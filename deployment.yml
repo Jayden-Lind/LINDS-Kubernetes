@@ -1,27 +1,32 @@
----
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: local-volume
-  namespace: default
+  name: linds-nfs
   labels:
-    type: local
+    storage.k8s.io/name: nfs
+    storage.k8s.io/part-of: kubernetes-complete-reference
 spec:
-  storageClassName: manual
-  capacity:
-    storage: 1Gi
   accessModes:
     - ReadWriteOnce
-  hostPath:
-    path: "/mnt/data"
+    - ReadOnlyMany
+    - ReadWriteMany
+  capacity:
+    storage: 10Gi
+  storageClassName: "manual"
+  persistentVolumeReclaimPolicy: Recycle
+  volumeMode: Filesystem
+  nfs:
+    server: jd-dc-01.linds.com.au
+    path: /NAS/server/
+    readOnly: false
 ---
   apiVersion: v1
   kind: PersistentVolumeClaim
   metadata:
-    name: local-volume
+    name: linds-nfs-pvc
     namespace: default
   spec:
-    storageClassName: manual
+    storageClassName: "manual"
     accessModes:
       - ReadWriteOnce
     resources:
@@ -54,13 +59,13 @@ spec:
           resources: {}
           volumeMounts:
             - mountPath: /config
-              name: local-volume
+              name: linds-nfs-pvc
           ports:
             - containerPort: 9117
         - name: radarr
           env:
             - name: GUID
-              value: "1000"
+              value: "0"
             - name: PUID
               value: "1000"
           image: linuxserver/radarr:latest
@@ -68,13 +73,13 @@ spec:
           resources: {}
           volumeMounts:
             - mountPath: /config
-              name: local-volume
+              name: linds-nfs-pvc
           ports:
             - containerPort: 7878
         - name: sonarr
           env:
             - name: GUID
-              value: "1000"
+              value: "0"
             - name: PUID
               value: "1000"
             - name: SONARR_BRANCH
@@ -84,14 +89,14 @@ spec:
           resources: {}
           volumeMounts:
             - mountPath: /config
-              name: local-volume
+              name: linds-nfs-pvc
           ports:
             - containerPort: 8989
       restartPolicy: Always
       volumes:
-        - name: local-volume
+        - name: linds-nfs-pvc
           persistentVolumeClaim:
-            claimName: local-volume
+            claimName: linds-nfs-pvc
 status: {}
 ---
 apiVersion: v1
