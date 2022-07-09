@@ -16,8 +16,8 @@ spec:
   persistentVolumeReclaimPolicy: Recycle
   volumeMode: Filesystem
   nfs:
-    server: jd-dc-01.linds.com.au
-    path: /NAS/server/
+    server: jd-truenas-01.linds.com.au
+    path: /mnt/NAS/NAS
     readOnly: false
 ---
   apiVersion: v1
