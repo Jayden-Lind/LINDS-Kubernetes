@@ -20,7 +20,6 @@ $ chmod +x nginx-ingress.sh; ./nginx-ingress.sh
 Ensure the below secret is created and applied for the nginx-ingress to secure the endpoints.
 
 ```
-
 ---
 apiVersion: v1
 kind: Secret
@@ -32,5 +31,4 @@ data:
   tls.crt: xxx
   tls.key: xxx
 ---
-
 ```
