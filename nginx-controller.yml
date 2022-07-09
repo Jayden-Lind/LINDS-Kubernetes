@@ -69,10 +69,10 @@ spec:
               fieldPath: metadata.name
         args:
           - -nginx-configmaps=$(POD_NAMESPACE)/nginx-config
-          - -default-server-tls-secret=$(POD_NAMESPACE)/default-server-secret
-          - -v=3 # Enables extensive logging. Useful for troubleshooting.
-          - -report-ingress-status
-          - -external-service=nginx-ingress
+          - -default-server-tls-secret=default/linds-certificate-secret
+         # - -v=3 # Enables extensive logging. Useful for troubleshooting.
+         # - -report-ingress-status
+         # - -external-service=nginx-ingress
          #- -enable-prometheus-metrics
          #- -global-configuration=$(POD_NAMESPACE)/nginx-configuration
 ---
@@ -82,6 +82,10 @@ metadata:
   name: ingress-linds-sonarr
   namespace: default
 spec:
+  tls:
+  - hosts:
+      - sonarr.linds.com.au
+    secretName: linds-certificate-secret
   rules:
   - host: sonarr.linds.com.au
     http:
@@ -101,6 +105,10 @@ metadata:
   name: ingress-linds-radarr
   namespace: default
 spec:
+  tls:
+  - hosts:
+      - radarr.linds.com.au
+    secretName: linds-certificate-secret
   rules:
   - host: radarr.linds.com.au
     http:
@@ -120,6 +128,10 @@ metadata:
   name: ingress-linds-jackett
   namespace: default
 spec:
+  tls:
+  - hosts:
+      - jackett.linds.com.au
+    secretName: linds-certificate-secret
   rules:
   - host: jackett.linds.com.au
     http:
