@@ -60,6 +60,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
+              subPath: jackett
           ports:
             - containerPort: 9117
         - name: radarr
@@ -74,6 +75,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
+              subPath: radarr
           ports:
             - containerPort: 7878
         - name: sonarr
@@ -90,6 +92,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
+              subPath: sonarr
           ports:
             - containerPort: 8989
       restartPolicy: Always
