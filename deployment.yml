@@ -1,0 +1,119 @@
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-volume
+  namespace: default
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+---
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: local-volume
+    namespace: default
+  spec:
+    storageClassName: manual
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linds-docker
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: v1
+      name: linds-docker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: v1
+        name: linds-docker
+    spec:
+      containers:
+        - name: jacket
+          image: linuxserver/jackett:latest
+          imagePullPolicy: Always
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: local-volume
+          ports:
+            - containerPort: 9117
+        - name: radarr
+          env:
+            - name: GUID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+          image: linuxserver/radarr:latest
+          imagePullPolicy: Always
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: local-volume
+          ports:
+            - containerPort: 7878
+        - name: sonarr
+          env:
+            - name: GUID
+              value: "1000"
+            - name: PUID
+              value: "1000"
+            - name: SONARR_BRANCH
+              value: main
+          image: linuxserver/sonarr:latest
+          imagePullPolicy: Always
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: local-volume
+          ports:
+            - containerPort: 8989
+      restartPolicy: Always
+      volumes:
+        - name: local-volume
+          persistentVolumeClaim:
+            claimName: local-volume
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: default
+  name: linds-docker
+  labels:
+    app: linds-docker
+spec:
+  ports:
+  - port: 8989
+    targetPort: 8989
+    protocol: TCP
+    name: sonarr-service
+  - port: 9117
+    targetPort: 9117
+    protocol: TCP
+    name: jackett-service
+  - port: 7878
+    targetPort: 7878
+    protocol: TCP
+    name: radarr-service
+  selector:
+    name: linds-docker
