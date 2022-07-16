@@ -81,6 +81,10 @@ kind: Ingress
 metadata:
   name: ingress-linds-sonarr
   namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
 spec:
   tls:
   - hosts:
@@ -104,6 +108,10 @@ kind: Ingress
 metadata:
   name: ingress-linds-radarr
   namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
 spec:
   tls:
   - hosts:
@@ -127,6 +135,10 @@ kind: Ingress
 metadata:
   name: ingress-linds-jackett
   namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
 spec:
   tls:
   - hosts:
