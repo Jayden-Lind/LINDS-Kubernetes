@@ -141,9 +141,9 @@ metadata:
   name: nginx-config
   namespace: nginx-ingress
 data:
-  proxy-connect-timeout: "10s"
-  proxy-read-timeout: "10s"
-  client-max-body-size: "2m"
+  proxy-connect-timeout: "180s"
+  proxy-read-timeout: "180s"
+  client-max-body-size: "10m"
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
