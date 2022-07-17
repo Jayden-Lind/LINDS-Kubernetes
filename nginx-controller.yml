@@ -3,8 +3,6 @@ kind: IngressClass
 metadata:
   name: nginx
   namespace: nginx-ingress
-  annotations:
-    ingressclass.kubernetes.io/is-default-class: "true"
 spec:
   controller: nginx.org/ingress-controller
 ---
@@ -76,87 +74,53 @@ spec:
          #- -enable-prometheus-metrics
          #- -global-configuration=$(POD_NAMESPACE)/nginx-configuration
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
 metadata:
-  name: ingress-linds-sonarr
+  name: linds-docker
   namespace: default
-  annotations:
-    nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-name: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
 spec:
+  host: proxy.linds.com.au
   tls:
-  - hosts:
-      - sonarr.linds.com.au
-    secretName: linds-certificate-secret
-  rules:
-  - host: sonarr.linds.com.au
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: linds-docker
-            port:
-              number: 8989
-  ingressClassName: nginx
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ingress-linds-radarr
-  namespace: default
-  annotations:
-    nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-name: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
-spec:
-  tls:
-  - hosts:
-      - radarr.linds.com.au
-    secretName: linds-certificate-secret
-  rules:
-  - host: radarr.linds.com.au
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: linds-docker
-            port:
-              number: 7878
-  ingressClassName: nginx
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ingress-linds-jackett
-  namespace: default
-  annotations:
-    nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-name: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
-spec:
-  tls:
-  - hosts:
-      - jackett.linds.com.au
-    secretName: linds-certificate-secret
-  rules:
-  - host: jackett.linds.com.au
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: linds-docker
-            port:
-              number: 9117
-  ingressClassName: nginx
----
+    secret: linds-certificate-secret
+  upstreams:
+  - name: linds-docker-radarr
+    service: linds-docker
+    port: 7878
+  - name: linds-docker-sonarr
+    service: linds-docker
+    port: 8989
+  - name: linds-docker-jackett
+    service: linds-docker
+    port: 9117
+  routes:
+  - path: /radarr
+    action:
+      proxy:
+        upstream: linds-docker-radarr
+        requestHeaders:
+          pass: true
+        rewritePath: /radarr
+        responseHeaders:
+          pass:
+          - Server
+  - path: /sonarr
+    action:
+      proxy: 
+        upstream: linds-docker-sonarr
+        requestHeaders:
+          pass: true
+        rewritePath: /sonarr
+        responseHeaders:
+          pass:
+          - Server
+  - path: /jackett
+    action:
+      proxy:
+        upstream: linds-docker-jackett
+        requestHeaders:
+          pass: true
+        rewritePath: /jackett
+        responseHeaders:
+          pass:
+          - Server
