@@ -1,0 +1,63 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: linds-docker
+  namespace: default
+spec:
+  host: proxy.linds.com.au
+  tls:
+    secret: linds-certificate-secret
+  upstreams:
+  - name: linds-docker-radarr
+    service: linds-docker
+    port: 7878
+  - name: linds-docker-sonarr
+    service: linds-docker
+    port: 8989
+  - name: linds-docker-jackett
+    service: linds-docker
+    port: 9117
+  - name: linds-docker-tautulli
+    service: linds-docker-tautulli
+    port: 8181
+  routes:
+  - path: /radarr
+    action:
+      proxy:
+        upstream: linds-docker-radarr
+        requestHeaders:
+          pass: true
+        rewritePath: /radarr
+        responseHeaders:
+          pass:
+          - Server
+  - path: /sonarr
+    action:
+      proxy: 
+        upstream: linds-docker-sonarr
+        requestHeaders:
+          pass: true
+        rewritePath: /sonarr
+        responseHeaders:
+          pass:
+          - Server
+  - path: /jackett
+    action:
+      proxy:
+        upstream: linds-docker-jackett
+        requestHeaders:
+          pass: true
+        rewritePath: /jackett
+        responseHeaders:
+          pass:
+          - Server
+  - path: /tautulli
+    action:
+      proxy:
+        upstream: linds-docker-tautulli
+        requestHeaders:
+          pass: true
+        rewritePath: /tautulli
+        responseHeaders:
+          pass:
+          - Server

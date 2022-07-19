@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linds-docker-tautulli
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: v1
+      name: linds-docker-tautulli
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: v1
+        name: linds-docker-tautulli
+    spec:
+      containers:
+        - name: jacket
+          image: linuxserver/tautulli:latest
+          imagePullPolicy: Always
+          resources: {}
+          volumeMounts:
+            - mountPath: /config
+              name: linds-nfs-pvc
+              subPath: tautulli
+          ports:
+            - containerPort: 8181
+      restartPolicy: Always
+      volumes:
+        - name: linds-nfs-pvc
+          persistentVolumeClaim:
+            claimName: linds-nfs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: default
+  name: linds-docker-tautulli
+  labels:
+    app: linds-docker-tautulli
+spec:
+  ports:
+  - port: 8181
+    targetPort: 8181
+    protocol: TCP
+    name: linds-docker-tautulli
+  selector:
+    name: linds-docker-tautulli
+  type: ClusterIP
