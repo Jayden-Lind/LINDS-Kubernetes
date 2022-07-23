@@ -5,6 +5,7 @@ This is my kubernetes set up that runs on 1 master node (CentOS 9 VM), and 2 wor
 1. Sonarr
 2. Radarr
 3. Jackett
+4. Tautulli
 
 ## Usage:
 ``` sh
