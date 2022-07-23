@@ -13,7 +13,7 @@ spec:
   capacity:
     storage: 10Gi
   storageClassName: "manual"
-  persistentVolumeReclaimPolicy: Recycle
+  persistentVolumeReclaimPolicy: Retain
   volumeMode: Filesystem
   nfs:
     server: jd-truenas-01.linds.com.au
@@ -28,7 +28,7 @@ spec:
   spec:
     storageClassName: "manual"
     accessModes:
-      - ReadWriteOnce
+      - ReadWriteMany
     resources:
       requests:
         storage: 1Gi
