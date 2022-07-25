@@ -56,7 +56,6 @@ spec:
         - name: jacket
           image: linuxserver/jackett:latest
           imagePullPolicy: Always
-          resources: {}
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
@@ -71,11 +70,16 @@ spec:
               value: "1000"
           image: linuxserver/radarr:latest
           imagePullPolicy: Always
-          resources: {}
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
               subPath: radarr
+            - name: smb-linds
+              mountPath: /mnt/nas/torrent
+              subPath: torrent
+            - name: smb-linds
+              mountPath: "/mnt/nas/Movies"
+              subPath: "Movies"
           ports:
             - containerPort: 7878
         - name: sonarr
@@ -88,11 +92,19 @@ spec:
               value: main
           image: linuxserver/sonarr:latest
           imagePullPolicy: Always
-          resources: {}
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
               subPath: sonarr
+            - name: smb-linds
+              mountPath: /mnt/torrent
+              subPath: torrent
+            - name: smb-linds
+              mountPath: "/mnt/TV Shows"
+              subPath: "TV Shows"
+            - name: smb-linds
+              mountPath: "/mnt/Movies"
+              subPath: "Movies"
           ports:
             - containerPort: 8989
       restartPolicy: Always
@@ -100,7 +112,9 @@ spec:
         - name: linds-nfs-pvc
           persistentVolumeClaim:
             claimName: linds-nfs-pvc
-status: {}
+        - name: smb-linds
+          persistentVolumeClaim:
+            claimName: linds-pvc-smb
 ---
 apiVersion: v1
 kind: Service
