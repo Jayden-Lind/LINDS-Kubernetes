@@ -52,6 +52,8 @@ spec:
         app: v1
         name: linds-docker
     spec:
+      nodeSelector: 
+        kubernetes.io/hostname: linds-kube-01.linds.com.au
       containers:
         - name: jacket
           image: linuxserver/jackett:latest
