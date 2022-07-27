@@ -5,6 +5,7 @@ metadata:
   labels:
     storage.k8s.io/name: nfs
     storage.k8s.io/part-of: kubernetes-complete-reference
+    volume.beta.kubernetes.io/mount-options: soft
 spec:
   accessModes:
     - ReadWriteOnce
