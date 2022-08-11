@@ -16,8 +16,6 @@ $ git clone git@github.com:Jayden-Lind/LINDS-Kube.git
 
 $ chmod +x nginx-ingress.sh; ./nginx-ingress.sh
 
-$ curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/v1.8.0/deploy/install-driver.sh | bash -s v1.8.0 
-
 $ chmod +x app-deployment.sh; ./app-deployment.sh
 
 ```
