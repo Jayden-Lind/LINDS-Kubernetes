@@ -34,6 +34,42 @@ spec:
       requests:
         storage: 1Gi
 ---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: linds-nfs-nas
+  labels:
+    storage.k8s.io/name: nfs
+    storage.k8s.io/part-of: kubernetes-complete-reference
+    volume.beta.kubernetes.io/mount-options: soft
+spec:
+  accessModes:
+    - ReadWriteOnce
+    - ReadOnlyMany
+    - ReadWriteMany
+  capacity:
+    storage: 1Ti
+  storageClassName: "manual"
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  nfs:
+    server: linds-truenas-01.linds.com.au
+    path: /mnt/ZFS_NAS
+    readOnly: false
+---
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: linds-nfs-nas-pvc
+    namespace: default
+  spec:
+    storageClassName: "manual"
+    accessModes:
+      - ReadWriteMany
+    resources:
+      requests:
+        storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -77,10 +113,10 @@ spec:
             - mountPath: /config
               name: linds-nfs-pvc
               subPath: radarr
-            - name: smb-linds
+            - name: linds-nfs-nas
               mountPath: /mnt/nas/torrent
               subPath: torrent
-            - name: smb-linds
+            - name: linds-nfs-nas
               mountPath: "/mnt/nas/Movies"
               subPath: "Movies"
           ports:
@@ -99,13 +135,13 @@ spec:
             - mountPath: /config
               name: linds-nfs-pvc
               subPath: sonarr
-            - name: smb-linds
+            - name: linds-nfs-nas
               mountPath: /mnt/torrent
               subPath: torrent
-            - name: smb-linds
+            - name: linds-nfs-nas
               mountPath: "/mnt/TV Shows"
               subPath: "TV Shows"
-            - name: smb-linds
+            - name: linds-nfs-nas
               mountPath: "/mnt/Movies"
               subPath: "Movies"
           ports:
@@ -115,9 +151,9 @@ spec:
         - name: linds-nfs-pvc
           persistentVolumeClaim:
             claimName: linds-nfs-pvc
-        - name: smb-linds
+        - name: linds-nfs-nas
           persistentVolumeClaim:
-            claimName: linds-pvc-smb
+            claimName: linds-nfs-nas-pvc
 ---
 apiVersion: v1
 kind: Service
