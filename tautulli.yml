@@ -16,6 +16,8 @@ spec:
       labels:
         app: v1
         name: linds-docker-tautulli
+      annotations:
+        diun.enable: "true"
     spec:
       containers:
         - name: jacket

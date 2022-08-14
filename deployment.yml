@@ -88,6 +88,8 @@ spec:
       labels:
         app: v1
         name: linds-docker
+      annotations:
+        diun.enable: "true"
     spec:
       nodeSelector: 
         kubernetes.io/hostname: linds-kube-01.linds.com.au

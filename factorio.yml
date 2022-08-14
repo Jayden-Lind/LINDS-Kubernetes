@@ -64,6 +64,8 @@ spec:
     metadata:
       labels:
         app: factorio
+      annotations:
+        diun.enable: "true"
     spec:
       containers:
       - name: factorio
