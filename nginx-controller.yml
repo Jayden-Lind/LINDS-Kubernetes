@@ -19,6 +19,8 @@ spec:
     metadata:
       labels:
         app: nginx-ingress
+      annotations:
+        diun.enable: "true"
     spec:
       serviceAccountName: nginx-ingress
       containers:

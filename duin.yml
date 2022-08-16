@@ -56,7 +56,7 @@ spec:
           args: ["serve"]
           env:
             - name: TZ
-              value: "	Australia/Melbourne"
+              value: "Australia/Melbourne"
             - name: LOG_LEVEL
               value: "debug"
             - name: LOG_JSON
@@ -68,11 +68,11 @@ spec:
             - name: DIUN_PROVIDERS_KUBERNETES
               value: "true"
           volumeMounts:
-            - name: linds-nfs-pvc
+            - name: jd-nfs-pvc
               mountPath: "/data"
               subPath: "duin"
       restartPolicy: Always
       volumes:
-        - name: linds-nfs-pvc
+        - name: jd-nfs-pvc
           persistentVolumeClaim:
-            claimName: linds-nfs-pvc
+            claimName: jd-nfs-pvc

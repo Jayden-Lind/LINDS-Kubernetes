@@ -17,7 +17,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   volumeMode: Filesystem
   nfs:
-    server: jd-truenas-01.linds.com.au
+    server: linds-truenas-01.linds.com.au
     path: /mnt/NAS/NAS
     readOnly: false
 ---
