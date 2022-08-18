@@ -102,6 +102,7 @@ metadata:
   name: factorio
 spec:
   type: LoadBalancer
+  externalTrafficPolicy: Local
   selector:
     app: factorio
   ports:

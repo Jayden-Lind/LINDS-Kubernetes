@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgresql-tcp
+---
+apiVersion: apps/v1
+kind: Deployment # Create a deployment
+metadata:
+  name: postgres # Set the name of the deployment
+spec:
+  replicas: 3 # Set 3 deployment replicas
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+      annotations:
+        diun.enable: "true"
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:latest # Docker image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432 # Exposing the container port 5432 for PostgreSQL client connections.
+          envFrom:
+            - configMapRef:
+                name: postgres-secret # Using the ConfigMap postgres-secret
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: jd-nfs-pvc
+              subPath: postgresql
+      volumes:
+        - name: jd-nfs-pvc
+          persistentVolumeClaim:
+            claimName: jd-nfs-pvc
