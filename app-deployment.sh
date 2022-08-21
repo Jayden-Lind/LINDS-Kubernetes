@@ -6,3 +6,4 @@ kubectl apply -f tautulli.yml
 kubectl apply -f linds-virtualserver.yml
 kubectl apply -f duin.yml
 kubectl apply -f factorio.yml
+kubectl apply -f postgresql.yml

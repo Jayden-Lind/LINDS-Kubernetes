@@ -27,6 +27,7 @@ spec:
     name: linds-nfs-pvc
     namespace: default
   spec:
+    volumeName: linds-nfs
     storageClassName: "manual"
     accessModes:
       - ReadWriteMany
@@ -64,6 +65,7 @@ spec:
     namespace: default
   spec:
     storageClassName: "manual"
+    volumeName: linds-nfs-nas
     accessModes:
       - ReadWriteMany
     resources:
