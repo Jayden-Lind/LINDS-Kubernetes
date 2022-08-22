@@ -75,3 +75,23 @@ spec:
          # - -external-service=nginx-ingress
          #- -enable-prometheus-metrics
          #- -global-configuration=$(POD_NAMESPACE)/nginx-configuration
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: nginx-ingress
+  name: nginx
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: nginx-ingress
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: nginx-http
+  - port: 443
+    targetPort: 443
+    protocol: TCP
+    name: nginx-https
