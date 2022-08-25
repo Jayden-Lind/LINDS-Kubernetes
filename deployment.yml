@@ -153,8 +153,8 @@ spec:
       restartPolicy: Always
       volumes:
         - name: linds-nfs-pvc
-          persistentVolumeClaim:
-            claimName: linds-nfs-pvc
+          hostPath:
+            path: /mnt/data
         - name: linds-nfs-nas
           persistentVolumeClaim:
             claimName: linds-nfs-nas-pvc

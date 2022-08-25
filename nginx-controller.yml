@@ -81,6 +81,8 @@ kind: Service
 metadata:
   namespace: nginx-ingress
   name: nginx
+  annotations:
+    metallb.universe.tf/address-pool: jd-ip-pool
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local

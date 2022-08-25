@@ -1,0 +1,28 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: test-bgp-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 10.100.1.0/24
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: external-bgp-jd
+spec:
+  ipAddressPools:
+  - test-bgp-pool
+  aggregationLength: 24
+---
+apiVersion: metallb.io/v1beta2
+kind: BGPPeer
+metadata:
+  name: jd-bgp-peer
+  namespace: metallb-system
+spec:
+  myASN: 64552
+  peerASN: 64550
+  peerAddress: 10.0.50.1
+  peerPort: 180
