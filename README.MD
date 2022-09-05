@@ -1,6 +1,8 @@
 ![image](img/kube.png)
 
-# LINDS-Kubernetes
+# [LINDS-Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)
+
+Check out my blog post on **[Moving to Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)**
 
 Hosts ever growing number of services. 
 
