@@ -1,6 +1,8 @@
 ![image](img/kube.png)
 
-# LINDS-Kubernetes
+# [LINDS-Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)
+
+Check out my blog post on **[Moving to Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)**
 
 Hosts ever growing number of services. 
 
@@ -28,9 +30,9 @@ Consists of:
 
 ### Storage
 
-- 2x TrueNAS hosts (100GB NFS Storage)
+- 2x [TrueNAS](https://www.truenas.com/) hosts (100GB NFS Storage)
 
-The TrueNAS machines rsync to each other the differences for the PVC(Physical Volume Claims) for redundancy.
+The [TrueNAS](https://www.truenas.com/) machines rsync to each other the differences for the PVC(Physical Volume Claims) for redundancy.
 
 ### Networking
 
@@ -52,7 +54,7 @@ $ chmod +x app-deployment.sh; ./app-deployment.sh
 ## Secrets
 2 Secrets are required for operation.
 
-1. NGINX-Ingress certificate
+1. [kubernetes.io/tls](https://kubernetes.io/docs/concepts/configuration/secret/#secret-types) secret.
 2. SMB/CIFS credentials for mounting SMB shares in a pod.
 
 **NOTE**
