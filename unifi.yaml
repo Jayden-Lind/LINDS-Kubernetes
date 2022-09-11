@@ -1,0 +1,135 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unifi
+  labels:
+    name: home
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jd-nfs-truenas-unifi
+  namespace: unifi
+  labels:
+    storage.k8s.io/name: nfs
+    storage.k8s.io/part-of: kubernetes-complete-reference
+    volume.beta.kubernetes.io/mount-options: soft
+spec:
+  accessModes:
+    - ReadWriteOnce
+    - ReadOnlyMany
+    - ReadWriteMany
+  capacity:
+    storage: 10Gi
+  storageClassName: "manual"
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  nfs:
+    server: jd-truenas-01.linds.com.au
+    path: /mnt/NAS/NAS
+    readOnly: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jd-nfs-pvc-unifi
+  namespace: unifi
+spec:
+  storageClassName: "manual"
+  volumeName: jd-nfs-truenas-unifi
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: unifi
+  namespace: unifi
+spec:
+  serviceName: "unifi"
+  replicas: 1
+  selector:
+    matchLabels:
+      name: unifi
+  template:
+    metadata:
+      name: unifi
+      labels:
+        name: unifi
+      annotations:
+        diun.enable: "true"
+    spec:
+      containers:
+        - name: unifi
+          image: lscr.io/linuxserver/unifi-controller:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3478
+              protocol: UDP
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8443
+              protocol: TCP
+            - containerPort: 8843
+              protocol: TCP
+            - containerPort: 8880
+              protocol: TCP
+            - containerPort: 6789
+              protocol: TCP
+          volumeMounts:
+            - name: jd-nfs-pvc-unifi
+              mountPath: /config
+              subPath: unifi
+          env:
+            - name: GUID
+              value: "1000"
+            - name: PUID
+              value: "0"
+      volumes:
+        - name: jd-nfs-pvc-unifi
+          persistentVolumeClaim:
+            claimName: jd-nfs-pvc-unifi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-bgp
+  namespace: unifi
+  annotations:
+    metallb.universe.tf/allow-shared-ip: "172.16.10.2"
+    metallb.universe.tf/address-pool: jd-bgp-pool
+spec:
+  loadBalancerIP: 172.16.10.2
+  ports:
+    - name: '8080'
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: '8443'
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+    - name: '8843'
+      protocol: TCP
+      port: 8843
+      targetPort: 8843
+    - name: '8880'
+      protocol: TCP
+      port: 8880
+      targetPort: 8880
+    - name: '6789'
+      protocol: TCP
+      port: 6789
+      targetPort: 6789
+    - name: '3478'
+      protocol: UDP
+      port: 3478
+      targetPort: 3478
+  selector:
+    name: unifi
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
