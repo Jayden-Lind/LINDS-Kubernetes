@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgresql
+  namespace: default
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
@@ -14,11 +15,12 @@ spec:
     name: postgresql-tcp
 ---
 apiVersion: apps/v1
-kind: Deployment # Create a deployment
+kind: Deployment
 metadata:
-  name: postgres # Set the name of the deployment
+  name: postgres
+  namespace: default
 spec:
-  replicas: 3 # Set 3 deployment replicas
+  replicas: 1
   selector:
     matchLabels:
       app: postgres
