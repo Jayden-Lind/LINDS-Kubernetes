@@ -32,6 +32,9 @@ spec:
               subPath: tautulli
           ports:
             - containerPort: 8181
+          env:
+            - name: TZ
+              value: Australia/Melbourne
       restartPolicy: Always
       volumes:
         - name: linds-nfs-pvc
