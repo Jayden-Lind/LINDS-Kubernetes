@@ -1,4 +1,5 @@
 #! /bin/bash
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/v1.8.0/deploy/install-driver.sh | bash -s v1.8.0 --
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/main/deployments/common/crds/k8s.nginx.org_virtualserverroutes.yaml
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/main/deployments/common/crds/k8s.nginx.org_virtualservers.yaml
@@ -16,3 +17,4 @@ kubectl apply -f postgresql.yml
 kubectl apply -f unifi.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.6.1/aio/deploy/recommended.yaml
 kubectl apply -f kube-dashboard.yaml
+kubectl apply -f metallb.yml
