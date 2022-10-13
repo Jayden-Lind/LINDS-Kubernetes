@@ -20,7 +20,7 @@ spec:
         diun.enable: "true"
     spec:
       nodeSelector: 
-        kubernetes.io/hostname: linds-kube-01.linds.com.au
+        kubernetes.io/hostname: linds-kube-02
       containers:
         - name: jacket
           image: linuxserver/tautulli:latest
