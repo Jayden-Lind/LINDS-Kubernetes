@@ -1,0 +1,27 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: linds-postgresql
+  namespace: postgresql-linds
+  annotations:
+    nfs.io/storage-path: "postgresql-nfs"
+spec:
+  teamId: "linds"
+  volume:
+    size: 1Gi
+    storageClass: nfs-client
+  numberOfInstances: 2
+  users:
+    lindrea_user:  # database owner
+    - superuser
+    - createdb
+    foo_user: []  # role for application foo
+  databases:
+    lindrea: lindrea_user  # dbname: owner
+  preparedDatabases:
+    bar: {}
+  postgresql:
+    version: "14"
+  allowedSourceRanges: [10.0.50.0/24, 10.3.1.0/24]
+  serviceAnnotations: 
+   metallb.universe.tf/address-pool: jd-bgp-pool

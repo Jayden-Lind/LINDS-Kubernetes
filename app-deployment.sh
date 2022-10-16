@@ -26,3 +26,6 @@ kubectl apply -f postgresql.yml
 kubectl apply -f unifi.yaml
 kubectl apply -f metallb.yml
 kubectl apply -f linds-secret.yml
+
+kubectl apply -f postgresql
+kubectl apply -f nfs-provisioner
