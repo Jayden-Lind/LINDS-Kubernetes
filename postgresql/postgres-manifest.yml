@@ -17,7 +17,8 @@ spec:
     - createdb
     foo_user: []  # role for application foo
   databases:
-    lindrea: lindrea_user  # dbname: owner
+    lindrea: lindrea_user     # dbname: owner
+    lindrea_th: lindrea_user  # dbname: owner
   preparedDatabases:
     bar: {}
   postgresql:
