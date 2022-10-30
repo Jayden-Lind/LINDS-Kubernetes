@@ -62,14 +62,17 @@ spec:
             - name: LOG_JSON
               value: "false"
             - name: DIUN_WATCH_WORKERS
-              value: "20"
+              value: "10"
             - name: DIUN_WATCH_SCHEDULE
-              value: "* 0 * * *"
+              value: "0 * * * *"
             - name: DIUN_PROVIDERS_KUBERNETES
               value: "true"
           volumeMounts:
             - name: jd-nfs-pvc
               mountPath: "/data"
+              subPath: "duin"
+            - name: jd-nfs-pvc
+              mountPath: "/root/"
               subPath: "duin"
       restartPolicy: Always
       volumes:

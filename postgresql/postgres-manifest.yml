@@ -15,9 +15,12 @@ spec:
     lindrea_user:  # database owner
     - superuser
     - createdb
+    zabbix:
+    - superuser
   databases:
     lindrea: lindrea_user     # dbname: owner
     lindrea_th: lindrea_user  # dbname: owner
+    zabbix: zabbix
   postgresql:
     version: "14"
   allowedSourceRanges: [10.0.50.0/24, 10.3.1.0/24]
