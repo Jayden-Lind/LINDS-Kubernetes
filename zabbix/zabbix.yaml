@@ -1,0 +1,587 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zabbix
+  labels:
+    name: zabbix
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: zabbix-agent
+  namespace: zabbix
+rules:
+- verbs:
+  - use
+  apiGroups:
+  - security.openshift.io
+  resources:
+  - securitycontextconstraints
+  resourceNames:
+  - privileged
+  - hostaccess
+  - hostnetwork
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: zabbix-agent
+  namespace: zabbix
+subjects:
+- kind: ServiceAccount
+  name: zabbix-agent
+roleRef:
+  kind: Role
+  name: zabbix-agent
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zabbix-agent
+  namespace: zabbix
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-web
+  labels:
+    app: zabbix
+  namespace: zabbix
+  annotations:
+    metallb.universe.tf/address-pool: jd-bgp-pool
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: web-http
+  - port: 443
+    targetPort: 8443
+    name: web-https
+  selector:
+    name: zabbix-web
+  sessionAffinity: None
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-server
+  labels:
+    app: zabbix
+  namespace: zabbix
+spec:
+  ports:
+  - port: 10051
+    targetPort: 10051
+    name: zabbix-trapper
+  - port: 162
+    targetPort: 1162
+    protocol: UDP
+    name: snmp-trap
+  selector:
+    name: zabbix-server
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-java-gateway
+  labels:
+    app: zabbix
+  namespace: zabbix
+spec:
+  ports:
+  - port: 10052
+    targetPort: 10052
+    name: zabbix-jmx
+  selector:
+    name: zabbix-java-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-web-service
+  labels:
+    app: zabbix
+  namespace: zabbix
+spec:
+  ports:
+  - port: 10053
+    targetPort: 10053
+    name: zabbix-web-svc
+  selector:
+    name: zabbix-web-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-agent
+  labels:
+    app: zabbix
+  namespace: zabbix
+spec:
+  ports:
+  - port: 10050
+    targetPort: 10050
+    name: zabbix-agent
+  selector:
+    name: zabbix-agent
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: zabbix-web
+  labels:
+    app: zabbix
+    tier: zabbix-web
+  namespace: zabbix
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        name: zabbix-web
+        app: zabbix
+    spec:
+      containers:
+        - name: zabbix-web
+          image: zabbix/zabbix-web-nginx-pgsql:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 8080
+            name: web-http
+          - containerPort: 8443
+            name: web-https
+          resources:
+           limits:
+            cpu: 200m
+            memory: 400Mi
+           requests:
+            cpu: 200m
+            memory: 400Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: web-http
+              scheme: HTTP
+            initialDelaySeconds: 15
+            timeoutSeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: web-http
+              scheme: HTTP
+            initialDelaySeconds: 15
+            timeoutSeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          env:
+          - name: ZBX_SERVER_NAME
+            value: "LINDS-Zabbix"
+          - name: PHP_TZ
+            value: "Australia/Melbourne"
+          - name: DB_SERVER_HOST
+            value: linds-postgresql.postgresql-linds.svc.cluster.local
+          - name: DB_SERVER_PORT
+            value: "5432"
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+                key:  password
+          - name: POSTGRES_DB
+            value: zabbix
+          - name: ZBX_DB_VERIFY_HOST
+            value: "false"
+          - name: ZBX_DB_CIPHER_LIST
+            value: ""
+          - name: ZBX_SSO_SETTINGS
+            value: "[]"
+          - name: ENABLE_WEB_ACCESS_LOG
+            value: "true"
+          - name: DEBUG_MODE
+            value: "false"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zabbix-server
+  labels:
+    app: zabbix
+    tier: server
+    environment: dev
+  namespace: zabbix
+spec:
+  serviceName: "zabbix-server"
+  replicas: 2
+  selector:
+    matchLabels:
+      name: zabbix-server
+      app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-server
+        app: zabbix
+    spec:
+      volumes:
+       - name: zabbix-snmptraps
+         emptyDir: {}
+      containers:
+        - name: zabbix-server
+          image: zabbix/zabbix-server-pgsql:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 10051
+            protocol: TCP
+            name: zabbix-trapper
+          env:
+          - name: DB_SERVER_HOST
+            value: linds-postgresql.postgresql-linds.svc.cluster.local
+          - name: DB_SERVER_PORT
+            value: "5432"
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+                key:  password
+          - name: POSTGRES_DB
+            value: zabbix
+          - name: ZBX_CACHESIZE
+            value: "1024M"
+          - name: ZBX_TRENDCACHESIZE
+            value: "1024M"
+          - name: ZBX_HISTORYCACHESIZE
+            value: "2048M"
+          - name: ZBX_HISTORYINDEXCACHESIZE
+            value: "1024M"
+          - name: ZBX_STARTTRAPPERS
+            value: "5"
+          - name: ZBX_STARTPREPROCESSORS
+            value: "10"
+          - name: ZBX_STARTDBSYNCERS
+            value: "10"
+          - name: ZBX_JAVAGATEWAY_ENABLE
+            value: "true"
+          - name: ZBX_STARTJAVAPOLLERS
+            value: "5"
+          - name: ZBX_ENABLE_SNMP_TRAPS
+            value: "true"
+          - name: ZBX_STARTPROXYPOLLERS
+            value: "5"
+          - name: ZBX_PROXYCONFIGFREQUENCY
+            value: "60"
+
+          # For HA mode
+          - name: ZBX_AUTOHANODENAME
+            value: "fqdn"
+          - name: ZBX_AUTONODEADDRESS
+            value: "fqdn"
+          - name: ZBX_SERVICEMANAGERSYNCFREQUENCY
+            value: "10"
+          - name: ZBX_PROBLEMHOUSEKEEPINGFREQUENCY
+            value: "60"
+
+          volumeMounts:
+          - name: zabbix-snmptraps
+            mountPath: "/var/lib/zabbix/snmptraps"
+            readOnly: true
+          securityContext:
+            capabilities: {}
+            privileged: true
+        - name: zabbix-snmptraps
+          image: zabbix/zabbix-snmptraps:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 1162
+            protocol: UDP
+            name: snmp-trap
+          volumeMounts:
+          - name: zabbix-snmptraps
+            mountPath: /var/lib/zabbix/snmptraps/
+            readOnly: false
+          securityContext:
+            capabilities: {}
+            privileged: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-java-gateway
+  labels:
+    app: zabbix
+    tier: java
+  namespace: zabbix
+spec:
+  selector:
+    matchLabels:
+     name: zabbix-java-gateway
+     app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-java-gateway
+        app: zabbix
+    spec:
+      containers:
+        - name: zabbix-java-gateway
+          image: zabbix/zabbix-java-gateway:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 10052
+            protocol: TCP
+            name: zabbix-java
+          env:
+          - name: ZBX_START_POLLERS
+            value: "5"
+          - name: ZBX_TIMEOUT
+            value: "3"
+          - name: ZBX_DEBUGLEVEL
+            value: "info"
+          - name: JAVA_OPTIONS
+            value: ""
+          - name: DEBUG_MODE
+            value: "false"
+          securityContext:
+            capabilities: {}
+            privileged: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-web-service
+  labels:
+    app: zabbix
+    tier: web-service
+  namespace: zabbix
+spec:
+  selector:
+    matchLabels:
+     name: zabbix-web-service
+     app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-web-service
+        app: zabbix
+    spec:
+      containers:
+        - name: zabbix-web-service
+          image: zabbix/zabbix-web-service:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          resources:
+           limits:
+            cpu: 100m
+            memory: 512Mi
+           requests:
+            cpu: 100m
+            memory: 512Mi
+          ports:
+          - containerPort: 10053
+            protocol: TCP
+            name: zabbix-web-svc
+          env:
+          - name: ZBX_ALLOWEDIP
+            value: "0.0.0.0/0"
+          - name: ZBX_LISTENPORT
+            value: "10053"
+          - name: ZBX_DEBUGLEVEL
+            value: "3"
+          - name: ZBX_TIMEOUT
+            value: "3"
+          - name: ZBX_TLSACCEPT
+            value: ""
+          - name: ZBX_TLSCAFILE
+            value: ""
+          - name: ZBX_TLSCERTFILE
+            value: ""
+          - name: ZBX_TLSKEYFILE
+            value: ""
+          - name: DEBUG_MODE
+            value: "false"
+          securityContext:
+            capabilities: {}
+            privileged: false
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zabbix-agent
+  labels:
+    app: zabbix
+    tier: agent
+  namespace: zabbix
+spec:
+  selector:
+   matchLabels:
+    name: zabbix-agent
+  updateStrategy:
+   type: RollingUpdate
+   rollingUpdate:
+    maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        name: zabbix-agent
+        app: zabbix
+    spec:
+      hostNetwork: true
+      hostIPC: true
+      hostPID: true
+      automountServiceAccountToken: true
+      serviceAccountName: zabbix-agent
+      containers:
+        - name: zabbix-agent
+          image: zabbix/zabbix-agent:alpine-trunk
+          imagePullPolicy: IfNotPresent
+          resources:
+           limits:
+            cpu: 100m
+            memory: 54Mi
+           requests:
+            cpu: 100m
+            memory: 54Mi
+          ports:
+          - containerPort: 10050
+            name: zabbix-agent
+          env:
+            - name: ZBX_DEBUGLEVEL
+              value: "3"
+            - name: ZBX_DENYKEY
+              value: "system.run[*]"
+            - name: ZBX_ALLOWKEY
+              value: ""
+            - name: ZBX_LOGREMOTECOMMANDS
+              value: "1"
+            - name: ZBX_SERVER_HOST
+              value: "zabbix-server"
+            - name: ZBX_PASSIVE_ALLOW
+              value: "true"
+            - name: ZBX_PASSIVESERVERS
+              value: ""
+            - name: ZBX_ACTIVE_ALLOW
+              value: "true"
+            - name: ZBX_ACTIVESERVERS
+              value: ""
+            - name: ZBX_STARTAGENTS
+              value: ""
+            - name: ZBX_HOSTNAME
+              valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+            - name: ZBX_HOSTNAMEITEM
+              value: ""
+            - name: ZBX_METADATA
+              value: ""
+            - name: ZBX_METADATAITEM
+              value: ""
+            - name: ZBX_TIMEOUT
+              value: ""
+            - name: ZBX_BUFFERSEND
+              value: ""
+            - name: ZBX_BUFFERSIZE
+              value: ""
+            - name: ZBX_MAXLINESPERSECOND
+              value: ""
+            - name: ZBX_UNSAFEUSERPARAMETERS
+              value: "0"
+            - name: ZBX_LOADMODULE
+              value: ""
+            - name: ZBX_HOSTINTERFACE
+              value: ""
+            - name: ZBX_HOSTINTERFACEITEM
+              value: ""
+            - name: ZBX_REFRESHACTIVECHECKS
+              value: ""
+            - name: DEBUG_MODE
+              value: "3"
+            - name: ZBX_TLSCONNECT
+              value: ""
+            - name: ZBX_TLSACCEPT
+              value: ""
+            - name: ZBX_TLSCAFILE
+              value: ""
+            - name: ZBX_TLSCRLFILE
+              value: ""
+            - name: ZBX_TLSSERVERCERTISSUER
+              value: ""
+            - name: ZBX_TLSSERVERCERTSUBJECT
+              value: ""
+            - name: ZBX_TLSCERTFILE
+              value: ""
+            - name: ZBX_TLSKEYFILE
+              value: ""
+            - name: ZBX_TLSPSKIDENTITY
+              value: ""
+            - name: ZBX_TLSPSKFILE
+              value: ""
+            - name: ZBX_TLSCIPHERALL
+              value: ""
+            - name: ZBX_TLSCIPHERALL13
+              value: ""
+            - name: ZBX_TLSCIPHERCERT
+              value: ""
+            - name: ZBX_TLSCIPHERCERT13
+              value: ""
+            - name: ZBX_TLSCIPHERPSK
+              value: ""
+            - name: ZBX_TLSCIPHERPSK13
+              value: ""
+          securityContext:
+            capabilities: {}
+            privileged: true
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+          volumeMounts:
+            - name: dev-volume
+              mountPath: /node/dev
+            - name: procfs-volume
+              readOnly: true
+              mountPath: /node/proc
+            - name: boot-volume
+              readOnly: true
+              mountPath: /node/boot
+            - name: run-volume
+              mountPath: /node/run
+            - name: var-run-volume
+              mountPath: /node/var/run
+      volumes:
+        - name: dev-volume
+          hostPath:
+            path: /dev
+            type: ''
+        - name: procfs-volume
+          hostPath:
+            path: /proc
+            type: ''
+        - name: boot-volume
+          hostPath:
+            path: /boot
+            type: ''
+        - name: run-volume
+          hostPath:
+            path: /run
+            type: ''
+        - name: var-run-volume
+          hostPath:
+            path: /var/run
+            type: ''
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+  namespace: zabbix
+type: Opaque
+data:
+  password: ZHY2ZE5KUHBYdDhHNldNbm1sMDA0dXV3blAydDNrbEN6VHU5MHRYQ3ZnVFMwMDRoNzZJeDdkN0NQTWczcFhPZA==
+  username: cG9zdGdyZXM=

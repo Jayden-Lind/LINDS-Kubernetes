@@ -2,6 +2,7 @@
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/tigera-operator.yaml
 kubectl apply -f calico.yml
 
+kubectl apply -f coredns.yml
 NGINX_VERSION=v2.4.0
 
 ##NGINX
@@ -29,3 +30,5 @@ kubectl apply -f linds-secret.yml
 
 kubectl apply -f postgresql
 kubectl apply -f nfs-provisioner
+
+kubectl apply -f zabbix
