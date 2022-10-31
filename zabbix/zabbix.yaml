@@ -160,26 +160,26 @@ spec:
            requests:
             cpu: 200m
             memory: 400Mi
-          livenessProbe:
-            httpGet:
-              path: /
-              port: web-http
-              scheme: HTTP
-            initialDelaySeconds: 15
-            timeoutSeconds: 2
-            periodSeconds: 10
-            successThreshold: 1
-            failureThreshold: 5
-          readinessProbe:
-            httpGet:
-              path: /
-              port: web-http
-              scheme: HTTP
-            initialDelaySeconds: 15
-            timeoutSeconds: 2
-            periodSeconds: 10
-            successThreshold: 1
-            failureThreshold: 5
+          # livenessProbe:
+          #   httpGet:
+          #     path: /
+          #     port: web-http
+          #     scheme: HTTP
+          #   initialDelaySeconds: 15
+          #   timeoutSeconds: 2
+          #   periodSeconds: 10
+          #   successThreshold: 1
+          #   failureThreshold: 5
+          # readinessProbe:
+          #   httpGet:
+          #     path: /
+          #     port: web-http
+          #     scheme: HTTP
+          #   initialDelaySeconds: 15
+          #   timeoutSeconds: 2
+          #   periodSeconds: 10
+          #   successThreshold: 1
+          #   failureThreshold: 5
           env:
           - name: ZBX_SERVER_NAME
             value: "LINDS-Zabbix"
@@ -280,6 +280,14 @@ spec:
             value: "5"
           - name: ZBX_PROXYCONFIGFREQUENCY
             value: "60"
+          - name: ZBX_STARTVMWARECOLLECTORS
+            value: "10"
+          - name: ZBX_VMWAREFREQUENCY
+            value: "60"
+          - name: ZBX_VMWAREPERFFREQUENCY
+            value: "60"
+          - name: ZBX_VMWARETIMEOUT
+            value: "10"
 
           # For HA mode
           - name: ZBX_AUTOHANODENAME
