@@ -79,6 +79,16 @@ spec:
         - name: jd-nfs-pvc
           persistentVolumeClaim:
             claimName: jd-nfs-pvc
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - jd-kube-02
+                - jd-kube-03
 ---
 apiVersion: v1
 kind: Service
@@ -89,7 +99,7 @@ metadata:
   namespace: default
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster
   selector:
     app: factorio
   ports:

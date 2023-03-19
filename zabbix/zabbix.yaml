@@ -147,7 +147,7 @@ spec:
       containers:
         - name: zabbix-web
           image: zabbix/zabbix-web-nginx-pgsql:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
           - containerPort: 8080
             name: web-http
@@ -237,7 +237,7 @@ spec:
       containers:
         - name: zabbix-server
           image: zabbix/zabbix-server-pgsql:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
           - containerPort: 10051
             protocol: TCP
@@ -308,7 +308,7 @@ spec:
             privileged: true
         - name: zabbix-snmptraps
           image: zabbix/zabbix-snmptraps:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
           - containerPort: 1162
             protocol: UDP
@@ -343,7 +343,7 @@ spec:
       containers:
         - name: zabbix-java-gateway
           image: zabbix/zabbix-java-gateway:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
           - containerPort: 10052
             protocol: TCP
@@ -385,7 +385,7 @@ spec:
       containers:
         - name: zabbix-web-service
           image: zabbix/zabbix-web-service:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           resources:
            limits:
             cpu: 100m
@@ -450,7 +450,7 @@ spec:
       containers:
         - name: zabbix-agent
           image: zabbix/zabbix-agent:alpine-trunk
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           resources:
            limits:
             cpu: 100m

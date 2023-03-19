@@ -28,7 +28,7 @@ spec:
           resources: {}
           volumeMounts:
             - mountPath: /config
-              name: linds-nfs-pvc
+              name: jd-nfs-pvc
               subPath: tautulli
           ports:
             - containerPort: 8181
@@ -37,9 +37,9 @@ spec:
               value: Australia/Melbourne
       restartPolicy: Always
       volumes:
-        - name: linds-nfs-pvc
+        - name: jd-nfs-pvc
           persistentVolumeClaim:
-            claimName: linds-nfs-pvc
+            claimName: jd-nfs-pvc
 ---
 apiVersion: v1
 kind: Service

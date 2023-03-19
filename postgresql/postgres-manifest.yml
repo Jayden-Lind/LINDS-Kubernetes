@@ -22,7 +22,7 @@ spec:
     lindrea_th: lindrea_user  # dbname: owner
     zabbix: zabbix
   postgresql:
-    version: "14"
+    version: "15"
   allowedSourceRanges: [10.0.50.0/24, 10.3.1.0/24]
   serviceAnnotations: 
    metallb.universe.tf/address-pool: jd-bgp-pool
