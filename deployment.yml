@@ -181,4 +181,3 @@ spec:
     name: radarr-service
   selector:
     name: linds-docker
-  type: ClusterIP

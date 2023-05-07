@@ -1,9 +1,13 @@
 #! /bin/bash
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/tigera-operator.yaml
+
+CALICO_VERSION=v3.25.1
+NGINX_VERSION=v3.1.1
+METALLB_VERSION=v0.13.9
+
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
 kubectl apply -f calico.yml
 
 kubectl apply -f coredns.yml
-NGINX_VERSION=v2.4.0
 
 ##NGINX
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/ns-and-sa.yaml
@@ -17,7 +21,7 @@ kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$
 kubectl apply -f nginx-config.yml
 kubectl apply -f nginx-controller.yml
 
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.6/config/manifests/metallb-native.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/$METALLB_VERSION/config/manifests/metallb-native.yaml
 kubectl apply -f deployment.yml
 kubectl apply -f tautulli.yml
 kubectl apply -f linds-virtualserver.yml

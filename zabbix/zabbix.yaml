@@ -146,8 +146,8 @@ spec:
     spec:
       containers:
         - name: zabbix-web
-          image: zabbix/zabbix-web-nginx-pgsql:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-web-nginx-pgsql:trunk-alpine
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 8080
             name: web-http
@@ -236,8 +236,8 @@ spec:
          emptyDir: {}
       containers:
         - name: zabbix-server
-          image: zabbix/zabbix-server-pgsql:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-server-pgsql:trunk-alpine
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 10051
             protocol: TCP
@@ -307,8 +307,8 @@ spec:
             capabilities: {}
             privileged: true
         - name: zabbix-snmptraps
-          image: zabbix/zabbix-snmptraps:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-snmptraps:trunk-alpine
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 1162
             protocol: UDP
@@ -342,8 +342,8 @@ spec:
     spec:
       containers:
         - name: zabbix-java-gateway
-          image: zabbix/zabbix-java-gateway:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-java-gateway:trunk-alpine
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 10052
             protocol: TCP
@@ -384,8 +384,8 @@ spec:
     spec:
       containers:
         - name: zabbix-web-service
-          image: zabbix/zabbix-web-service:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-web-service:trunk-alpine
+          imagePullPolicy: IfNotPresent
           resources:
            limits:
             cpu: 100m
@@ -449,8 +449,8 @@ spec:
       serviceAccountName: zabbix-agent
       containers:
         - name: zabbix-agent
-          image: zabbix/zabbix-agent:alpine-trunk
-          imagePullPolicy: Always
+          image: zabbix/zabbix-agent:trunk-alpine
+          imagePullPolicy: IfNotPresent
           resources:
            limits:
             cpu: 100m

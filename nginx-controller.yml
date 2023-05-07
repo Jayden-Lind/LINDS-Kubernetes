@@ -23,9 +23,13 @@ spec:
         diun.enable: "true"
     spec:
       serviceAccountName: nginx-ingress
+      automountServiceAccountToken: true
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-      - image: nginx/nginx-ingress:latest
-        imagePullPolicy: IfNotPresent
+      - image: nginx/nginx-ingress:3.1.0
+        imagePullPolicy: Always
         name: nginx-ingress
         ports:
         - name: http
@@ -52,12 +56,13 @@ spec:
          #  memory: "1Gi"
         securityContext:
           allowPrivilegeEscalation: true
-          runAsUser: 101 #nginx
-          capabilities:
-            drop:
-            - ALL
-            add:
-            - NET_BIND_SERVICE
+          runAsUser: 0
+          #runAsUser: 101 #nginx
+          # capabilities:
+          #   drop:
+          #   - ALL
+          #   add:
+          #   - NET_BIND_SERVICE
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -85,7 +90,7 @@ metadata:
     metallb.universe.tf/address-pool: jd-ip-pool
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster
   selector:
     app: nginx-ingress
   ports:
