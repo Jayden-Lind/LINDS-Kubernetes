@@ -26,8 +26,3 @@ data:
       loadbalance
       }
     }
-    linds.com.au:53 {
-      errors
-      cache 300
-      forward . 10.0.50.1 192.168.6.1 10.3.1.200 10.0.50.200
-    }

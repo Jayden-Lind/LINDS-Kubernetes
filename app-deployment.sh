@@ -1,10 +1,10 @@
 #! /bin/bash
 
-CALICO_VERSION=v3.25.1
+CALICO_VERSION=v3.26.0
 NGINX_VERSION=v3.1.1
-METALLB_VERSION=v0.13.9
+METALLB_VERSION=v0.13.10
 
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
 kubectl apply -f calico.yml
 
 kubectl apply -f coredns.yml
