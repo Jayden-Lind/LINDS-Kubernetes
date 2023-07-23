@@ -449,7 +449,7 @@ spec:
       serviceAccountName: zabbix-agent
       containers:
         - name: zabbix-agent
-          image: zabbix/zabbix-agent@sha256:3b46f091994f0b6f4a35c03d5c0070593132ba243c0b3b4a26b42b36e29f8c51
+          image: zabbix/zabbix-agent@sha256:dd00cea1cc439c8495f688f96f751109ce844b3357f7ecd48c2d7a3a337f83ae
           imagePullPolicy: IfNotPresent
           resources:
            limits:
