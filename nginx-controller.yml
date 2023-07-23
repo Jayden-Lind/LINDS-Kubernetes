@@ -102,4 +102,4 @@ spec:
     targetPort: 443
     protocol: TCP
     name: nginx-https
-  loadBalancerIP: 10.0.53.13
+  loadBalancerIP: 10.0.53.22
