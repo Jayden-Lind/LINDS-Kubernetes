@@ -21,20 +21,6 @@ spec:
     path: /mnt/NAS/NAS
     readOnly: false
 ---
-  apiVersion: v1
-  kind: PersistentVolumeClaim
-  metadata:
-    name: linds-nfs-pvc
-    namespace: default
-  spec:
-    volumeName: linds-nfs
-    storageClassName: "manual"
-    accessModes:
-      - ReadWriteMany
-    resources:
-      requests:
-        storage: 1Gi
----
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -101,7 +87,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: jackett
+              subPath: jackett/jackett
           ports:
             - containerPort: 9117
         - name: radarr
@@ -115,7 +101,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: radarr
+              subPath: radarr/radarr
             - name: linds-nfs-nas
               mountPath: /mnt/nas/torrent
               subPath: torrent
@@ -137,7 +123,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: sonarr
+              subPath: sonarr/sonarr
             - name: linds-nfs-nas
               mountPath: /mnt/torrent
               subPath: torrent
