@@ -44,6 +44,7 @@ metadata:
   annotations:
     metallb.universe.tf/address-pool: jd-bgp-pool
 spec:
+  loadBalancerIP: 172.16.10.5
   ports:
   - port: 80
     targetPort: 8080
