@@ -19,7 +19,7 @@ spec:
   volumeMode: Filesystem
   nfs:
     server: jd-truenas-01.linds.com.au
-    path: /mnt/NAS/NAS
+    path: /mnt/NAS
     readOnly: false
 ---
 apiVersion: v1

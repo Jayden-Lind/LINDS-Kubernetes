@@ -29,11 +29,11 @@ spec:
             - name: PROVISIONER_NAME
               value: k8s-sigs.io/nfs-subdir-external-provisioner
             - name: NFS_SERVER
-              value: jd-truenas-01
+              value: jd-truenas-01.linds.com.au
             - name: NFS_PATH
-              value: /mnt/NAS/NAS
+              value: /mnt/NAS
       volumes:
         - name: nfs-client-root
           nfs:
-            server: jd-truenas-01
-            path: /mnt/NAS/NAS
+            server: jd-truenas-01.linds.com.au
+            path: /mnt/NAS
