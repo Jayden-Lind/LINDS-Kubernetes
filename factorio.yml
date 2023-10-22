@@ -99,7 +99,7 @@ metadata:
   namespace: default
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Cluster
+  externalTrafficPolicy: Local
   selector:
     app: factorio
   ports:

@@ -6,10 +6,11 @@ spec:
   # Configures Calico networking.
   calicoNetwork:
     # Note: The ipPools section cannot be modified post-install.
+    containerIPForwarding: Enabled
     ipPools:
     - blockSize: 26
       cidr: 10.244.0.0/16
-      encapsulation: IPIP
+      encapsulation: IPIPCrossSubnet
       natOutgoing: Enabled
       nodeSelector: all()
 ---

@@ -35,7 +35,7 @@ data:
   # default_memory_request: 100Mi
   # delete_annotation_date_key: delete-date
   # delete_annotation_name_key: delete-clustername
-  docker_image: registry.opensource.zalan.do/acid/spilo-14:2.1-p6
+  docker_image: ghcr.io/zalando/spilo-15:3.0-p1 
   # downscaler_annotations: "deployment-time,downscaler/*"
   # enable_admin_role_for_users: "true"
   # enable_crd_registration: "true"
@@ -53,7 +53,7 @@ data:
   # enable_pod_disruption_budget: "true"
   # enable_postgres_team_crd: "false"
   # enable_postgres_team_crd_superusers: "false"
-  enable_readiness_probe: "false"
+  enable_readiness_probe: "true"
   enable_replica_load_balancer: "true"
   enable_replica_pooler_load_balancer: "false"
   # enable_shm_volume: "true"
