@@ -8,3 +8,7 @@ parameters:
   archiveOnDelete: "true"
   pathPattern: "${.PVC.namespace}/${.PVC.annotations.nfs.io/storage-path}/${.PVC.name}"
   onDelete: "retain"
+mountOptions:
+  - nfsvers=4.2
+  - proto=tcp
+  - noacl

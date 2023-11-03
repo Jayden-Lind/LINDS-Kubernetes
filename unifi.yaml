@@ -7,39 +7,14 @@ metadata:
     name: home
 ---
 apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: jd-nfs-truenas-unifi
-  namespace: unifi
-  labels:
-    storage.k8s.io/name: nfs
-    storage.k8s.io/part-of: kubernetes-complete-reference
-    volume.beta.kubernetes.io/mount-options: soft
-spec:
-  accessModes:
-    - ReadWriteOnce
-    - ReadOnlyMany
-    - ReadWriteMany
-  capacity:
-    storage: 10Gi
-  storageClassName: "manual"
-  persistentVolumeReclaimPolicy: Retain
-  volumeMode: Filesystem
-  nfs:
-    server: jd-truenas-01.linds.com.au
-    path: /mnt/NAS
-    readOnly: false
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: jd-nfs-pvc-unifi
   namespace: unifi
 spec:
-  storageClassName: "manual"
-  volumeName: jd-nfs-truenas-unifi
+  storageClassName: nfs-client
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
@@ -65,7 +40,7 @@ spec:
     spec:
       containers:
         - name: unifi
-          image: lscr.io/linuxserver/unifi-controller:latest
+          image: lscr.io/linuxserver/unifi-network-application:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3478
@@ -83,16 +58,42 @@ spec:
           volumeMounts:
             - name: jd-nfs-pvc-unifi
               mountPath: /config
-              subPath: unifi
+              subPath: unifi-appliance
           env:
-            - name: GUID
+            - name: PGID
               value: "1000"
             - name: PUID
-              value: "0"
+              value: "1000"
+            - name: MONGO_HOST
+              value: localhost
+            - name: MONGO_PORT
+              value: "27017"
+            - name: MONGO_USER
+              value: root
+            - name: MONGO_PASS
+              value: example
+            - name: MONGO_DBNAME
+              value: unifi
+        - name: mongodb
+          image: registry.hub.docker.com/library/mongo:4.4
+          ports:
+          - containerPort: 27017
+            protocol: TCP 
+          volumeMounts:
+            - name: jd-nfs-pvc-unifi
+              mountPath: /docker-entrypoint-initdb.d/
+              subPath: unifi-appliance-mongo
+            - name: jd-nfs-pvc-unifi 
+              mountPath: /data/db
+              subPath: unifi-appliance-mongo-db
       volumes:
         - name: jd-nfs-pvc-unifi
           persistentVolumeClaim:
             claimName: jd-nfs-pvc-unifi
+        - name: test-local
+          hostPath:
+            path: /mnt/test
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service
@@ -105,27 +106,27 @@ metadata:
 spec:
   loadBalancerIP: 172.16.10.2
   ports:
-    - name: '8080'
+    - name: "8080"
       protocol: TCP
       port: 8080
       targetPort: 8080
-    - name: '8443'
+    - name: "8443"
       protocol: TCP
       port: 8443
       targetPort: 8443
-    - name: '8843'
+    - name: "8843"
       protocol: TCP
       port: 8843
       targetPort: 8843
-    - name: '8880'
+    - name: "8880"
       protocol: TCP
       port: 8880
       targetPort: 8880
-    - name: '6789'
+    - name: "6789"
       protocol: TCP
       port: 6789
       targetPort: 6789
-    - name: '3478'
+    - name: "3478"
       protocol: UDP
       port: 3478
       targetPort: 3478
