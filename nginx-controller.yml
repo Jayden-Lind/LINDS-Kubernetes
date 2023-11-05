@@ -86,11 +86,8 @@ kind: Service
 metadata:
   namespace: nginx-ingress
   name: nginx
-  annotations:
-    metallb.universe.tf/address-pool: jd-ip-pool
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Cluster
+  type: ClusterIP
   selector:
     app: nginx-ingress
   ports:
@@ -102,4 +99,3 @@ spec:
     targetPort: 443
     protocol: TCP
     name: nginx-https
-  loadBalancerIP: 10.0.53.22

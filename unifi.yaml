@@ -102,11 +102,7 @@ kind: Service
 metadata:
   name: unifi-bgp
   namespace: unifi
-  annotations:
-    metallb.universe.tf/allow-shared-ip: "172.16.10.2"
-    metallb.universe.tf/address-pool: jd-bgp-pool
 spec:
-  loadBalancerIP: 172.16.10.2
   ports:
     - name: "8080"
       protocol: TCP
@@ -134,5 +130,4 @@ spec:
       targetPort: 3478
   selector:
     name: unifi
-  type: LoadBalancer
-  externalTrafficPolicy: Cluster
+  type: ClusterIP 

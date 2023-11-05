@@ -41,10 +41,7 @@ metadata:
   labels:
     app: zabbix
   namespace: zabbix
-  annotations:
-    metallb.universe.tf/address-pool: jd-bgp-pool
 spec:
-  loadBalancerIP: 172.16.10.5
   ports:
   - port: 80
     targetPort: 8080
@@ -55,7 +52,7 @@ spec:
   selector:
     name: zabbix-web
   sessionAffinity: None
-  type: LoadBalancer
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: Service
