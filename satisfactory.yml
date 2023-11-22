@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: satisfactory
+  labels:
+    name: home
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jd-nfs-pvc-satisfactory
+  namespace: satisfactory
+spec:
+  storageClassName: nfs-client
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: satisfactory
+  namespace: satisfactory
+spec:
+  selector:
+    matchLabels:
+      app: satisfactory
+  template:
+    metadata:
+      labels:
+        app: satisfactory
+    spec:
+      nodeSelector: 
+        kubernetes.io/hostname: jd-kube-03
+      containers:
+      - name: satisfactory
+        image: wolveix/satisfactory-server:dev
+        ports:
+        - containerPort: 7777
+          protocol: UDP
+        - containerPort: 15000
+          protocol: UDP
+        - containerPort: 15777
+          protocol: UDP
+        env:
+          - name: NETWORKQUALITY
+            value: "5"
+          - name: TZ
+            value: Australia/Melbourne
+        volumeMounts:
+            - name: jd-nfs-pvc-satisfactory
+              mountPath: config/
+              subPath: satisfactory
+      volumes:
+        - name: jd-nfs-pvc-satisfactory
+          persistentVolumeClaim:
+            claimName: jd-nfs-pvc-satisfactory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: satisfactory
+  namespace: satisfactory
+spec:
+  externalTrafficPolicy: Local
+  internalTrafficPolicy: Local
+  selector:
+    app: satisfactory
+  ports:
+  - port: 7777
+    name: satisfactory-udp-game
+    targetPort: 7777
+    protocol: UDP
+  - port: 15000
+    name: satisfactory-udp-game-remote
+    targetPort: 15000
+    protocol: UDP
+  - port: 15777
+    name: satisfactory-udp-game-admin
+    targetPort: 15777
+    protocol: UDP
+  type: LoadBalancer
+  externalIPs:
+    - 172.16.1.1
