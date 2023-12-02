@@ -50,6 +50,8 @@ spec:
             value: "5"
           - name: TZ
             value: Australia/Melbourne
+          - name: SERVERIP
+            value: "0.0.0.0"
         volumeMounts:
             - name: jd-nfs-pvc-satisfactory
               mountPath: config/
@@ -65,8 +67,8 @@ metadata:
   name: satisfactory
   namespace: satisfactory
 spec:
-  externalTrafficPolicy: Local
-  internalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
   selector:
     app: satisfactory
   ports:
