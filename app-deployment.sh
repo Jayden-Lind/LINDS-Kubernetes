@@ -1,11 +1,16 @@
 #! /bin/bash
 
-CALICO_VERSION=v3.26.3
+CALICO_VERSION=v3.26.4
 NGINX_VERSION=v3.2.1
 
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
 kubectl create -f calico.yml
 kubectl apply -f calico-bgp.yml
+
+kubectl label nodes jd-kube-03 datacenter=jd
+kubectl label nodes jd-kube-02 datacenter=jd
+kubectl label nodes linds-kube-01 datacenter=linds
+kubectl label nodes linds-kube-02 datacenter=linds
 
 if ! test -f /usr/local/bin/kubectl-calico; then
     curl -L https://github.com/projectcalico/calico/releases/download/v3.26.3/calicoctl-linux-amd64 -o /usr/local/bin/kubectl-calico && chmod +x /usr/local/bin/kubectl-calico

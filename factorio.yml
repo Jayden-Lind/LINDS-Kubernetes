@@ -52,6 +52,8 @@ spec:
       annotations:
         diun.enable: "true"
     spec:
+      nodeSelector:
+        datacenter: jd
       containers:
       - name: factorio
         image: factoriotools/factorio:stable
