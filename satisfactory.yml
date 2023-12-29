@@ -36,23 +36,23 @@ spec:
       nodeSelector:
         datacenter: jd
       containers:
-      - name: satisfactory
-        image: wolveix/satisfactory-server:dev
-        ports:
-        - containerPort: 7777
-          protocol: UDP
-        - containerPort: 15000
-          protocol: UDP
-        - containerPort: 15777
-          protocol: UDP
-        env:
-          - name: NETWORKQUALITY
-            value: "5"
-          - name: TZ
-            value: Australia/Melbourne
-          - name: SERVERIP
-            value: "0.0.0.0"
-        volumeMounts:
+        - name: satisfactory
+          image: wolveix/satisfactory-server:dev
+          ports:
+            - containerPort: 7777
+              protocol: UDP
+            - containerPort: 15000
+              protocol: UDP
+            - containerPort: 15777
+              protocol: UDP
+          env:
+            - name: NETWORKQUALITY
+              value: "5"
+            - name: TZ
+              value: Australia/Melbourne
+            - name: SERVERIP
+              value: "0.0.0.0"
+          volumeMounts:
             - name: jd-nfs-pvc-satisfactory
               mountPath: config/
               subPath: satisfactory
@@ -72,18 +72,18 @@ spec:
   selector:
     app: satisfactory
   ports:
-  - port: 7777
-    name: satisfactory-udp-game
-    targetPort: 7777
-    protocol: UDP
-  - port: 15000
-    name: satisfactory-udp-game-remote
-    targetPort: 15000
-    protocol: UDP
-  - port: 15777
-    name: satisfactory-udp-game-admin
-    targetPort: 15777
-    protocol: UDP
+    - port: 7777
+      name: satisfactory-udp-game
+      targetPort: 7777
+      protocol: UDP
+    - port: 15000
+      name: satisfactory-udp-game-remote
+      targetPort: 15000
+      protocol: UDP
+    - port: 15777
+      name: satisfactory-udp-game-admin
+      targetPort: 15777
+      protocol: UDP
   type: LoadBalancer
   externalIPs:
     - 172.16.1.1
