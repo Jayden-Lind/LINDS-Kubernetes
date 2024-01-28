@@ -17,9 +17,17 @@ spec:
     - createdb
     zabbix:
     - superuser
+    catcrawl:
+    - superuser
   databases:
     lindrea: lindrea_user     # dbname: owner
     lindrea_th: lindrea_user  # dbname: owner
     zabbix: zabbix
+    catcrawl: catcrawl
   postgresql:
     version: "14"
+  enableShmVolume: true
+  patroni:
+    pg_hba:
+      - "local  all,replication all trust"
+      - "host all,replication all 0.0.0.0/0 trust"
