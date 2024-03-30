@@ -17,6 +17,8 @@ spec:
       labels:
         name: postgres-operator
     spec:
+      nodeSelector:
+        datacenter: jd
       serviceAccountName: postgres-operator
       containers:
       - name: postgres-operator
@@ -29,11 +31,6 @@ spec:
           limits:
             cpu: 500m
             memory: 500Mi
-        securityContext:
-          runAsUser: 1000
-          runAsNonRoot: true
-          readOnlyRootFilesystem: true
-          allowPrivilegeEscalation: true
         env:
         # provided additional ENV vars can overwrite individual config map entries
         - name: CONFIG_MAP_NAME
@@ -44,13 +41,3 @@ spec:
         # Define an ID to isolate controllers from each other
         # - name: CONTROLLER_ID
         #   value: "second-operator"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                - jd-kube-02
-                - jd-kube-03

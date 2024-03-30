@@ -10,5 +10,4 @@ parameters:
   onDelete: "retain"
 mountOptions:
   - nfsvers=4.2
-  - proto=tcp
-  - noacl
+  - soft

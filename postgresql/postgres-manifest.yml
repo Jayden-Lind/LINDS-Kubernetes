@@ -25,7 +25,7 @@ spec:
     zabbix: zabbix
     catcrawl: catcrawl
   postgresql:
-    version: "14"
+    version: "15"
   enableShmVolume: true
   patroni:
     pg_hba:
