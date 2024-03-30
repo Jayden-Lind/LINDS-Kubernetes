@@ -135,7 +135,7 @@ data:
   role_deletion_suffix: "_deleted"
   secret_name_template: "{username}.{cluster}.credentials.{tprkind}.{tprgroup}"
   # sidecar_docker_images: ""
-  set_memory_request_to_limit: "true"
+  #set_memory_request_to_limit: "true"
   spilo_allow_privilege_escalation: "true"
   # spilo_runasuser: 101
   # spilo_runasgroup: 103

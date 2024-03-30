@@ -24,13 +24,6 @@ spec:
       - name: postgres-operator
         image: registry.opensource.zalan.do/acid/postgres-operator:latest
         imagePullPolicy: Always
-        resources:
-          requests:
-            cpu: 100m
-            memory: 250Mi
-          limits:
-            cpu: 500m
-            memory: 500Mi
         env:
         # provided additional ENV vars can overwrite individual config map entries
         - name: CONFIG_MAP_NAME
