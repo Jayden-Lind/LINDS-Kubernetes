@@ -1,7 +1,7 @@
 #! /bin/bash
 
-CALICO_VERSION=v3.26.4
-NGINX_VERSION=v3.2.1
+CALICO_VERSION=v3.27.2
+NGINX_VERSION=v3.3.1
 
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
 kubectl create -f calico.yml
