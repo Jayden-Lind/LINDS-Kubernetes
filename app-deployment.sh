@@ -4,8 +4,7 @@ CALICO_VERSION=v3.27.2
 NGINX_VERSION=v3.3.1
 
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
-kubectl create -f calico.yml
-kubectl apply -f calico-bgp.yml
+kubectl create -f calico
 
 kubectl label nodes jd-kube-03 datacenter=jd
 kubectl label nodes jd-kube-02 datacenter=jd
@@ -18,6 +17,16 @@ fi
 
 kubectl apply -f coredns.yml
 
+#argo-cd
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+if ! test -f /usr/local/bin/argocd; then
+    curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+    rm argocd-linux-amd64
+fi
+
 ##NGINX
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/ns-and-sa.yaml
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/rbac/rbac.yaml
@@ -27,19 +36,12 @@ kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/crds/k8s.nginx.org_virtualservers.yaml
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/crds/k8s.nginx.org_transportservers.yaml
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/crds/k8s.nginx.org_policies.yaml
-kubectl apply -f nginx-config.yml
-kubectl apply -f nginx-controller.yml
+kubectl apply -f nginx
 
-kubectl apply -f deployment.yml
-kubectl apply -f tautulli.yml
-kubectl apply -f linds-virtualserver.yml
-kubectl apply -f duin.yml
-kubectl apply -f factorio.yml
-kubectl apply -f postgresql.yml
-kubectl apply -f unifi.yaml
-kubectl apply -f linds-secret.yml
 
 kubectl apply -f postgresql
 kubectl apply -f nfs-provisioner
 
 kubectl apply -f zabbix
+
+kubectl apply -f linds/deploy
