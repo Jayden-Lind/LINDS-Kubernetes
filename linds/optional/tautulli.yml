@@ -19,7 +19,7 @@ spec:
       annotations:
         diun.enable: "true"
     spec:
-      nodeSelector: 
+      nodeSelector:
         kubernetes.io/hostname: linds-kube-02
       containers:
         - name: jacket
@@ -50,10 +50,10 @@ metadata:
     app: linds-docker-tautulli
 spec:
   ports:
-  - port: 8181
-    targetPort: 8181
-    protocol: TCP
-    name: linds-docker-tautulli
+    - port: 8181
+      targetPort: 8181
+      protocol: TCP
+      name: linds-docker-tautulli
   selector:
     name: linds-docker-tautulli
   type: ClusterIP

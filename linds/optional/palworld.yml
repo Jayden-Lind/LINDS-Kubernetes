@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: palworld 
+  name: palworld
   labels:
     name: home
 ---
@@ -37,7 +37,7 @@ spec:
         datacenter: jd
       containers:
         - name: palworld
-          image: thijsvanloef/palworld-server-docker 
+          image: thijsvanloef/palworld-server-docker
           ports:
             - containerPort: 8211
               protocol: UDP
