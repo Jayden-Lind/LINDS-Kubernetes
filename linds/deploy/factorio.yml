@@ -49,8 +49,6 @@ spec:
     metadata:
       labels:
         app: factorio
-      annotations:
-        diun.enable: "true"
     spec:
       nodeSelector:
         datacenter: jd
