@@ -7,6 +7,7 @@ spec:
   calicoNetwork:
     # Note: The ipPools section cannot be modified post-install.
     containerIPForwarding: Enabled
+    bgp: Enabled
     ipPools:
     - blockSize: 26
       cidr: 10.244.0.0/16

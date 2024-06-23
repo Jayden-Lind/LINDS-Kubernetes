@@ -75,6 +75,8 @@ spec:
               value: "845"
             - name: PGID
               value: "845"
+            - name: SAVE_NAME
+              value: me_and_obro
       volumes:
         - name: jd-nfs-pvc
           persistentVolumeClaim:
@@ -86,7 +88,7 @@ metadata:
   name: factorio
   namespace: default
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: factorio
   ports:
@@ -98,3 +100,5 @@ spec:
       targetPort: 27015
       protocol: TCP
       name: factorio-tcp
+  externalIPs:
+    - 172.16.1.10

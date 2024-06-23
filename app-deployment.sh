@@ -1,6 +1,6 @@
 #! /bin/bash
 
-CALICO_VERSION=v3.27.3
+CALICO_VERSION=v3.28.0
 NGINX_VERSION=v3.5.0
 
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml
@@ -33,6 +33,7 @@ kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deploy/crds.yaml
 kubectl apply -f nginx
 
+kubectl apply -f linds-secret.yml
 
 kubectl apply -f postgresql
 kubectl apply -f nfs-provisioner
