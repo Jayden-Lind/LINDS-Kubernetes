@@ -137,8 +137,8 @@ spec:
     spec:
       containers:
         - name: zabbix-web
-          image: zabbix/zabbix-web-nginx-pgsql@sha256:a4e7a40e0bcb4ab7a9dd852e95a8a455f289a9e6d9f99f12d34e94c79c870791
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+          imagePullPolicy: Always
           ports:
           - containerPort: 8080
             name: web-http
@@ -227,8 +227,8 @@ spec:
          emptyDir: {}
       containers:
         - name: zabbix-server
-          image: zabbix/zabbix-server-pgsql@sha256:b6a5bd483b1ffe45a0bb7368ed0f4305469a26f27507a069e33b04b0638708f3
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          imagePullPolicy: Always
           ports:
           - containerPort: 10051
             protocol: TCP
@@ -298,8 +298,8 @@ spec:
             capabilities: {}
             privileged: true
         - name: zabbix-snmptraps
-          image: zabbix/zabbix-snmptraps@sha256:b2e2f0a02e0da170728a644eb9117320699e5de0ba111ee0949b7b72d8904517
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-snmptraps:alpine-7.0-latest
+          imagePullPolicy: Always
           ports:
           - containerPort: 1162
             protocol: UDP
@@ -333,8 +333,8 @@ spec:
     spec:
       containers:
         - name: zabbix-java-gateway
-          image: zabbix/zabbix-java-gateway@sha256:d40ff3f2bfa771f4ba8781149355580d1285d92134bc7bacd989753ff39109a9
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-java-gateway:alpine-7.0-latest
+          imagePullPolicy: Always
           ports:
           - containerPort: 10052
             protocol: TCP
@@ -375,8 +375,8 @@ spec:
     spec:
       containers:
         - name: zabbix-web-service
-          image: zabbix/zabbix-web-service@sha256:cf3858a604ce5e565e1b44243d384f0f8f36d04d3952c943e0885c5e24461c1c
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-web-service:alpine-7.0-latest
+          imagePullPolicy: Always
           resources:
            limits:
             cpu: 100m
@@ -440,8 +440,8 @@ spec:
       serviceAccountName: zabbix-agent
       containers:
         - name: zabbix-agent
-          image: zabbix/zabbix-agent@sha256:dd00cea1cc439c8495f688f96f751109ce844b3357f7ecd48c2d7a3a337f83ae
-          imagePullPolicy: IfNotPresent
+          image: zabbix/zabbix-agent:alpine-7.0-latest
+          imagePullPolicy: Always
           resources:
            limits:
             cpu: 100m
