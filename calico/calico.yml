@@ -9,9 +9,10 @@ spec:
     containerIPForwarding: Enabled
     bgp: Enabled
     ipPools:
-    - blockSize: 26
+    - name: default-ipv4-ippool
+      blockSize: 26
       cidr: 10.244.0.0/16
-      encapsulation: IPIPCrossSubnet
+      encapsulation: IPIP
       natOutgoing: Enabled
       nodeSelector: all()
 ---
