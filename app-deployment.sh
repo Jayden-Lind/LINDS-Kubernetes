@@ -27,19 +27,6 @@ if ! test -f /usr/local/bin/argocd; then
     rm argocd-linux-amd64
 fi
 
-##NGINX
-kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/ns-and-sa.yaml
-kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/rbac/rbac.yaml
-kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deploy/crds.yaml
-kubectl apply -f nginx
+kubectl apply -f applications
 
-kubectl apply -f linds-secret.yml
-
-kubectl apply -f postgresql
-kubectl apply -f nfs-provisioner
-
-kubectl apply -f zabbix
-
-kubectl apply -f linds/deploy
-
-#after applying reboot all nodes - Just an Ubuntu thing
+# Reboot ubuntu nodes after provisioning
