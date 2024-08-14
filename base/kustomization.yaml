@@ -1,10 +1,26 @@
 resources:
   # Local resources
   - coredns.yml
-  - postgresql/
-  - nfs-provisioner/
-  - zabbix/
-  - linds/deploy/
+
+  - postgresql/api-service.yml
+  - postgresql/configmap.yml
+  - postgresql/operator-serviceaccount.yml
+  - postgresql/password-postgres.yml
+  - postgresql/postgres-manifest.yml
+  - postgresql/postgres-operator.yml
+
+  - nfs-provisioner/class.yml
+  - nfs-provisioner/deployment.yml
+  - nfs-provisioner/namespace.yml
+  - nfs-provisioner/rbac.yml
+
+  - zabbix/namespace.yml
+  - zabbix/zabbix.yaml
+
+
+  - linds/deploy/deployment.yml
+  - linds/deploy/factorio.yml
+  - linds/deploy/unifi.yaml
 
   # Remote resources
   - https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/tigera-operator.yaml
