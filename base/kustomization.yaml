@@ -1,7 +1,6 @@
 resources:
   # Local resources
   - coredns.yml
-  - linds-secret.yml
   - postgresql
   - nfs-provisioner
   - zabbix
@@ -11,3 +10,13 @@ resources:
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deployments/common/ns-and-sa.yaml
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deployments/rbac/rbac.yaml
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deploy/crds.yaml
+
+
+
+secretGenerator:
+  - name: my-secret
+    files:
+      - linds-secret.yml
+
+generatorOptions:
+  disableNameSuffixHash: true
