@@ -574,13 +574,3 @@ spec:
           hostPath:
             path: /var/run
             type: ''
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
-  namespace: zabbix
-type: Opaque
-data:
-  password: ZHY2ZE5KUHBYdDhHNldNbm1sMDA0dXV3blAydDNrbEN6VHU5MHRYQ3ZnVFMwMDRoNzZJeDdkN0NQTWczcFhPZA==
-  username: cG9zdGdyZXM=

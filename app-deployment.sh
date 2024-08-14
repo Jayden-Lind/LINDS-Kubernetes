@@ -18,14 +18,14 @@ fi
 kubectl apply -f coredns.yml
 
 #argo-cd
-# kubectl create namespace argocd
-# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# if ! test -f /usr/local/bin/argocd; then
-#     curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-#     sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-#     rm argocd-linux-amd64
-# fi
+if ! test -f /usr/local/bin/argocd; then
+    curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+    rm argocd-linux-amd64
+fi
 
 ##NGINX
 kubectl apply -f https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/$NGINX_VERSION/deployments/common/ns-and-sa.yaml
@@ -41,3 +41,5 @@ kubectl apply -f nfs-provisioner
 kubectl apply -f zabbix
 
 kubectl apply -f linds/deploy
+
+#after applying reboot all nodes - Just an Ubuntu thing
