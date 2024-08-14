@@ -1,9 +1,10 @@
 resources:
   # Local resources
   - coredns.yml
-  - postgresql
-  - nfs-provisioner
-  - zabbix
+  - postgresql/
+  - nfs-provisioner/
+  - zabbix/
+  - linds/deploy/
 
   # Remote resources
   - https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/tigera-operator.yaml
