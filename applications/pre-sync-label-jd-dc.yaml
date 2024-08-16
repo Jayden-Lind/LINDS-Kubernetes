@@ -21,4 +21,13 @@ spec:
               kubectl label nodes $node datacenter=jd --overwrite;
             done
       restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - jd-kube-01
   backoffLimit: 4
