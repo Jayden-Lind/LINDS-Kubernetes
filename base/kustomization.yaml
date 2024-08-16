@@ -2,6 +2,9 @@ resources:
   # Local resources
   - coredns.yml
 
+  - calico/calico-bgp.yml
+  - calico/calico.yml
+
   - postgresql/api-service.yml
   - postgresql/configmap.yml
   - postgresql/operator-serviceaccount.yml
@@ -16,7 +19,6 @@ resources:
 
   - zabbix/namespace.yml
   - zabbix/zabbix.yaml
-
 
   - linds/deploy/deployment.yml
   - linds/deploy/factorio.yml
