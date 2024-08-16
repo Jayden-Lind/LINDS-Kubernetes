@@ -17,6 +17,10 @@ resources:
   - nfs-provisioner/namespace.yml
   - nfs-provisioner/rbac.yml
 
+  - nginx/linds-virtualserver.yml
+  - nginx/nginx-config.yml
+  - nginx/nginx-controller.yml
+
   - zabbix/namespace.yml
   - zabbix/zabbix.yaml
 
