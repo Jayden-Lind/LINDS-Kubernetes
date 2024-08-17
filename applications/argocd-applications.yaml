@@ -20,6 +20,7 @@ spec:
     syncOptions:
       - ApplyOutOfSyncOnly=true
       - Validate=false
+      - ServerSideApply=true
     retry:
       limit: 5 # number of failed sync attempt retries; unlimited number of attempts if less than 0
       backoff:
