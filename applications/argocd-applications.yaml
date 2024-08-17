@@ -17,5 +17,12 @@ spec:
     automated:
       prune: true
       selfHeal: true
-  syncOptions:
-  - ServerSideApply=true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - Validate=false
+    retry:
+      limit: 5 # number of failed sync attempt retries; unlimited number of attempts if less than 0
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
