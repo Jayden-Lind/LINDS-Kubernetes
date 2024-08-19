@@ -3,16 +3,18 @@ kind: Installation
 metadata:
   name: default
 spec:
-  # Configures Calico networking.
   calicoNetwork:
-    # Note: The ipPools section cannot be modified post-install.
     containerIPForwarding: Enabled
     bgp: Enabled
     ipPools:
-    - name: default-ipv4-ippool
+    - allowedUses:
+          - Workload
+          - Tunnel
+      name: default-ipv4-ippool
+      disableBGPExport: false
       blockSize: 26
       cidr: 10.244.0.0/16
-      encapsulation: IPIP
+      encapsulation: IPIPCrossSubnet
       natOutgoing: Enabled
       nodeSelector: all()
 ---
