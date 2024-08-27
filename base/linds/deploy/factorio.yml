@@ -41,6 +41,9 @@ kind: Deployment
 metadata:
   name: factorio
   namespace: default
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: factorio
+    argocd-image-updater.argoproj.io/factorio.update-strategy: latest
 spec:
   selector:
     matchLabels:
