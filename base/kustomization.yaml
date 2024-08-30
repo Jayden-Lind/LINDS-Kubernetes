@@ -25,7 +25,6 @@ resources:
   - zabbix/zabbix.yaml
 
   - linds/deploy/deployment.yml
-  - linds/deploy/factorio.yml
   - linds/deploy/unifi.yaml
 
   - argocd-image-updater/
