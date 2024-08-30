@@ -11,7 +11,7 @@ spec:
     path: "base/factorio/prod"
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: default
+    namespace: factorio
   syncPolicy:
     automated:
       prune: true
