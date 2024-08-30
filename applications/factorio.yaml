@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: factorio
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "base/factorio/prod"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - Validate=false
+      - ServerSideApply=true

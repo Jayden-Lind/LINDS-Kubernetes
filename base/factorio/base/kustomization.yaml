@@ -1,0 +1,11 @@
+resources:
+  - pv.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app: factorio
+
+namespace: factorio
+

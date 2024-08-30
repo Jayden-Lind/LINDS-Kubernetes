@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: factorio
+  labels:
+    app: factorio
+spec:
+  selector:
+    matchLabels:
+      app: factorio
+  template:
+    metadata:
+      labels:
+        app: factorio
+    spec:
+      nodeSelector:
+        datacenter: jd
+      containers:
+        - name: factorio
+          image: factoriotools/factorio:stable
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 34197
+              protocol: UDP
+            - containerPort: 27015
+          volumeMounts:
+            - mountPath: /factorio
+              name: jd-nfs-pvc
+              subPath: factorio
+          env:
+            - name: CONFIG
+              value: /factorio/config
+            - name: PORT
+              value: "34197"
+            - name: RCON_PORT
+              value: "27015"
+            - name: PUID
+              value: "845"
+            - name: PGID
+              value: "845"
+            - name: SAVE_NAME
+              value: me_and_obro
+      volumes:
+        - name: jd-nfs-pvc
+          persistentVolumeClaim:
+            claimName: jd-nfs-pvc

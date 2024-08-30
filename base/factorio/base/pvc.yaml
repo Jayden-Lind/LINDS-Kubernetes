@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jd-nfs-pvc
+spec:
+  storageClassName: "manual"
+  volumeName: jd-nfs-truenas
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
