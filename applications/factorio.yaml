@@ -4,8 +4,9 @@ metadata:
   name: factorio
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: factorio
-    argocd-image-updater.argoproj.io/factorio.update-strategy: latest
+    argocd-image-updater.argoproj.io/image-list: factorio=factoriotools/factorio:stable
+    argocd-image-updater.argoproj.io/factorio.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
 spec:
   project: default
   source:
