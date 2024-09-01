@@ -9,6 +9,9 @@ resources:
   - services/zabbix-web-service.yaml
   - replicationcontrollers/zabbix-web.yaml
   - statefulsets/zabbix-server.yaml
+  - daemonsets/zabbix-agent.yaml
+  - deployments/zabbix-java-gateway.yaml
+  - deployments/zabbix-web-service.yaml
 
 commonLabels:
   app: zabbix
