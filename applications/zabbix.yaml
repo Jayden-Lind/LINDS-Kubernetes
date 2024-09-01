@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zabbix
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: zabbix-server=zabbix/zabbix-server-pgsql:alpine-7.0-latest,zabbix-web=zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest,zabbix-java-gateway=zabbix/zabbix-java-gateway:alpine-7.0-latest,zabbix-web-service=zabbix/zabbix-web-service:alpine-7.0-latest,zabbix-agent=zabbix/zabbix-agent:alpine-7.0-latest,zabbix-snmptraps=zabbix/zabbix-snmptraps:alpine-7.0-latest
+    argocd-image-updater.argoproj.io/zabbix-server.update-strategy: digest
+    argocd-image-updater.argoproj.io/zabbix-java-gateway.update-strategy: digest
+    argocd-image-updater.argoproj.io/zabbix-web.update-strategy: digest
+    argocd-image-updater.argoproj.io/zabbix-web-service.update-strategy: digest
+    argocd-image-updater.argoproj.io/zabbix-agent.update-strategy: digest
+    argocd-image-updater.argoproj.io/zabbix-snmptraps.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "base/zabbix/prod"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: zabbix
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - Validate=false
+      - ServerSideApply=true
+      - CreateNamespace=true

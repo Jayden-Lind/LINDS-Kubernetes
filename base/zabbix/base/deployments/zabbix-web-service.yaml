@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-web-service
+  labels:
+    app: zabbix
+    tier: web-service
+  namespace: zabbix
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: zabbix-web-service
+    argocd-image-updater.argoproj.io/zabbix-web-service.update-strategy: latest
+spec:
+  selector:
+    matchLabels:
+     name: zabbix-web-service
+     app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-web-service
+        app: zabbix
+    spec:
+      containers:
+        - name: zabbix-web-service
+          image: zabbix/zabbix-web-service:alpine-7.0-latest
+          imagePullPolicy: Always
+          resources:
+           limits:
+            cpu: 100m
+            memory: 512Mi
+           requests:
+            cpu: 100m
+            memory: 512Mi
+          ports:
+          - containerPort: 10053
+            protocol: TCP
+            name: zabbix-web-svc
+          env:
+          - name: ZBX_ALLOWEDIP
+            value: "0.0.0.0/0"
+          - name: ZBX_LISTENPORT
+            value: "10053"
+          - name: ZBX_DEBUGLEVEL
+            value: "3"
+          - name: ZBX_TIMEOUT
+            value: "3"
+          - name: ZBX_TLSACCEPT
+            value: ""
+          - name: ZBX_TLSCAFILE
+            value: ""
+          - name: ZBX_TLSCERTFILE
+            value: ""
+          - name: ZBX_TLSKEYFILE
+            value: ""
+          - name: DEBUG_MODE
+            value: "false"
+          securityContext:
+            capabilities: {}
+            privileged: false

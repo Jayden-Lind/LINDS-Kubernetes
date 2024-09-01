@@ -1,0 +1,14 @@
+resources:
+  - role.yaml
+  - rolebinding.yaml
+  - serviceaccount.yaml
+  - services/zabbix-agent.yaml
+  - services/zabbix-java-gateway.yaml
+  - services/zabbix-server.yaml
+  - services/zabbix-web.yaml
+  - services/zabbix-web-service.yaml
+  - replicationcontrollers/zabbix-web.yaml
+  - statefulsets/zabbix-server.yaml
+
+commonLabels:
+  app: zabbix

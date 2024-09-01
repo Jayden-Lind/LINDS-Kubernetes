@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-java-gateway
+  labels:
+    app: zabbix
+    tier: java
+  namespace: zabbix
+spec:
+  selector:
+    matchLabels:
+     name: zabbix-java-gateway
+     app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-java-gateway
+        app: zabbix
+    spec:
+      containers:
+        - name: zabbix-java-gateway
+          image: zabbix/zabbix-java-gateway:alpine-7.0-latest
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 10052
+            protocol: TCP
+            name: zabbix-java
+          env:
+          - name: ZBX_START_POLLERS
+            value: "5"
+          - name: ZBX_TIMEOUT
+            value: "3"
+          - name: ZBX_DEBUGLEVEL
+            value: "info"
+          - name: JAVA_OPTIONS
+            value: ""
+          - name: DEBUG_MODE
+            value: "false"
+          securityContext:
+            capabilities: {}
+            privileged: false

@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zabbix-server
+  labels:
+    app: zabbix
+    tier: server
+    environment: dev
+  namespace: zabbix
+spec:
+  serviceName: "zabbix-server"
+  replicas: 2
+  selector:
+    matchLabels:
+      name: zabbix-server
+      app: zabbix
+  template:
+    metadata:
+      labels:
+        name: zabbix-server
+        app: zabbix
+    spec:
+      volumes:
+       - name: zabbix-snmptraps
+         emptyDir: {}
+      containers:
+        - name: zabbix-server
+          image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 10051
+            protocol: TCP
+            name: zabbix-trapper
+          env:
+          - name: DB_SERVER_HOST
+            value: linds-postgresql.postgresql-linds.svc.cluster.local
+          - name: DB_SERVER_PORT
+            value: "5432"
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+                key:  password
+          - name: POSTGRES_DB
+            value: zabbix
+          - name: ZBX_CACHESIZE
+            value: "1024M"
+          - name: ZBX_TRENDCACHESIZE
+            value: "1024M"
+          - name: ZBX_HISTORYCACHESIZE
+            value: "2048M"
+          - name: ZBX_HISTORYINDEXCACHESIZE
+            value: "1024M"
+          - name: ZBX_STARTTRAPPERS
+            value: "5"
+          - name: ZBX_STARTPREPROCESSORS
+            value: "10"
+          - name: ZBX_STARTDBSYNCERS
+            value: "10"
+          - name: ZBX_JAVAGATEWAY_ENABLE
+            value: "true"
+          - name: ZBX_STARTJAVAPOLLERS
+            value: "5"
+          - name: ZBX_ENABLE_SNMP_TRAPS
+            value: "true"
+          - name: ZBX_STARTPROXYPOLLERS
+            value: "5"
+          - name: ZBX_PROXYCONFIGFREQUENCY
+            value: "60"
+          - name: ZBX_STARTVMWARECOLLECTORS
+            value: "10"
+          - name: ZBX_VMWAREFREQUENCY
+            value: "60"
+          - name: ZBX_VMWAREPERFFREQUENCY
+            value: "60"
+          - name: ZBX_VMWARETIMEOUT
+            value: "10"
+
+          # For HA mode
+          - name: ZBX_AUTOHANODENAME
+            value: "fqdn"
+          - name: ZBX_AUTONODEADDRESS
+            value: "fqdn"
+          - name: ZBX_SERVICEMANAGERSYNCFREQUENCY
+            value: "10"
+          - name: ZBX_PROBLEMHOUSEKEEPINGFREQUENCY
+            value: "60"
+
+          volumeMounts:
+          - name: zabbix-snmptraps
+            mountPath: "/var/lib/zabbix/snmptraps"
+            readOnly: true
+          securityContext:
+            capabilities: {}
+            privileged: true
+        - name: zabbix-snmptraps
+          image: zabbix/zabbix-snmptraps:alpine-7.0-latest
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 1162
+            protocol: UDP
+            name: snmp-trap
+          volumeMounts:
+          - name: zabbix-snmptraps
+            mountPath: /var/lib/zabbix/snmptraps/
+            readOnly: false
+          securityContext:
+            capabilities: {}
+            privileged: false

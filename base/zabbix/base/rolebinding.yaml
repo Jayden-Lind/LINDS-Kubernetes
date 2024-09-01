@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: zabbix-agent
+  namespace: zabbix
+subjects:
+- kind: ServiceAccount
+  name: zabbix-agent
+roleRef:
+  kind: Role
+  name: zabbix-agent
+  apiGroup: rbac.authorization.k8s.io
