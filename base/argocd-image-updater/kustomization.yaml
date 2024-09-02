@@ -1,3 +1,6 @@
 namespace: argocd
 resources:
   - https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/manifests/install.yaml
+
+patchesStrategicMerge:
+  - argocd-image-updater-patch.yaml
