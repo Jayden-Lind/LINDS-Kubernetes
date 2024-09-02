@@ -12,6 +12,7 @@ metadata:
 spec:
   selector:
    matchLabels:
+    app: zabbix
     name: zabbix-agent
   updateStrategy:
    type: RollingUpdate
