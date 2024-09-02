@@ -17,7 +17,7 @@ spec:
   source:
     repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
     targetRevision: HEAD
-    path: "base/zabbix"
+    path: "base/zabbix/prod"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: zabbix
