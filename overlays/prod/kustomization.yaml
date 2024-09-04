@@ -2,4 +2,4 @@ resources:
   - ../../base
 
 patchesStrategicMerge:
-  - argocd-image-updater/argocd-image-updater-patch.yaml
+  - argocd-image-updater-patch.yaml
