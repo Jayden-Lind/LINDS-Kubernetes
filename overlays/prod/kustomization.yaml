@@ -1,5 +1,5 @@
 resources:
   - ../../base
 
-patches:
+patchesStrategicMerge:
   - ../../base/argocd-image-updater/argocd-image-updater-patch.yaml
