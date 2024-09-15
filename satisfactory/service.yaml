@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: satisfactory
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: satisfactory=wolveix/satisfactory-server:dev
+    argocd-image-updater.argoproj.io/satisfactory.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+spec:
+  selector:
+    app: satisfactory
+  ports:
+    - port: 7777
+      name: satisfactory-udp-game
+      targetPort: 7777
+      protocol: UDP
+    - port: 7777
+      name: satisfactory-tcp-game
+      targetPort: 7777
+      protocol: TCP
+  type: LoadBalancer
+  externalIPs:
+    - 172.16.1.1

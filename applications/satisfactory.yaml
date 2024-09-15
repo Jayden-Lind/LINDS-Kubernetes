@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: satisfactory-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "satisfactory"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: satisfactory
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
