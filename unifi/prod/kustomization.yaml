@@ -1,0 +1,5 @@
+bases:
+  - ../base
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
