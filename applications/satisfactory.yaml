@@ -3,6 +3,10 @@ kind: Application
 metadata:
   name: satisfactory-app
   namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: satisfactory=wolveix/satisfactory-server:latest
+    argocd-image-updater.argoproj.io/satisfactory.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
 spec:
   project: default
   source:

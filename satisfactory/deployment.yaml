@@ -15,7 +15,7 @@ spec:
         datacenter: jd
       containers:
         - name: satisfactory
-          image: wolveix/satisfactory-server:dev
+          image: wolveix/satisfactory-server:latest
           ports:
             - containerPort: 7777
               protocol: UDP
