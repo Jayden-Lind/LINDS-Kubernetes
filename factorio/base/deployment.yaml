@@ -40,6 +40,8 @@ spec:
               value: "845"
             - name: SAVE_NAME
               value: me_and_obro
+            - name: DLC_SPACE_AGE
+              value: "false"
       volumes:
         - name: jd-nfs-pvc
           persistentVolumeClaim:
