@@ -18,10 +18,12 @@ resources:
   - nfs-provisioner/rbac.yml
 
   - nginx/linds-virtualserver.yml
+  - nginx/pdf.yml
   - nginx/nginx-config.yml
   - nginx/nginx-controller.yml
 
   - linds/deploy/deployment.yml
+  - linds/deploy/pdf.yml
 
   - argocd-image-updater/
 
