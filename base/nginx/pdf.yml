@@ -1,0 +1,26 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: stirling-pdf
+  namespace: default
+spec:
+  host: pdf.linds.com.au
+  tls:
+    secret: linds-certificate-secret
+    redirect:
+      enable: true
+  upstreams:
+    - name: stirling-pdf-service
+      service: stirling-pdf-service
+      port: 8080
+  routes:
+    - path: /
+      action:
+        proxy:
+          upstream: stirling-pdf-service
+          requestHeaders:
+            pass: true
+          rewritePath: /
+          responseHeaders:
+            pass:
+              - Server

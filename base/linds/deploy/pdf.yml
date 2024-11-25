@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stirling-pdf-deployment
+  labels:
+    app: stirling-pdf
+spec:
+  selector:
+    matchLabels:
+      app: stirling-pdf
+  template:
+    metadata:
+      labels:
+        app: stirling-pdf
+    spec:
+      containers:
+        - name: stirling-pdf
+          image: docker.io/stirlingtools/stirling-pdf:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DOCKER_ENABLE_SECURITY
+              value: "false"
+            - name: INSTALL_BOOK_AND_ADVANCED_HTML_OPS
+              value: "false"
+            - name: LANGS
+              value: "en_GB"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stirling-pdf-service
+  labels:
+    app: stirling-pdf
+spec:
+  selector:
+    app: stirling-pdf
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
