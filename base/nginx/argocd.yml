@@ -1,0 +1,22 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: argocd-server
+  namespace: argocd 
+spec:
+  host: argocd.linds.com.au
+  tls:
+    secret: linds-certificate-secret
+    redirect:
+      enable: true
+  upstreams:
+    - name: argocd-server
+      service: argocd-server
+      port: 443
+      tls: 
+        enable: true
+  routes:
+    - path: /
+      action:
+        proxy:
+          upstream: argocd-server
