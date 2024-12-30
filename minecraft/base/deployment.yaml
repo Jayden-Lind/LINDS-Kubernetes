@@ -23,11 +23,19 @@ spec:
         - name: EULA
           value: "TRUE"
         - name: VERSION
-          value: "LATEST"        # or "1.20.1", or "PURPUR", "SPIGOT", "FORGE", etc.
+          value: "LATEST"
         - name: MEMORY
-          value: "4G"           # adjust for your needs
+          value: "4G"
         - name: TYPE
-          value: "PAPER"      # or "SPIGOT", "PAPER", etc.
+          value: "PAPER"
+        - name: PAPER_CHANNEL
+          value: experimental
+        - name: USE_AIKAR_FLAGS
+          value: "true"
+        - name: TZ
+          value: Australia/Melbourne
+        - name: DIFFICULTY
+          value: hard
         ports:
         - containerPort: 25565
           name: minecraft
