@@ -1,0 +1,10 @@
+resources:
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app: minecraft
+
+namespace: minecraft
+

@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minecraft
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: minecraft=itzg/minecraft-server:latest
+    argocd-image-updater.argoproj.io/minecraft.update-strategy: digest
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "minecraft/prod"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: minecraft
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+      - Validate=false
+      - ServerSideApply=true
+      - CreateNamespace=true

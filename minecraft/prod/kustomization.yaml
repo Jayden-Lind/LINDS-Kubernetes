@@ -1,0 +1,8 @@
+bases:
+  - ../base
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
