@@ -17,6 +17,9 @@ spec:
     server: 'https://kubernetes.default.svc'
     namespace: satisfactory
   syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true
     automated:
       prune: true
       selfHeal: true
