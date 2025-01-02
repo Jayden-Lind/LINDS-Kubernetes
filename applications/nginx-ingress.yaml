@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-ingress
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nginx-ingress
+  source:
+    chart: nginx-ingress
+    repoURL: ghcr.io/nginxinc/charts
+    targetRevision: 2.0.0
+    helm:
+      releaseName: nginx-ingress
+      valuesObject:
+        controller:
+          disableIPV6: true
+          extraArgs:
+            default-ssl-certificate: "nginx-ingress/linds-certificate-secret"
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
