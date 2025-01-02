@@ -3,7 +3,6 @@ resources:
   - coredns.yml
 
   - calico/calico-bgp.yml
-  - calico/calico.yml
 
   - postgresql/api-service.yml
   - postgresql/configmap.yml

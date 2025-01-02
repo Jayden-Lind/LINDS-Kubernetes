@@ -29,7 +29,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
   ignoreDifferences:
-    - group: "actions.github.com"
+    - group: actions.github.com
       kind: AutoscalingListener
-      name: "*"
-      jsonPointers: []
+      jsonPointers:
+        - /
