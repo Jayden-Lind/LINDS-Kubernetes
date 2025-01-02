@@ -1,5 +1,25 @@
 #! /bin/bash
 
+# Calico (Networking)
+kubectl create namespace tigera-operator
+helm repo add projectcalico https://docs.tigera.io/calico/charts
+helm install calico projectcalico/tigera-operator \
+  --namespace tigera-operator \
+  --create-namespace \
+  --version v3.29.1 \
+  --set calicoNetwork.containerIPForwarding=Enabled \
+  --set calicoNetwork.bgp=Enabled \
+  --set calicoNetwork.ipPools[0].allowedUses[0]=Workload \
+  --set calicoNetwork.ipPools[0].allowedUses[1]=Tunnel \
+  --set calicoNetwork.ipPools[0].name=default-ipv4-ippool \
+  --set calicoNetwork.ipPools[0].disableBGPExport=false \
+  --set calicoNetwork.ipPools[0].blockSize=26 \
+  --set calicoNetwork.ipPools[0].cidr=10.244.0.0/16 \
+  --set calicoNetwork.ipPools[0].encapsulation=IPIPCrossSubnet \
+  --set calicoNetwork.ipPools[0].natOutgoing=Enabled \
+  --set calicoNetwork.ipPools[0].nodeSelector="all()"
+
+
 #argo-cd
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
