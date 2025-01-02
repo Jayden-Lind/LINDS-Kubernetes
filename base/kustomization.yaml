@@ -27,7 +27,6 @@ resources:
   - argocd-image-updater/
 
   # Remote resources
-  - https://raw.githubusercontent.com/projectcalico/calico/v3.28.1/manifests/tigera-operator.yaml
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deployments/common/ns-and-sa.yaml
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deployments/rbac/rbac.yaml
   - https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.6.1/deploy/crds.yaml
