@@ -33,7 +33,7 @@ fi
 # Allow master to receive jobs to run the pre-hooks to finish provisioning the cluster
 kubectl taint node jd-kube-01 node-role.kubernetes.io/control-plane:NoSchedule-
 
-kubectl apply -f applications
+kubectl create -f applications
 
 kubectl create -k base
 
