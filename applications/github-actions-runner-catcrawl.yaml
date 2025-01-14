@@ -22,6 +22,9 @@ spec:
         githubConfigUrl: "https://github.com/Jayden-Lind/catcrawl"
 
         githubConfigSecret: pre-defined-secret
+
+        containerMode:
+          type: "dind"
   syncPolicy:
     automated:
       selfHeal: true
