@@ -49,6 +49,6 @@ spec:
                   secretKeyRef:
                     name: catcrawl-env-secret
                     key: API_URL
-            imagePullSecrets:
-            - name: ghcr-pull-secret
+          imagePullSecrets:
+          - name: ghcr-pull-secret
           restartPolicy: Never
