@@ -27,7 +27,7 @@ spec:
           type: "dind"
   syncPolicy:
     automated:
-      selfHeal: true
+      selfHeal: false
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true

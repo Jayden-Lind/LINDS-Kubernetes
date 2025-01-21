@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: catcrawl
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "catcrawl"
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true
+    automated:
+      prune: true
+      selfHeal: true
