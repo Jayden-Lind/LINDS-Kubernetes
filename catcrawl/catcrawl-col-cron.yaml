@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: catcrawl-scheduler
+  namespace: default
+spec:
+  schedule: "0 2 * * 3" 
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: catcrawl-coles
+            image: ghcr.io/jayden-lind/cat-crawl-coles:latest
+            imagePullPolicy: Always
+            env:
+              - name: DB_HOST
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: DB_HOST
+              - name: DB_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: DB_USER
+              - name: DB_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: DB_PASSWORD
+              - name: DB_PORT
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: DB_PORT
+              - name: CAT_STORE_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: CAT_STORE_ID
+              - name: API_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: API_KEY
+              - name: API_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: catcrawl-coles-env-secret
+                    key: API_URL
+          imagePullSecrets:
+          - name: ghcr-pull-secret
+          restartPolicy: Never

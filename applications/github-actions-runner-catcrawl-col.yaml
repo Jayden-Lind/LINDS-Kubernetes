@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gha-runner-scale-set-catcrawl-col
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-runners
+  source:
+    chart: gha-runner-scale-set
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    targetRevision: 0.10.1
+    helm:
+      releaseName: arc-runner-set-col
+      valuesObject:
+        controllerServiceAccount:
+          namespace: arc-systems
+          name: arc-gha-rs-controller
+
+        githubConfigUrl: "https://github.com/Jayden-Lind/catcrawl-coles"
+
+        githubConfigSecret: pre-defined-secret
+
+        containerMode:
+          type: "dind"
+  syncPolicy:
+    automated:
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+  ignoreDifferences:
+    - group: actions.github.com
+      kind: AutoscalingListener
+      jsonPointers:
+        - /
