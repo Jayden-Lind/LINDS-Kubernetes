@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: catcrawl-scheduler
+  name: catcrawl-coles-scheduler
   namespace: default
 spec:
   schedule: "0 2 * * 3" 
