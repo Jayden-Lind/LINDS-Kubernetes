@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catcrawl-coles-api
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catcrawl-coles-api
+  template:
+    metadata:
+      labels:
+        app: catcrawl-coles-api
+    spec:
+      containers:
+      - name: catcrawl-coles-api
+        image: ghcr.io/jayden-lind/cat-crawl-coles-api:latest
+        imagePullPolicy: Always
+        env:
+          - name: DB_HOST
+            valueFrom:
+              secretKeyRef:
+                name: catcrawl-coles-env-secret
+                key: DB_HOST
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: catcrawl-coles-env-secret
+                key: DB_USER
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: catcrawl-coles-env-secret
+                key: DB_PASSWORD
+          - name: DB_PORT
+            valueFrom:
+              secretKeyRef:
+                name: catcrawl-coles-env-secret
+                key: DB_PORT
+      imagePullSecrets:
+      - name: ghcr-pull-secret
