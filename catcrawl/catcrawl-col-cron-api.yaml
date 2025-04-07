@@ -43,3 +43,22 @@ spec:
             protocol: TCP
       imagePullSecrets:
       - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catcrawl-col-api
+  namespace: default
+spec:
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  selector:
+    app: catcrawl-coles-api
+  ports:
+    - port: 8080
+      name: catcrawl-coles-api
+      targetPort: 3000
+      protocol: TCP
+  type: LoadBalancer
+  externalIPs:
+    - 172.16.1.16
