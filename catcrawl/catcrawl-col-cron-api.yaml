@@ -75,14 +75,14 @@ spec:
     redirect:
       enable: true
   upstreams:
-    - name: catcrawl-coles-api
-      service: catcrawl-coles-api
+    - name: catcrawl-col-api
+      service: catcrawl-col-api
       port: 8080
   routes:
     - path: /
       action:
         proxy:
-          upstream: catcrawl-coles-api
+          upstream: catcrawl-col-api
           requestHeaders:
             pass: true
           rewritePath: /
