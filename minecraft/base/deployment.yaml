@@ -18,7 +18,7 @@ spec:
         datacenter: jd
       containers:
       - name: minecraft
-        image: itzg/minecraft-server:latest
+        image: itzg/minecraft-server:java23-graalvm
         env:
         - name: EULA
           value: "TRUE"
