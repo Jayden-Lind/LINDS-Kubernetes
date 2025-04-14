@@ -25,17 +25,19 @@ spec:
         - name: VERSION
           value: "LATEST"
         - name: MEMORY
-          value: "4G"
+          value: "10240M"
         - name: TYPE
           value: "PAPER"
-        - name: PAPER_CHANNEL
-          value: experimental
         - name: USE_AIKAR_FLAGS
           value: "true"
         - name: TZ
           value: Australia/Melbourne
         - name: DIFFICULTY
           value: hard
+        - name: SYNC_CHUNK_WRITES
+          value: "false"
+        - name: REGION_FILE_COMPRESSION
+          value: "lz4"
         ports:
         - containerPort: 25565
           name: minecraft
