@@ -10,7 +10,7 @@ spec:
     namespace: nginx-ingress
   source:
     chart: nginx-ingress
-    repoURL: ghcr.io/nginxinc/charts
+    repoURL: ghcr.io/nginx/charts
     targetRevision: 2.1.0
     helm:
       releaseName: nginx-ingress
