@@ -6,9 +6,6 @@ metadata:
     app: zabbix
     tier: agent
   namespace: zabbix
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: zabbix-agent
-    argocd-image-updater.argoproj.io/zabbix-agent.update-strategy: digest
 spec:
   selector:
    matchLabels:
