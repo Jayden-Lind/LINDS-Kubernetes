@@ -11,7 +11,7 @@ spec:
   source:
     chart: tigera-operator
     repoURL: https://docs.tigera.io/calico/charts 
-    targetRevision: v3.29.2
+    targetRevision: v3.29.3
     helm:
       releaseName: calico
       valuesObject:
