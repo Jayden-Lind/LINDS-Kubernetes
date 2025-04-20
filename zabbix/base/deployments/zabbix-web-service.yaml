@@ -8,7 +8,7 @@ metadata:
   namespace: zabbix
   annotations:
     argocd-image-updater.argoproj.io/image-list: zabbix-web-service
-    argocd-image-updater.argoproj.io/zabbix-web-service.update-strategy: latest
+    argocd-image-updater.argoproj.io/zabbix-web-service.update-strategy: digest
 spec:
   selector:
     matchLabels:

@@ -8,7 +8,7 @@ metadata:
   namespace: zabbix
   annotations:
     argocd-image-updater.argoproj.io/image-list: zabbix-web-service-nginx
-    argocd-image-updater.argoproj.io/zabbix-web-service-nginx.update-strategy: latest
+    argocd-image-updater.argoproj.io/zabbix-web-service-nginx.update-strategy: digest
 spec:
   replicas: 2
   template:

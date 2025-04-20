@@ -4,4 +4,4 @@ metadata:
   name: factorio
   annotations:
     argocd-image-updater.argoproj.io/image-list: factorio
-    argocd-image-updater.argoproj.io/factorio.update-strategy: latest
+    argocd-image-updater.argoproj.io/factorio.update-strategy: digest
