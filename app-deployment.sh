@@ -6,7 +6,7 @@ helm repo add projectcalico https://docs.tigera.io/calico/charts
 helm install calico projectcalico/tigera-operator \
   --namespace tigera-operator \
   --create-namespace \
-  --version v3.29.1 \
+  --version v3.29.3 \
   --set calicoNetwork.containerIPForwarding=Enabled \
   --set calicoNetwork.bgp=Enabled \
   --set calicoNetwork.ipPools[0].allowedUses[0]=Workload \
