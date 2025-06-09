@@ -23,3 +23,8 @@ resources:
   - linds/deploy/pdf.yml
 
   - argocd-image-updater/
+
+  # Remote resources
+  - https://raw.githubusercontent.com/nginx/kubernetes-ingress/v5.0.0/deployments/common/ns-and-sa.yaml
+  - https://raw.githubusercontent.com/nginx/kubernetes-ingress/v5.0.0/deployments/rbac/rbac.yaml
+  - https://raw.githubusercontent.com/nginx/kubernetes-ingress/v5.0.0/deploy/crds.yaml
