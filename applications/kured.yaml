@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kured
+  namespace: argocd          # ← change if your Argo CD is in another ns
+  labels:
+    app.kubernetes.io/managed-by: argocd
+spec:
+  project: default # ← or a custom Argo CD Project
+  source:
+    repoURL: https://kubereboot.github.io/charts          # Helm repo URL
+    chart: kured
+    targetRevision: "5.6.1" # pick an exact version for reproducibility
+    helm:
+      releaseName: kured
+      values: |
+        # --- begin Helm values overrides ---
+        # Install kured to kube-system where node-level daemons usually live
+        namespace: kube-system
+
+        # Example: act immediately when /var/run/reboot-required appears
+        configuration:
+          period: 1h0m0s            # polling interval
+          timeZone: "Etc/UTC"
+          # optional: rebootSentinelCommand to catch more cases
+          # rebootSentinelCommand: "sh -c '! needrestart --reboothint'"
+
+        # SecurityContext, tolerations, etc. can go here
+        # tolerations:
+        #   - key: node-role.kubernetes.io/master
+        #     operator: Exists
+        #     effect: NoSchedule
+        # --- end Helm values overrides ---
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system     # Helm’s default ns (must match values above)
+  syncPolicy:
+    automated:                 # enable auto-sync (optional)
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true   # let Argo CD create kube-system if missing
+

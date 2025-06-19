@@ -16,6 +16,7 @@ spec:
       releaseName: nginx-ingress
       valuesObject:
         controller:
+          kind: daemonset
           disableIPV6: true
           extraArgs:
             default-ssl-certificate: "nginx-ingress/linds-certificate-secret"
