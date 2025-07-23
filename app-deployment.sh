@@ -6,7 +6,7 @@ helm repo add projectcalico https://docs.tigera.io/calico/charts
 helm install calico projectcalico/tigera-operator \
   --namespace tigera-operator \
   --create-namespace \
-  --version v3.30.1 \
+  --version v3.30.2 \
   --set calicoNetwork.containerIPForwarding=Enabled \
   --set calicoNetwork.bgp=Enabled \
   --set calicoNetwork.ipPools[0].allowedUses[0]=Workload \
@@ -38,3 +38,7 @@ kubectl create -f applications
 kubectl create -k base
 
 # Reboot ubuntu nodes after provisioning
+
+# Deleting kube-proxy to prevent collision with calico
+kubectl -n kube-system delete ds kube-proxy
+kubectl -n kube-system delete cm kube-proxy
