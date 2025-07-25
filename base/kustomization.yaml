@@ -3,6 +3,7 @@ resources:
   - coredns.yml
 
   - calico/calico-bgp.yml
+  - calico/felixconfig.yml
 
   - postgresql/api-service.yml
   - postgresql/configmap.yml
@@ -18,6 +19,7 @@ resources:
 
   - nginx/linds-virtualserver.yml
   - nginx/pdf.yml
+  - nginx/argocd.yml
 
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml
