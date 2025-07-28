@@ -13,15 +13,19 @@ spec:
   - name: linds-docker-radarr
     service: linds-docker
     port: 7878
+    use-cluster-ip: true
   - name: linds-docker-sonarr
     service: linds-docker
     port: 8989
+    use-cluster-ip: true
   - name: linds-docker-jackett
     service: linds-docker
     port: 9117
+    use-cluster-ip: true
   - name: linds-docker-tautulli
     service: linds-docker-tautulli
     port: 8181
+    use-cluster-ip: true
   routes:
   - path: /radarr
     action:

@@ -15,6 +15,7 @@ spec:
       port: 443
       tls: 
         enable: true
+      use-cluster-ip: true
   routes:
     - path: /
       action:

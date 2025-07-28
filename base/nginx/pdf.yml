@@ -13,6 +13,7 @@ spec:
     - name: stirling-pdf-service
       service: stirling-pdf-service
       port: 8080
+      use-cluster-ip: true
   routes:
     - path: /
       action:
