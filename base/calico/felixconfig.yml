@@ -4,3 +4,8 @@ metadata:
   name: default
 spec:
   bpfExternalServiceMode: DSR   
+  bpfConnectTimeLoadBalancing: Enabled
+  bpfEnabled: true
+  bpfEnforceRPF: Disabled
+  bpfHostNetworkedNATWithoutCTLB: Disabled
+

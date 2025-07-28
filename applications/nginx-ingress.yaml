@@ -16,7 +16,7 @@ spec:
       releaseName: nginx-ingress
       valuesObject:
         controller:
-          kind: daemonset
+          kind: deployment
           hostNetwork: false
           disableIPV6: true
           extraArgs:
