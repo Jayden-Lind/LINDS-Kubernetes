@@ -1,5 +1,7 @@
 resources:
-  - ../../base
+- ../../base
 
-patchesStrategicMerge:
-  - argocd-image-updater-patch.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+patches:
+- path: argocd-image-updater-patch.yaml
