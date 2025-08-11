@@ -16,7 +16,15 @@ helm upgrade --install calico projectcalico/tigera-operator \
   --set installation.calicoNetwork.ipPools[0].natOutgoing=Enabled \
   --set installation.calicoNetwork.ipPools[0].allowedUses[0]=Workload \
   --set installation.calicoNetwork.ipPools[0].disableBGPExport=false \
-  --set installation.calicoNetwork.ipPools[0].nodeSelector="all()"
+  --set installation.calicoNetwork.ipPools[0].nodeSelector="all()" \
+  --set installation.calicoNetwork.ipPools[1].name=lb-ipv4-pool \
+  --set installation.calicoNetwork.ipPools[1].cidr=172.16.1.0/24 \
+  --set installation.calicoNetwork.ipPools[1].encapsulation=None \
+  --set installation.calicoNetwork.ipPools[1].blockSize=24 \
+  --set installation.calicoNetwork.ipPools[1].natOutgoing=Enabled \
+  --set installation.calicoNetwork.ipPools[1].allowedUses[0]=LoadBalancer \
+  --set installation.calicoNetwork.ipPools[1].assignmentMode=Automatic \
+  --set installation.calicoNetwork.ipPools[1].nodeSelector="all()"
 
 
 #argo-cd
