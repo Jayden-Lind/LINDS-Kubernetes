@@ -4,7 +4,6 @@ resources:
 
   - calico/calico-bgp.yml
   - calico/felixconfig.yml
-  - calico
 
   - postgresql/api-service.yml
   - postgresql/configmap.yml

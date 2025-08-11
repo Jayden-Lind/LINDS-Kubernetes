@@ -8,4 +8,12 @@ spec:
   bpfEnabled: true
   bpfEnforceRPF: Disabled
   bpfHostNetworkedNATWithoutCTLB: Disabled
-
+---
+apiVersion: v1
+data:
+  KUBERNETES_SERVICE_HOST: 10.0.53.10
+  KUBERNETES_SERVICE_PORT: "6443"
+kind: ConfigMap
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
