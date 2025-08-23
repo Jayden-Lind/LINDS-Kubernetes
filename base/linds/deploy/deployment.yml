@@ -1,48 +1,34 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: linds-nfs
-  labels:
-    storage.k8s.io/name: nfs
-    storage.k8s.io/part-of: kubernetes-complete-reference
-    volume.beta.kubernetes.io/mount-options: soft
+  name: pv-iscsi-arr-suite
 spec:
-  accessModes:
-    - ReadWriteOnce
-    - ReadOnlyMany
-    - ReadWriteMany
   capacity:
     storage: 10Gi
-  storageClassName: "manual"
+  accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
   volumeMode: Filesystem
-  nfs:
-    server: linds-truenas-01.linds.com.au
-    path: /mnt/NAS/NAS
+  iscsi:
+    targetPortal: "10.0.53.20:3260"
+    portals: []
+    iqn: "iqn.2005-10.org.truenas:arr-suite"
+    lun: 0
+    fsType: ext4
     readOnly: false
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: linds-nfs-nas
-  labels:
-    storage.k8s.io/name: nfs
-    storage.k8s.io/part-of: kubernetes-complete-reference
-    volume.beta.kubernetes.io/mount-options: soft
+  name: linds-arr-config
+  namespace: default
 spec:
-  accessModes:
-    - ReadWriteOnce
-    - ReadOnlyMany
-    - ReadWriteMany
-  capacity:
-    storage: 1Ti
-  storageClassName: "manual"
-  persistentVolumeReclaimPolicy: Retain
-  volumeMode: Filesystem
-  nfs:
-    server: linds-truenas-01.linds.com.au
-    path: /mnt/ZFS_NAS
-    readOnly: false
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: ""
+  volumeName: pv-iscsi-arr-suite
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -78,8 +64,7 @@ spec:
       annotations:
         diun.enable: "true"
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: linds-kube-02
+      terminationGracePeriodSeconds: 120
       containers:
         - name: jacket
           image: linuxserver/jackett:latest
@@ -87,7 +72,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: jackett/jackett
+              subPath: jackett
           ports:
             - containerPort: 9117
         - name: radarr
@@ -101,7 +86,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: radarr/radarr
+              subPath: radarr
             - name: linds-nfs-nas
               mountPath: /mnt/nas/torrent
               subPath: torrent
@@ -123,7 +108,7 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
-              subPath: sonarr/sonarr
+              subPath: sonarr
             - name: linds-nfs-nas
               mountPath: /mnt/torrent
               subPath: torrent
@@ -138,8 +123,8 @@ spec:
       restartPolicy: Always
       volumes:
         - name: linds-nfs-pvc
-          hostPath:
-            path: /mnt/data
+          persistentVolumeClaim:
+            claimName: linds-arr-config
         - name: linds-nfs-nas
           persistentVolumeClaim:
             claimName: linds-nfs-nas-pvc
