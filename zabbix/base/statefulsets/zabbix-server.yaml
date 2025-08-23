@@ -77,6 +77,17 @@ spec:
             value: "60"
           - name: ZBX_VMWARETIMEOUT
             value: "10"
+          - name: ZBX_STARTIPMIPOLLERS
+            value: "3"
+          - name: ZBX_TIMEOUT
+            value: "10"
+          - name: ZBX_STARTPOLLERS
+            value: "8"
+          - name: ZBX_STARTPINGERS
+            value: "2"
+          - name: ZBX_STARTSNMPPOLLERS
+            value: "2"
+
 
           # For HA mode
           - name: ZBX_AUTOHANODENAME
