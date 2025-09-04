@@ -1,0 +1,110 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-kube-prometheus-stack
+  namespace: argocd
+  annotations:
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 77.2.1
+    helm:
+      values: |
+        #######################################################################
+        # Grafana
+        #######################################################################
+        grafana:
+          adminUser: admin
+          adminPassword: "changeme"          # consider using a Secret later
+          persistence:
+            enabled: true
+            size: 10Gi
+            storageClassName: nfs-client
+          service:
+            type: ClusterIP
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts: 
+              - grafana.linds.com.au
+            tls:
+              - secretName: linds-certificate-secret
+                hosts:
+                  - grafana.linds.com.au
+            path: /
+        #######################################################################
+        # Prometheus
+        #######################################################################
+        prometheus:
+          ingress:
+            enabled: false
+          prometheusSpec:
+            retention: 15d
+            retentionSize: "25GB"
+            scrapeInterval: 30s
+            evaluationInterval: 30s
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                storageClassName: nfs-client
+                accessModes: ["ReadWriteOnce"]
+
+        #######################################################################
+        # Alertmanager
+        #######################################################################
+        alertmanager:
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: nfs-client
+                  accessModes: ["ReadWriteOnce"]
+
+        #######################################################################
+        # Disable secure control-plane scrapes unless you wire certs/ports
+        #######################################################################
+        kubeControllerManager:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+
+        #######################################################################
+        # Node Exporter & Kube-State-Metrics (enabled by default)
+        #######################################################################
+        nodeExporter:
+          enabled: true
+        kube-state-metrics:
+          enabled: true
+
+        #######################################################################
+        # Example: scrape ingress-nginx controller metrics (optional)
+        #######################################################################
+        prometheus:
+          additionalServiceMonitors:
+            - name: ingress-nginx
+              namespaceSelector:
+                matchNames: ["ingress-nginx"]
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: ingress-nginx
+                  app.kubernetes.io/component: controller
+              endpoints:
+                - port: metrics
+                  interval: 30s
+                  path: /metrics
+                  scheme: http
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true
+
