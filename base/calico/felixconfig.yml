@@ -7,7 +7,7 @@ spec:
   bpfConnectTimeLoadBalancing: Enabled
   bpfEnabled: true
   bpfEnforceRPF: Disabled
-  bpfHostNetworkedNATWithoutCTLB: Disabled
+  bpfHostNetworkedNATWithoutCTLB: Enabled
 ---
 apiVersion: v1
 data:
