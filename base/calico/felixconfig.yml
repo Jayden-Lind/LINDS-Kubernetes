@@ -8,6 +8,7 @@ spec:
   bpfEnabled: true
   bpfEnforceRPF: Disabled
   bpfHostNetworkedNATWithoutCTLB: Enabled
+  bpfHostConntrackBypass: true
 ---
 apiVersion: v1
 data:
