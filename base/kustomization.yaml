@@ -1,6 +1,7 @@
 resources:
   # Local resources
   - coredns.yml
+  - rpf.yaml
 
   - calico/calico-bgp.yml
   - calico/felixconfig.yml
@@ -11,6 +12,7 @@ resources:
   - postgresql/password-postgres.yml
   - postgresql/postgres-manifest.yml
   - postgresql/postgres-operator.yml
+  - postgresql/barman-cloud.yaml
 
   - nfs-provisioner/class.yml
   - nfs-provisioner/deployment.yml
