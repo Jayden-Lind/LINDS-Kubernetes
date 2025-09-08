@@ -12,6 +12,7 @@ resources:
   - postgresql/password-postgres.yml
   - postgresql/postgres-manifest.yml
   - postgresql/postgres-operator.yml
+  - postgresql/postgres-cluster.yaml
   - postgresql/
 
   - nfs-provisioner/class.yml

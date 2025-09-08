@@ -1,0 +1,123 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: minio-store
+  namespace: postgresql-linds
+spec:
+  configuration:
+    destinationPath: s3://postgresql-backup
+    endpointURL: http://jd-truenas-01.linds.com.au:9000
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3-creds
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3-creds
+        key: SECRET_ACCESS_KEY
+    wal:
+      compression: zstd
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: linds-postgres
+  namespace: postgresql-linds
+  annotations:
+    nfs.io/storage-path: "postgresql-nfs"
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: app-postgres-superuser
+  storage:
+    size: 50Gi
+    storageClass: nfs-client
+  monitoring:
+    enablePodMonitor: true
+  affinity:
+    nodeSelector:
+      datacenter: "jd"
+    enablePodAntiAffinity: true
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: minio-store
+  bootstrap:
+    recovery:
+      source: backup-truenas          # matches externalClusters[].name
+  externalClusters:
+  - name: backup-truenas
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: minio-store # read from this object store
+        serverName: linds-postgres    # <— MUST match the name used when you made the backups
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-lindrea
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: lindrea
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-lindrea-th
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: lindrea_th
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-zabbix
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: zabbix
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-catcrawl
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: catcrawl
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-catcrawl-coles
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: catcrawl-coles
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: linds-postgres-nightly
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  schedule: "0 18 * * *"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: minio-store
+      serverName: linds-postgres

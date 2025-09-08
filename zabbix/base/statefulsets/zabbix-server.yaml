@@ -33,7 +33,7 @@ spec:
             name: zabbix-trapper
           env:
           - name: DB_SERVER_HOST
-            value: linds-postgresql.postgresql-linds.svc.cluster.local
+            value: linds-postgres-rw.postgresql-linds.svc.cluster.local
           - name: DB_SERVER_PORT
             value: "5432"
           - name: POSTGRES_USER
