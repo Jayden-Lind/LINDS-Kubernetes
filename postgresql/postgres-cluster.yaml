@@ -49,7 +49,7 @@ spec:
         enabled: "true"
         isWALArchiver: "true"
         barmanObjectName: minio-store
-        serverName: linds-postgres-new1
+        serverName: linds-postgres-restored
   bootstrap:
     recovery:
       source: backup-truenas          # matches externalClusters[].name
@@ -59,7 +59,7 @@ spec:
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: minio-store # read from this object store
-        serverName: linds-postgres-new    # <— MUST match the name used when you made the backups
+        serverName: linds-postgres
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
