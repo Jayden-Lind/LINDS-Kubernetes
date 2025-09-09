@@ -48,6 +48,7 @@ spec:
             retentionSize: "25GB"
             scrapeInterval: 30s
             evaluationInterval: 30s
+            podMonitorSelectorNilUsesHelmValues: false
           storageSpec:
             volumeClaimTemplate:
               spec:
