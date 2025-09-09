@@ -6,9 +6,6 @@ resources:
   - calico/calico-bgp.yml
   - calico/felixconfig.yml
 
-  - postgresql/postgres-cluster.yaml
-  - postgresql/
-
   - nfs-provisioner/class.yml
   - nfs-provisioner/deployment.yml
   - nfs-provisioner/namespace.yml
