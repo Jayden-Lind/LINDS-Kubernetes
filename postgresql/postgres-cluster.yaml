@@ -46,8 +46,8 @@ spec:
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       parameters:
-        enabled: true
-        isWALArchiver: true
+        enabled: "true"
+        isWALArchiver: "true"
         barmanObjectName: minio-store
         serverName: linds-postgres-new
   bootstrap:

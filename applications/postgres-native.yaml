@@ -8,10 +8,13 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: postgresql-linds
-  source:
-    repoURL: https://cloudnative-pg.github.io/charts
-    chart: cloudnative-pg
-    targetRevision: 0.26.0
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.26.0
+    - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+      targetRevision: master   # or HEAD
+      path: postgresql         # <- your folder with ObjectStore/Cluster/etc
   syncPolicy:
     automated:
       prune: true
