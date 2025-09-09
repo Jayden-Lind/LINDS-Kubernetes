@@ -43,10 +43,11 @@ spec:
     nodeSelector:
       datacenter: "jd"
     enablePodAntiAffinity: true
-  #plugins:
-  #  - name: barman-cloud.cloudnative-pg.io
-  #    parameters:
-  #      barmanObjectName: minio-store
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: minio-store
+        serverName: linds-postgres-new
   bootstrap:
     recovery:
       source: backup-truenas          # matches externalClusters[].name
