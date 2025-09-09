@@ -6,12 +6,6 @@ resources:
   - calico/calico-bgp.yml
   - calico/felixconfig.yml
 
-  - postgresql/api-service.yml
-  - postgresql/configmap.yml
-  - postgresql/operator-serviceaccount.yml
-  - postgresql/password-postgres.yml
-  - postgresql/postgres-manifest.yml
-  - postgresql/postgres-operator.yml
   - postgresql/postgres-cluster.yaml
   - postgresql/
 
