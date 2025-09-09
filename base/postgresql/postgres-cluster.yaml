@@ -16,6 +16,9 @@ spec:
         key: SECRET_ACCESS_KEY
     wal:
       compression: zstd
+    data:
+      compression: bzip2
+  retentionPolicy: 7d
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -112,7 +115,7 @@ metadata:
 spec:
   cluster:
     name: linds-postgres
-  schedule: "0 18 * * *"
+  schedule: "0 0 0 * * *"
   immediate: true
   backupOwnerReference: self
   method: plugin
