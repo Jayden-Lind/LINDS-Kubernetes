@@ -28,14 +28,18 @@ spec:
             resolver:
               ipv6: false
           replicaCount: 1 
-          enableLatencyMetrics: true
         prometheus:
           port: 9113
           service:
             create: true
             port: 9113
           serviceMonitor:
-            create: true
+            enabled: true
+            namespace: monitoring
+            interval: 30s
+            scrapeTimeout: 10s
+            additionalLabels:
+              release: monitoring
   syncPolicy:
     automated:
       selfHeal: true

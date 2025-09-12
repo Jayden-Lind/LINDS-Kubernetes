@@ -13,8 +13,11 @@ spec:
       chart: cloudnative-pg
       targetRevision: 0.26.0
     - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
-      targetRevision: master   # or HEAD
-      path: postgresql         # <- your folder with ObjectStore/Cluster/etc
+      targetRevision: master
+      path: postgresql
+    - repoURL: https://cloudnative-pg.github.io/grafana-dashboards
+      chart: cluster
+      targetRevision: v0.0.5
   syncPolicy:
     automated:
       prune: true
@@ -24,3 +27,4 @@ spec:
       - Validate=false
       - ServerSideApply=true
       - CreateNamespace=true
+

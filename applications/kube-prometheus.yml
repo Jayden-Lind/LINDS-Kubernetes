@@ -15,9 +15,6 @@ spec:
     targetRevision: 77.2.1
     helm:
       values: |
-        #######################################################################
-        # Grafana
-        #######################################################################
         grafana:
           adminUser: admin
           adminPassword: "changeme"          # consider using a Secret later
@@ -37,9 +34,6 @@ spec:
                 hosts:
                   - grafana.linds.com.au
             path: /
-        #######################################################################
-        # Prometheus
-        #######################################################################
         prometheus:
           ingress:
             enabled: false
@@ -54,10 +48,6 @@ spec:
               spec:
                 storageClassName: nfs-client
                 accessModes: ["ReadWriteOnce"]
-
-        #######################################################################
-        # Alertmanager
-        #######################################################################
         alertmanager:
           alertmanagerSpec:
             storage:
@@ -65,42 +55,12 @@ spec:
                 spec:
                   storageClassName: nfs-client
                   accessModes: ["ReadWriteOnce"]
-
-        #######################################################################
-        # Disable secure control-plane scrapes unless you wire certs/ports
-        #######################################################################
         kubeControllerManager:
           enabled: false
         kubeScheduler:
           enabled: false
         kubeEtcd:
           enabled: false
-
-        #######################################################################
-        # Node Exporter & Kube-State-Metrics (enabled by default)
-        #######################################################################
-        nodeExporter:
-          enabled: true
-        kube-state-metrics:
-          enabled: true
-
-        #######################################################################
-        # Example: scrape ingress-nginx controller metrics (optional)
-        #######################################################################
-        prometheus:
-          additionalServiceMonitors:
-            - name: ingress-nginx
-              namespaceSelector:
-                matchNames: ["ingress-nginx"]
-              selector:
-                matchLabels:
-                  app.kubernetes.io/name: ingress-nginx
-                  app.kubernetes.io/component: controller
-              endpoints:
-                - port: metrics
-                  interval: 30s
-                  path: /metrics
-                  scheme: http
   syncPolicy:
     automated:
       prune: true
