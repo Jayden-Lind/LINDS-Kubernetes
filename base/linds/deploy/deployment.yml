@@ -44,6 +44,29 @@ spec:
     requests:
       storage: 1Gi
 ---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: linds-nfs-nas
+  labels:
+    storage.k8s.io/name: nfs
+    storage.k8s.io/part-of: kubernetes-complete-reference
+    volume.beta.kubernetes.io/mount-options: soft
+spec:
+  accessModes:
+    - ReadWriteOnce
+    - ReadOnlyMany
+    - ReadWriteMany
+  capacity:
+    storage: 1Ti
+  storageClassName: "manual"
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  nfs:
+    server: linds-truenas-01.linds.com.au
+    path: /mnt/ZFS_NAS
+    readOnly: false
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

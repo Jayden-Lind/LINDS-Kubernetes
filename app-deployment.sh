@@ -5,7 +5,7 @@ helm repo add projectcalico https://docs.tigera.io/calico/charts
 helm upgrade --install calico projectcalico/tigera-operator \
   --namespace tigera-operator \
   --create-namespace \
-  --version v3.30.2 \
+  --version v3.30.3 \
   --set installation.calicoNetwork.containerIPForwarding=Enabled \
   --set installation.calicoNetwork.bgp=Enabled \
   --set installation.calicoNetwork.linuxDataplane=BPF \
