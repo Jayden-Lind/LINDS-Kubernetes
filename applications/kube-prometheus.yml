@@ -43,6 +43,12 @@ spec:
             scrapeInterval: 30s
             evaluationInterval: 30s
             podMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelector: {}
+            serviceMonitorNamespaceSelector: {}
+            podMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelector: {}
+            podMonitorNamespaceSelector: {}
           storageSpec:
             volumeClaimTemplate:
               spec:

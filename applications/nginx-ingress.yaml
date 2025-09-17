@@ -30,10 +30,10 @@ spec:
           replicaCount: 1 
           enableLatencyMetrics: true
         prometheus:
+          create: true
           port: 9113
           service:
             create: true
-            port: 9113
           serviceMonitor:
             create: true
   syncPolicy:

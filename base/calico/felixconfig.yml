@@ -9,6 +9,7 @@ spec:
   bpfEnforceRPF: Disabled
   bpfHostNetworkedNATWithoutCTLB: Enabled
   bpfHostConntrackBypass: true
+  prometheusMetricsEnabled: true
 ---
 apiVersion: v1
 data:
