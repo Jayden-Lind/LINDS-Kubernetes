@@ -9,8 +9,8 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-  source:
-    repoURL: https://prometheus-community.github.io/helm-charts
+  sources:
+  - repoURL: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
     targetRevision: 77.2.1
     helm:
@@ -67,6 +67,9 @@ spec:
           enabled: false
         kubeEtcd:
           enabled: false
+  - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+    targetRevision: master
+    path: prometheus
   syncPolicy:
     automated:
       prune: true
