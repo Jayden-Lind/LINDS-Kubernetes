@@ -11,7 +11,7 @@ spec:
   source:
     chart: nginx-ingress
     repoURL: ghcr.io/nginx/charts
-    targetRevision: 2.2.2
+    targetRevision: 2.3.0
     helm:
       releaseName: nginx-ingress
       valuesObject:
