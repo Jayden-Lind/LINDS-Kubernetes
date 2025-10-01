@@ -1,85 +1,37 @@
-![image](img/kube.png)
+# LINDS Kubernetes Homelab
 
-# [LINDS-Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)
+This repository contains my personal Kubernetes homelab setup, designed to run on bare metal servers with a focus on networking performance, GitOps, and automation.
 
-Check out my blog post on **[Moving to Kubernetes](https://jayden-lind.github.io/posts/linds-kubernetes/)**
+## Cluster Overview
 
-Hosts ever growing number of services. 
+* **OS:** Ubuntu 24.04 LTS (control and worker nodes)
+* **Networking:** [Calico](https://www.tigera.io/project-calico/) with **eBPF dataplane**, **BGP peering** directly to my VyOS routers
+* **Service Load Balancing:** Provided natively by Calico BGP (no MetalLB)
+* **Proxy:** Kube-proxy is **disabled**; Calico eBPF handles service load balancing and cluster networking
+* **Storage:** Backed by TrueNAS (NFS/iSCSI)
+* **GitOps:** [Argo CD](https://argo-cd.readthedocs.io/) provisions and manages all applications
 
-1. Sonarr
-2. Radarr
-3. Jackett
-4. Tautulli
-5. Factorio
-6. PostgreSQL
+## Bootstrap
 
-Kubernetes is setup through [LINDS-Puppet](https://github.com/Jayden-Lind/LINDS-Puppet).
+After building the cluster with [Ansible](https://github.com/Jayden-Lind/LINDS-Ansible/tree/main/roles/kubernetes), the initial application deployment can be bootstrapped by running:
 
-## Infrastructure
-
-![infra-diagram](img/linds-kube.png)
-
-### Nodes
-
-Consists of:
-
-- 1x Master node (CentOS 9)
-- 3x Worker nodes (CentOS 9)
-
-2 worker nodes are in one physical location, and the last worker node in another.
-
-### Storage
-
-- 2x [TrueNAS](https://www.truenas.com/) hosts (100GB NFS Storage)
-
-The [TrueNAS](https://www.truenas.com/) machines rsync to each other the differences for the PVC(Physical Volume Claims) for redundancy.
-
-### Networking
-
-Uses [MetalLB](https://metallb.universe.tf/) to expose these services through 2 different modes.
-
-L2 (Layer 2) Advertisements, which just uses ARP for IPv4.
-
-BGP Advertisements, which advertises to the 2 OPNSense box the route to the service.
-
-## Usage:
-``` sh
-
-$ git clone git@github.com:Jayden-Lind/LINDS-Kube.git
-
-$ chmod +x app-deployment.sh; ./app-deployment.sh
-
+```bash
+./app-deployment.sh
 ```
 
-## Secrets
-2 Secrets are required for operation.
+This script installs the base Argo CD configuration, which then provisions everything else declaratively.
 
-1. [kubernetes.io/tls](https://kubernetes.io/docs/concepts/configuration/secret/#secret-types) secret.
-2. SMB/CIFS credentials for mounting SMB shares in a pod.
+## Provisioning
 
-**NOTE**
+* **Argo CD** manages all workloads, applications, monitoring, logging, and supporting services.
+* **Exception:** Calico (with eBPF + BGP) is installed and configured manually as part of cluster bootstrap.
 
-Ensure to `base64` these secret values before applying them.
+## Key Features
 
-```yaml
+* **eBPF dataplane:** Improves performance and observability, removes the need for kube-proxy.
+* **BGP integration:** Calico peers with my VyOS routers, advertising cluster services and pod CIDRs for seamless external access.
+* **Declarative GitOps:** All apps are managed through Git with Argo CD, enabling full reproducibility and rollback.
+
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: linds-certificate-secret
-  namespace: default
-type: kubernetes.io/tls
-data:
-  tls.crt: xxx
-  tls.key: xxx
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: linds-smb-secret
-  namespace: default
-type: smb.csi.k8s.io
-data:
-  username: xxx
-  password: xxx
-```
+
+This setup prioritizes clean GitOps workflows, minimal moving parts, and high-performance networking using Calico.

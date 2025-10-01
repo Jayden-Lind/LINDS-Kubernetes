@@ -39,6 +39,13 @@ spec:
     storageClass: nfs-client
   monitoring:
     enablePodMonitor: true
+  managed:
+    roles:
+      - name: catcrawl
+        ensure: present
+        login: true
+        passwordSecret:
+          name: catcrawl-auth
   affinity:
     nodeSelector:
       datacenter: "jd"
