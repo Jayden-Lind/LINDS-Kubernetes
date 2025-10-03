@@ -107,6 +107,7 @@ spec:
   cluster:
     name: linds-postgres
   name: catcrawl
+  owner: catcrawl
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -117,6 +118,7 @@ spec:
   cluster:
     name: linds-postgres
   name: catcrawl-coles
+  owner: catcrawl
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
