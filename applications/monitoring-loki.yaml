@@ -1,0 +1,182 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-loki
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  # 👇 Multiple Helm sources in one Application
+  sources:
+    # --- 1) LOKI (your working values, unchanged except formatting) ---
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 6.41.1
+      helm:
+        releaseName: loki
+        values: |
+          deploymentMode: SingleBinary
+          loki:
+            commonConfig:
+              replication_factor: 1
+            schemaConfig:
+              configs:
+                - from: 2024-04-01
+                  object_store: s3
+                  store: tsdb
+                  schema: v13
+                  index:
+                    prefix: index_
+                    period: 24h
+            auth_enabled: false
+            storage_config:
+              aws:
+                bucketnames: loki-chunks
+            storage:
+              bucketNames:
+                chunks: loki-chunks
+                ruler: loki-ruler
+              type: 's3'
+              s3:
+                endpoint: jd-truenas-01.linds.com.au:9000
+                s3ForcePathStyle: true
+                insecure: true
+                accessKeyId: jayden
+                secretAccessKey: "ZnEaKy69"
+            pattern_ingester:
+              enabled: true
+            limits_config:
+              allow_structured_metadata: true
+              volume_enabled: true
+            ruler:
+              enable_api: true
+
+          singleBinary:
+            replicas: 1
+            persistence:
+              enabled: true
+              size: 100Gi
+              storageClass: nfs-client
+
+          backend:         { replicas: 0 }
+          read:            { replicas: 0 }
+          write:           { replicas: 0 }
+          ingester:        { replicas: 0 }
+          querier:         { replicas: 0 }
+          queryFrontend:   { replicas: 0 }
+          queryScheduler:  { replicas: 0 }
+          distributor:     { replicas: 0 }
+          compactor:       { replicas: 0 }
+          indexGateway:    { replicas: 0 }
+          bloomCompactor:  { replicas: 0 }
+          bloomGateway:    { replicas: 0 }
+
+          serviceMonitor:
+            enabled: true
+          monitoring:
+            dashboards:
+              enabled: true
+              namespace: monitoring
+            rules:
+              enabled: true
+          test:
+            enabled: false
+          lokiCanary:
+            enabled: false
+
+    # --- 2) ALLOY (DaemonSet) — Kubernetes pod logs -> Loki ---
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.2.1
+      helm:
+        releaseName: alloy-podlogs
+        values: |
+          controller:
+            type: deployment
+            replicas: 1
+
+          service:
+            enabled: true
+            type: LoadBalancer
+
+          alloy:
+            extraPorts:
+              - name: "syslog-udp"
+                port: 1514
+                targetPort: 1514
+                protocol: "UDP"
+              - name: "syslog-tcp"
+                port: 1515
+                targetPort: 1515
+                protocol: "TCP"
+              - name: "syslog-udp-old"
+                port: 514
+                targetPort: 514
+                protocol: "UDP"
+
+            configMap:
+              content: |
+                // --- Kubernetes pod logs (minimal) ---
+                discovery.kubernetes "pods" {
+                  role = "pod"
+                }
+                loki.source.kubernetes "pods" {
+                  targets    = discovery.kubernetes.pods.targets
+                  forward_to = [loki.write.default.receiver]
+                }
+
+                // --- Syslog source with multiple listeners (per Alloy docs) ---
+                loki.source.syslog "syslog" {
+                  // Legacy devices on UDP/514 (strict RFC3164)
+                  listener {
+                    address  = "0.0.0.0:514"
+                    protocol = "udp"
+                    syslog_format   = "rfc3164"
+                    labels   = { job = "syslog", transport = "udp", port = "514" }
+                  }
+
+                  // General UDP/1514 (auto-detect RFC3164/RFC5424)
+                  listener {
+                    address  = "0.0.0.0:1514"
+                    protocol = "udp"
+                    syslog_format = "rfc5424"
+                    use_rfc5424_message = true
+                    label_structured_data = true
+                    labels   = { job = "syslog", transport = "udp", port = "1514" }
+                  }
+
+                  // General TCP/1515 (auto-detect RFC3164/RFC5424)
+                  listener {
+                    address  = "0.0.0.0:1515"
+                    protocol = "tcp"
+                    syslog_format = "rfc5424"
+                    use_rfc5424_message = true
+                    label_structured_data = true
+                    labels   = { job = "syslog", transport = "tcp", port = "1515" }
+                  }
+
+                  forward_to = [loki.relabel.syslog.receiver]
+                }
+
+                loki.relabel "syslog" {
+                  rule {
+                    action = "labelkeep"
+                    regex  = ".*"
+                  }
+                  forward_to = [loki.write.default.receiver]
+                }
+
+                // --- Write to Loki ---
+                loki.write "default" {
+                  endpoint {
+                    url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+                  }
+                }
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+

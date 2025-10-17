@@ -15,7 +15,8 @@ mountOptions:
   - file_mode=0664
   - uid=1000
   - gid=1000
-  - vers=3.0
+  - domain=linds.com.au
+  - vers=3.1.1
 reclaimPolicy: Retain
 allowVolumeExpansion: false
 volumeBindingMode: Immediate
