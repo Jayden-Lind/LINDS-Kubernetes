@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   sources:
-    - repoURL: oci://ghcr.io/immich-app/immich-charts
+    - repoURL: https://immich-app.github.io/immich-charts
       chart: immich
       targetRevision: "0.10.0"
       helm:
@@ -28,12 +28,11 @@ spec:
                 accessMode: ReadWriteMany
                 storageClass: nfs-client
     - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
-      targetRevision: main
+      targetRevision: master
       path: immich
   destination:
     server: https://kubernetes.default.svc
     namespace: immich
-
   syncPolicy:
     automated:
       prune: true

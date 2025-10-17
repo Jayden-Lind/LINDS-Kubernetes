@@ -1,4 +1,4 @@
-namespace: postgresql-linds
+namespace: immich
 
 resources:
   - immich-pvc.yaml
