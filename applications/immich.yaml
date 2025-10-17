@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: immich
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: oci://ghcr.io/immich-app/immich-charts
+      chart: immich
+      targetRevision: "0.10.0"
+      helm:
+        values: |
+          immich:
+            metrics:
+              enabled: true
+            persistence:
+              library:
+                existingClaim: immich-library-pvc
+          server:
+            enabled: true
+          machine-learning:
+            enabled: true
+            persistence:
+              cache:
+                enabled: true
+                size: 10Gi
+                accessMode: ReadWriteMany
+                storageClass: nfs-client
+    - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+      targetRevision: main
+      path: immich
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: immich
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
