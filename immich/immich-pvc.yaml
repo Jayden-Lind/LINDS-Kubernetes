@@ -11,10 +11,9 @@ parameters:
   csi.storage.k8s.io/node-stage-secret-name: smb-immich-creds
   csi.storage.k8s.io/node-stage-secret-namespace: immich
 mountOptions:
-  - dir_mode=0775
-  - file_mode=0664
-  - uid=1000
-  - gid=1000
+  - soft
+  - dir_mode=0777
+  - file_mode=0777
   - domain=linds.com.au
   - vers=3.1.1
 reclaimPolicy: Retain
