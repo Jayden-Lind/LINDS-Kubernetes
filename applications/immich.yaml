@@ -8,7 +8,7 @@ spec:
   sources:
     - repoURL: https://immich-app.github.io/immich-charts
       chart: immich
-      targetRevision: "0.10.0"
+      targetRevision: "0.10.1"
       helm:
         values: |
           immich:
@@ -16,7 +16,7 @@ spec:
               enabled: true
             persistence:
               library:
-                existingClaim: immich-library-pvc
+                existingClaim: pv-immich-photos
           server:
             enabled: true
           machine-learning:
