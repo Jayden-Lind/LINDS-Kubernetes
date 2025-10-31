@@ -1,36 +1,16 @@
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: smb-immich
-  namespace: immich
-provisioner: smb.csi.k8s.io
-parameters:
-  source: "//jd-dc-01.linds.com.au/nas/photos"
-  csi.storage.k8s.io/provisioner-secret-name: smb-immich-creds
-  csi.storage.k8s.io/provisioner-secret-namespace: immich
-  csi.storage.k8s.io/node-stage-secret-name: smb-immich-creds
-  csi.storage.k8s.io/node-stage-secret-namespace: immich
-mountOptions:
-  - soft
-  - dir_mode=0777
-  - file_mode=0777
-  - domain=linds.com.au
-  - vers=3.1.1
-reclaimPolicy: Retain
-allowVolumeExpansion: false
-volumeBindingMode: Immediate
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: immich-library-pvc
   namespace: immich
 spec:
-  accessModes: [ "ReadWriteMany" ]
-  storageClassName: smb-immich
+  accessModes:
+    - ReadWriteMany
   resources:
     requests:
       storage: 10Ti
+  volumeName: pv-immich-photos
+  storageClassName: ""
 ---
 apiVersion: v1
 kind: PersistentVolume

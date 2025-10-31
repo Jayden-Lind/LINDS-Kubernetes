@@ -16,7 +16,7 @@ spec:
               enabled: true
             persistence:
               library:
-                existingClaim: pv-immich-photos
+                existingClaim: immich-library-pvc
           server:
             enabled: true
           machine-learning:
