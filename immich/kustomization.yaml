@@ -2,23 +2,3 @@ namespace: immich
 
 resources:
   - immich-pvc.yaml
-
-patches:
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: immich-server
-        namespace: immich
-      spec:
-        template:
-          spec:
-            containers:
-            - name: main
-              volumeMounts:
-              - mountPath: /usr/src/app/upload
-                name: library
-            volumes:
-            - name: library
-              persistentVolumeClaim:
-                claimName: immich-library-pvc
