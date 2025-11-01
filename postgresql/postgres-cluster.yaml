@@ -46,6 +46,11 @@ spec:
         login: true
         passwordSecret:
           name: catcrawl-auth
+      - name: immich
+        ensure: present
+        login: true
+        passwordSecret:
+          name: immich-auth
   affinity:
     nodeSelector:
       datacenter: "jd"
@@ -119,6 +124,17 @@ spec:
     name: linds-postgres
   name: catcrawl-coles
   owner: catcrawl
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-immich
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: immich
+  owner: immich
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup

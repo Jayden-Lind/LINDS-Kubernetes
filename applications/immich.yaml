@@ -19,6 +19,8 @@ spec:
                 existingClaim: immich-library-pvc
           server:
             enabled: true
+          valkey:
+            enabled: true
           machine-learning:
             enabled: true
             persistence:
