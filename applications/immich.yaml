@@ -15,6 +15,8 @@ spec:
             main:
               containers:
                 main:
+                  image:
+                    tag: v2.2.1
                   env:
                     DB_HOSTNAME: linds-postgres-rw.postgresql-linds.svc.cluster.local
                     DB_DATABASE_NAME: immich
@@ -35,7 +37,7 @@ spec:
               enabled: true
             persistence:
               library:
-                existingClaim: immich-library-pvc
+                existingClaim: immich-nfs-pvc
           server:
             enabled: true
           valkey:

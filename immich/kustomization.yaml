@@ -2,3 +2,9 @@ namespace: immich
 
 resources:
   - immich-pvc.yaml
+
+patches:
+  - path: immich-library-patch.yaml
+    target:
+      kind: Deployment
+      name: immich-server
