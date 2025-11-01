@@ -11,6 +11,25 @@ spec:
       targetRevision: "0.10.1"
       helm:
         values: |
+          controllers:
+            main:
+              containers:
+                main:
+                  env:
+                    DB_HOSTNAME: linds-postgres-rw.postgresql-linds.svc.cluster.local
+                    DB_DATABASE_NAME: immich
+                    DB_USERNAME:
+                      valueFrom:
+                        secretKeyRef:
+                          name: immich-auth
+                          key: username
+                    DB_PASSWORD:
+                      valueFrom:
+                        secretKeyRef:
+                          name: immich-auth
+                          key: password
+                    LOG_LEVEL: verbose
+                    TZ: Australia/Melbourne
           immich:
             metrics:
               enabled: true

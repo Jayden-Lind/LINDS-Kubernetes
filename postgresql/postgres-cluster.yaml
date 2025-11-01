@@ -49,6 +49,7 @@ spec:
       - name: immich
         ensure: present
         login: true
+        superuser: true
         passwordSecret:
           name: immich-auth
   affinity:
