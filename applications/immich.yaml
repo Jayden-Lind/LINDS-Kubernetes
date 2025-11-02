@@ -6,50 +6,6 @@ metadata:
 spec:
   project: default
   sources:
-    - repoURL: https://immich-app.github.io/immich-charts
-      chart: immich
-      targetRevision: "0.10.1"
-      helm:
-        values: |
-          controllers:
-            main:
-              containers:
-                main:
-                  image:
-                    tag: v2.2.1
-                  env:
-                    DB_HOSTNAME: linds-postgres-rw.postgresql-linds.svc.cluster.local
-                    DB_DATABASE_NAME: immich
-                    DB_USERNAME:
-                      valueFrom:
-                        secretKeyRef:
-                          name: immich-auth
-                          key: username
-                    DB_PASSWORD:
-                      valueFrom:
-                        secretKeyRef:
-                          name: immich-auth
-                          key: password
-                    LOG_LEVEL: verbose
-                    TZ: Australia/Melbourne
-          immich:
-            metrics:
-              enabled: true
-            persistence:
-              library:
-                existingClaim: immich-nfs-pvc
-          server:
-            enabled: true
-          valkey:
-            enabled: true
-          machine-learning:
-            enabled: true
-            persistence:
-              cache:
-                enabled: true
-                size: 10Gi
-                accessMode: ReadWriteMany
-                storageClass: nfs-client
     - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
       targetRevision: master
       path: immich
