@@ -207,7 +207,9 @@ spec:
         app.kubernetes.io/controller: main
         app.kubernetes.io/instance: immich
         app.kubernetes.io/name: server
-    spec: 
+    spec:
+      nodeSelector:
+        datacenter: jd
       enableServiceLinks: false
       serviceAccountName: default
       automountServiceAccountToken: true
