@@ -33,7 +33,7 @@ spec:
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   enableSuperuserAccess: true
   superuserSecret:
-    name: app-postgres-superuser
+    name: postgres-user
   storage:
     size: 50Gi
     storageClass: nfs-client
