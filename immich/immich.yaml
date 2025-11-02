@@ -281,7 +281,7 @@ spec:
           volumeMounts:
           - mountPath: /data
             name: data
-          - mountPath: /usr/src/app
+          - mountPath: /usr/src/app/library
             name: library
       volumes: 
         - name: data
