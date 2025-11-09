@@ -1,23 +1,27 @@
-apiVersion: k8s.nginx.org/v1
-kind: VirtualServer
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: argocd-server
-  namespace: argocd 
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.org/ssl-redirect: "true"
+    nginx.org/grpc-services: "argocd-server"
+    nginx.org/backend-protocol: "HTTP"
 spec:
-  host: argocd.linds.com.au
+  ingressClassName: nginx
+  rules:
+    - host: argocd.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
   tls:
-    secret: linds-certificate-secret
-    redirect:
-      enable: true
-  upstreams:
-    - name: argocd-server
-      service: argocd-server
-      port: 443
-      tls: 
-        enable: true
-      use-cluster-ip: true
-  routes:
-    - path: /
-      action:
-        proxy:
-          upstream: argocd-server
+    - hosts:
+        - argocd.linds.com.au
+      secretName: argocd-linds-com-au-tls

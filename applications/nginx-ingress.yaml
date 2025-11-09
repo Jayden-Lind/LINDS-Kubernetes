@@ -19,16 +19,24 @@ spec:
           kind: deployment
           hostNetwork: false
           disableIPV6: true
+          defaultTLS:
+            secret: "nginx-ingress/linds-certificate-secret"
+            cert: "nginx-ingress/linds-certificate-secret"
           extraArgs:
             default-ssl-certificate: "nginx-ingress/linds-certificate-secret"
           service:
             externalIPs:
               - 172.16.1.20
+          enableExternalDNS: true
           mgmt:
             resolver:
               ipv6: false
           replicaCount: 1 
           enableLatencyMetrics: true
+          ingressClass:
+            name: nginx
+            create: true
+            setAsDefaultIngress: true
         prometheus:
           create: true
           port: 9113

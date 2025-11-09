@@ -1,0 +1,8 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: linds-ca
+  namespace: cert-manager
+spec:
+  ca:
+    secretName: linds-ca-keypair

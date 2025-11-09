@@ -5,7 +5,7 @@ helm repo add projectcalico https://docs.tigera.io/calico/charts
 helm upgrade --install calico projectcalico/tigera-operator \
   --namespace tigera-operator \
   --create-namespace \
-  --version v3.30.3 \
+  --version v3.31.0 \
   --set installation.calicoNetwork.containerIPForwarding=Enabled \
   --set installation.calicoNetwork.bgp=Enabled \
   --set installation.calicoNetwork.linuxDataplane=BPF \
@@ -31,6 +31,8 @@ helm upgrade --install calico projectcalico/tigera-operator \
 kubectl create namespace argocd
 kubectl apply -f base/linds-secret.yml
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl patch configmap argocd-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
+
 
 if ! test -f /usr/local/bin/argocd; then
     curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64

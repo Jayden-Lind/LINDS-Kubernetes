@@ -1,27 +1,24 @@
-apiVersion: k8s.nginx.org/v1
-kind: VirtualServer
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: stirling-pdf
+  name: stirling-pdf-ingress
   namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
 spec:
-  host: pdf.linds.com.au
+  ingressClassName: nginx
+  rules:
+    - host: pdf.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stirling-pdf-service
+                port:
+                  number: 8080
   tls:
-    secret: linds-certificate-secret
-    redirect:
-      enable: true
-  upstreams:
-    - name: stirling-pdf-service
-      service: stirling-pdf-service
-      port: 8080
-      use-cluster-ip: true
-  routes:
-    - path: /
-      action:
-        proxy:
-          upstream: stirling-pdf-service
-          requestHeaders:
-            pass: true
-          rewritePath: /
-          responseHeaders:
-            pass:
-              - Server
+    - hosts:
+        - pdf.linds.com.au
+      secretName: pdf-linds-tls
