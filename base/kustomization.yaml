@@ -17,5 +17,3 @@ resources:
 
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml
-
-  - argocd-image-updater/
