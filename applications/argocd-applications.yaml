@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
     targetRevision: HEAD
-    path: "overlays/prod"
+    path: "base"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd

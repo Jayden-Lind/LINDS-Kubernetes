@@ -4,7 +4,6 @@ resources:
   - rpf.yaml
 
   - calico/calico-bgp.yml
-  - calico/felixconfig.yml
 
   - nfs-provisioner/class.yml
   - nfs-provisioner/deployment.yml
