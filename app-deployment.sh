@@ -18,7 +18,7 @@ helm upgrade --install calico projectcalico/tigera-operator \
   --set installation.calicoNetwork.ipPools[0].encapsulation=IPIPCrossSubnet \
   --set installation.calicoNetwork.ipPools[0].natOutgoing=Enabled \
   --set installation.calicoNetwork.ipPools[0].disableBGPExport=false \
-  --set installation.calicoNetwork.ipPools[0].nodeSelector="all()" 
+  --set installation.calicoNetwork.ipPools[0].nodeSelector="all()"
 
 
 #argo-cd
