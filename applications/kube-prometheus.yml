@@ -15,8 +15,8 @@ spec:
     helm:
       values: |
         grafana:
-          adminUser: admin
-          adminPassword: "changeme"          # consider using a Secret later
+          admin:
+            existingSecret: grafana-credentials
           persistence:
             enabled: true
             size: 10Gi
