@@ -11,17 +11,18 @@ spec:
   source:
     repoURL: quay.io/jetstack/charts
     chart: cert-manager
-    # Pick a recent stable version; update as needed (chart/app versions match).
-    # Examples: v1.15.3, v1.16.1, etc.
-    targetRevision: v1.18.2
+    targetRevision: v1.19.1
     helm:
       values: |
         crds:
           enabled: true
-        # (Optional) set leader election namespace explicitly
         global:
           leaderElection:
             namespace: cert-manager
+        ingressShim:
+          defaultIssuerName: linds-ca
+          defaultIssuerKind: ClusterIssuer
+          defaultIssuerGroup: cert-manager.io
   syncPolicy:
     automated:
       prune: true

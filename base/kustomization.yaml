@@ -4,7 +4,6 @@ resources:
   - rpf.yaml
 
   - calico/calico-bgp.yml
-  - calico/felixconfig.yml
 
   - nfs-provisioner/class.yml
   - nfs-provisioner/deployment.yml
@@ -17,5 +16,3 @@ resources:
 
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml
-
-  - argocd-image-updater/

@@ -33,7 +33,7 @@ spec:
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   enableSuperuserAccess: true
   superuserSecret:
-    name: app-postgres-superuser
+    name: postgres-user
   storage:
     size: 50Gi
     storageClass: nfs-client
@@ -46,6 +46,12 @@ spec:
         login: true
         passwordSecret:
           name: catcrawl-auth
+      - name: immich
+        ensure: present
+        login: true
+        superuser: true
+        passwordSecret:
+          name: immich-auth
   affinity:
     nodeSelector:
       datacenter: "jd"
@@ -56,7 +62,7 @@ spec:
         enabled: "true"
         isWALArchiver: "true"
         barmanObjectName: minio-store
-        serverName: linds-postgres-restored
+        serverName: linds-postgres-restored-2
   bootstrap:
     recovery:
       source: backup-truenas          # matches externalClusters[].name
@@ -66,7 +72,7 @@ spec:
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: minio-store # read from this object store
-        serverName: linds-postgres
+        serverName: linds-postgres-restored
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -119,6 +125,17 @@ spec:
     name: linds-postgres
   name: catcrawl-coles
   owner: catcrawl
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-immich
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: immich
+  owner: immich
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup

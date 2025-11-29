@@ -3,7 +3,6 @@ kind: Application
 metadata:
   name: monitoring-kube-prometheus-stack
   namespace: argocd
-  annotations:
 spec:
   project: default
   destination:
@@ -12,12 +11,12 @@ spec:
   sources:
   - repoURL: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
-    targetRevision: 77.14.0
+    targetRevision: 79.7.1
     helm:
       values: |
         grafana:
-          adminUser: admin
-          adminPassword: "changeme"          # consider using a Secret later
+          admin:
+            existingSecret: grafana-credentials
           persistence:
             enabled: true
             size: 10Gi
@@ -25,12 +24,14 @@ spec:
           service:
             type: ClusterIP
           ingress:
+            annotations:
+              cert-manager.io/cluster-issuer: linds-ca
             enabled: true
             ingressClassName: nginx
             hosts: 
               - grafana.linds.com.au
             tls:
-              - secretName: linds-certificate-secret
+              - secretName: grafana.linds.com.au
                 hosts:
                   - grafana.linds.com.au
             path: /

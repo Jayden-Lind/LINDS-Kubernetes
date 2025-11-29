@@ -10,6 +10,8 @@ spec:
     - cidr: 10.96.0.0/12 
   serviceExternalIPs:
     - cidr: 172.16.1.0/24
+  serviceLoadBalancerIPs:
+    - cidr: 172.16.1.0/24
   listenPort: 179
 ---
 apiVersion: projectcalico.org/v3

@@ -1,3 +1,0 @@
-namespace: argocd
-resources:
-  - https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/release-0.16/manifests/install.yaml

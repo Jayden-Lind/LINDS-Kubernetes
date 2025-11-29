@@ -11,7 +11,7 @@ spec:
   source:
     chart: nginx-ingress
     repoURL: ghcr.io/nginx/charts
-    targetRevision: 2.3.0
+    targetRevision: 2.3.1
     helm:
       releaseName: nginx-ingress
       valuesObject:
@@ -19,16 +19,16 @@ spec:
           kind: deployment
           hostNetwork: false
           disableIPV6: true
-          extraArgs:
-            default-ssl-certificate: "nginx-ingress/linds-certificate-secret"
-          service:
-            externalIPs:
-              - 172.16.1.20
+          enableExternalDNS: true
           mgmt:
             resolver:
               ipv6: false
           replicaCount: 1 
           enableLatencyMetrics: true
+          ingressClass:
+            name: nginx
+            create: true
+            setAsDefaultIngress: true
         prometheus:
           create: true
           port: 9113

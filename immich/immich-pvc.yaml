@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-library-pvc
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Ti
+  volumeName: pv-immich-photos
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-immich-photos
+spec:
+  capacity:
+    storage: 10Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:
+    - vers=3.0
+    - file_mode=0777
+    - dir_mode=0777
+    - nounix
+  csi:
+    driver: smb.csi.k8s.io
+    # unique id for this share in the cluster
+    volumeHandle: pv-immich-photos-handle
+    readOnly: false
+    # volumeAttributes are driver-specific. For the common smb.csi.k8s.io driver use "source"
+    volumeAttributes:
+      source: "//jd-dc-01.linds.com.au/nas/photos"
+    # These must point to a Secret that contains the SMB user/password
+    nodePublishSecretRef:
+      name: smb-immich-creds
+      namespace: immich
+    nodeStageSecretRef:
+      name: smb-immich-creds
+      namespace: immich
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-nfs-pvc
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client

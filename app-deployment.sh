@@ -5,25 +5,28 @@ helm repo add projectcalico https://docs.tigera.io/calico/charts
 helm upgrade --install calico projectcalico/tigera-operator \
   --namespace tigera-operator \
   --create-namespace \
-  --version v3.30.3 \
+  --version v3.31.1 \
   --set installation.calicoNetwork.containerIPForwarding=Enabled \
   --set installation.calicoNetwork.bgp=Enabled \
+  --set installation.calicoNetwork.mtu=1300 \
+  --set installation.calicoNetwork.kubeProxyManagement=Enabled \
+  --set installation.calicoNetwork.bpfNetworkBootstrap=Enabled \
   --set installation.calicoNetwork.linuxDataplane=BPF \
   --set installation.calicoNetwork.ipPools[0].name=default-ipv4-ippool \
   --set installation.calicoNetwork.ipPools[0].cidr=10.244.0.0/16 \
   --set installation.calicoNetwork.ipPools[0].blockSize=26 \
   --set installation.calicoNetwork.ipPools[0].encapsulation=IPIPCrossSubnet \
   --set installation.calicoNetwork.ipPools[0].natOutgoing=Enabled \
-  --set installation.calicoNetwork.ipPools[0].allowedUses[0]=Workload \
   --set installation.calicoNetwork.ipPools[0].disableBGPExport=false \
   --set installation.calicoNetwork.ipPools[0].nodeSelector="all()" \
-  --set installation.calicoNetwork.ipPools[1].name=lb-ipv4-pool \
+  \
+  --set installation.calicoNetwork.ipPools[1].name=lb-172-16-1 \
   --set installation.calicoNetwork.ipPools[1].cidr=172.16.1.0/24 \
-  --set installation.calicoNetwork.ipPools[1].encapsulation=None \
   --set installation.calicoNetwork.ipPools[1].blockSize=24 \
-  --set installation.calicoNetwork.ipPools[1].natOutgoing=Enabled \
-  --set installation.calicoNetwork.ipPools[1].allowedUses[0]=LoadBalancer \
+  --set installation.calicoNetwork.ipPools[1].encapsulation=None \
+  --set installation.calicoNetwork.ipPools[1].natOutgoing=Disabled \
   --set installation.calicoNetwork.ipPools[1].assignmentMode=Automatic \
+  --set installation.calicoNetwork.ipPools[1].allowedUses[0]=LoadBalancer \
   --set installation.calicoNetwork.ipPools[1].nodeSelector="all()"
 
 
@@ -31,6 +34,8 @@ helm upgrade --install calico projectcalico/tigera-operator \
 kubectl create namespace argocd
 kubectl apply -f base/linds-secret.yml
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl patch configmap argocd-cmd-params-cm -n argocd --type merge -p '{"data":{"server.insecure":"true"}}'
+
 
 if ! test -f /usr/local/bin/argocd; then
     curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64

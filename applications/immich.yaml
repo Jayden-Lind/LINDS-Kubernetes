@@ -1,19 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gha-runner-scale-set-controller
+  name: immich
   namespace: argocd
 spec:
   project: default
+  sources:
+    - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+      targetRevision: master
+      path: immich
   destination:
     server: https://kubernetes.default.svc
-    namespace: arc-systems
-  source:
-    chart: gha-runner-scale-set-controller
-    repoURL: ghcr.io/actions/actions-runner-controller-charts
-    targetRevision: 0.13.0
-    helm:
-      releaseName: arc
+    namespace: immich
   syncPolicy:
     automated:
       prune: true
@@ -21,3 +19,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+

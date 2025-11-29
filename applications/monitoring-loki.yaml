@@ -1,0 +1,222 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-loki
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 6.46.0
+      helm:
+        releaseName: loki
+        valuesObject:
+          loki:
+            auth_enabled: false
+            commonConfig:
+              replication_factor: 1
+            schemaConfig:
+              configs:
+                - from: 2024-04-01
+                  store: tsdb
+                  object_store: s3
+                  schema: v13
+                  index:
+                    prefix: loki_index_
+                    period: 24h
+            ingester:
+              chunk_encoding: zstd
+            tracing:
+              enabled: true
+            querier:
+              max_concurrent: 2
+            storage:
+              bucketNames:
+                chunks: loki-chunks
+                ruler: loki-ruler
+              type: 's3'
+              s3:
+                endpoint: jd-truenas-01.linds.com.au:9000
+                s3ForcePathStyle: true
+                insecure: true
+                accessKeyId: ${accessKeyId}
+                secretAccessKey: ${secretAccessKey}
+
+
+          deploymentMode: SingleBinary
+          singleBinary:
+            replicas: 1
+            persistence:
+              enabled: true
+              size: 20Gi
+              storageClass: nfs-client
+            resources:
+              limits:
+                cpu: 3
+                memory: 4Gi
+              requests:
+                cpu: 2
+                memory: 2Gi
+            extraArgs:
+              - -config.expand-env=true
+            extraEnv:
+              - name: accessKeyId
+                valueFrom:
+                  secretKeyRef:
+                    name: loki-access-creds
+                    key: accessKeyId
+              - name: secretAccessKey
+                valueFrom:
+                  secretKeyRef:
+                    name: loki-access-creds
+                    key: secretAccessKey
+
+          chunksCache:
+            # default is 500MB, with limited memory keep this smaller
+            writebackSizeLimit: 10MB
+
+          # Enable minio for storage
+          minio:
+            enabled: false
+
+          # Zero out replica counts of other deployment modes
+          backend:
+            replicas: 0
+          read:
+            replicas: 0
+          write:
+            replicas: 0
+
+          ingester:
+            replicas: 0
+          querier:
+            replicas: 0
+          queryFrontend:
+            replicas: 0
+          queryScheduler:
+            replicas: 0
+          distributor:
+            replicas: 0
+          compactor:
+            replicas: 0
+          indexGateway:
+            replicas: 0
+          bloomCompactor:
+            replicas: 0
+          bloomGateway:
+            replicas: 0
+          lokiCanary:
+            enabled: false
+          test:
+            enabled: false
+
+
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.4.0
+      helm:
+        releaseName: alloy-podlogs
+        values: |
+          controller:
+            type: deployment
+            replicas: 1
+
+          service:
+            enabled: true
+            type: LoadBalancer
+            internalTrafficPolicy: Local
+            annotations:
+              projectcalico.org/ipv4pools: '["lb-172-16-1"]'
+              projectcalico.org/loadBalancerIPs: '["172.16.1.23"]'
+
+
+          alloy:
+            extraPorts:
+              - name: "syslog-udp"
+                port: 1514
+                targetPort: 1514
+                protocol: "UDP"
+              - name: "syslog-tcp"
+                port: 1515
+                targetPort: 1515
+                protocol: "TCP"
+              - name: "syslog-udp-old"
+                port: 514
+                targetPort: 514
+                protocol: "UDP"
+
+            configMap:
+              content: |
+                // --- Kubernetes pod logs (minimal) ---
+                discovery.kubernetes "pods" {
+                  role = "pod"
+                }
+                loki.source.kubernetes "pods" {
+                  targets    = discovery.kubernetes.pods.targets
+                  forward_to = [loki.write.default.receiver]
+                }
+
+                // --- Syslog source with multiple listeners (per Alloy docs) ---
+                loki.source.syslog "syslog" {
+                  // Legacy devices on UDP/514 (strict RFC3164)
+                  listener {
+                    address  = "0.0.0.0:514"
+                    protocol = "udp"
+                    rfc3164_default_to_current_year = true
+                    syslog_format   = "rfc3164"
+                    label_structured_data = true
+                    labels   = { job = "syslog", transport = "udp", port = "514" }
+                  }
+
+                  // General UDP/1514 (auto-detect RFC3164/RFC5424)
+                  listener {
+                    address  = "0.0.0.0:1514"
+                    protocol = "udp"
+                    syslog_format = "rfc5424"
+                    use_rfc5424_message = true
+                    label_structured_data = true
+                    labels   = { job = "syslog", transport = "udp", port = "1514" }
+                  }
+
+                  // General TCP/1515 (auto-detect RFC3164/RFC5424)
+                  listener {
+                    address  = "0.0.0.0:1515"
+                    protocol = "tcp"
+                    syslog_format = "rfc5424"
+                    use_rfc5424_message = true
+                    label_structured_data = true
+                    labels   = { job = "syslog", transport = "tcp", port = "1515" }
+                  }
+                  relabel_rules = loki.relabel.syslog.rules
+                  forward_to = [loki.write.default.receiver]
+                }
+
+                loki.relabel "syslog" {
+                  rule {
+                    action        = "replace"
+                    source_labels = ["__syslog_connection_hostname"]
+                    target_label  = "host"
+                  }
+                  rule {
+                    action        = "replace"
+                    source_labels = ["__syslog_connection_ip_address"]
+                    target_label  = "sender_ip"
+                  }
+                  forward_to = [loki.write.default.receiver]
+                }
+
+                // --- Write to Loki ---
+                loki.write "default" {
+                  endpoint {
+                    url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+                  }
+                }
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+

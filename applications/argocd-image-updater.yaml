@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-image-updater
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argocd-image-updater
+    targetRevision: 1.0.1
+    helm:
+      values: |
+        config:
+          argocd:
+            grpcWeb: true
+            serverAddress: http://argocd-server
+            insecure: true
+            plaintext: true
+          registries:
+            - name: Docker Hub
+              api_url: https://registry-1.docker.io
+              prefix: docker.io
+              default: true
+        metrics:
+          enabled: true
+          serviceMonitor:
+            enabled: false
+        extraArgs:
+          - --loglevel=info
+          - --interval=60m
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

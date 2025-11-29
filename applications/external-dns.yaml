@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+    targetRevision: 1.19.0
+    helm:
+      releaseName: external-dns
+      valuesObject:
+        sources:
+          - ingress
+          - service
+
+        provider: 
+         name: rfc2136
+
+        domainFilters:
+          - linds.com.au
+
+        extraArgs:
+          - --rfc2136-host=10.0.50.200
+          - --rfc2136-port=53
+          - --rfc2136-zone=linds.com.au
+          - --rfc2136-insecure
+          - --rfc2136-tsig-axfr
+        registry: txt
+        txtOwnerId: k8s-home
+
+        policy: upsert-only
+        logLevel: info
+        interval: 1m
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

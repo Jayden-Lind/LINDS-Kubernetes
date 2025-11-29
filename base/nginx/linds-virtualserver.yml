@@ -1,69 +1,47 @@
-apiVersion: k8s.nginx.org/v1
-kind: VirtualServer
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
-  name: linds-docker
+  name: linds-docker-ingress
   namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
-  host: proxy.linds.com.au
+  ingressClassName: nginx
+  rules:
+    - host: proxy.linds.com.au
+      http:
+        paths:
+          - path: /radarr
+            pathType: Prefix
+            backend:
+              service:
+                name: linds-docker
+                port:
+                  number: 7878
+          - path: /sonarr
+            pathType: Prefix
+            backend:
+              service:
+                name: linds-docker
+                port:
+                  number: 8989
+          - path: /jackett
+            pathType: Prefix
+            backend:
+              service:
+                name: linds-docker
+                port:
+                  number: 9117
+          - path: /tautulli
+            pathType: Prefix
+            backend:
+              service:
+                name: linds-docker-tautulli
+                port:
+                  number: 8181
   tls:
-    secret: linds-certificate-secret
-    redirect:
-      enable: true
-  upstreams:
-  - name: linds-docker-radarr
-    service: linds-docker
-    port: 7878
-    use-cluster-ip: true
-  - name: linds-docker-sonarr
-    service: linds-docker
-    port: 8989
-    use-cluster-ip: true
-  - name: linds-docker-jackett
-    service: linds-docker
-    port: 9117
-    use-cluster-ip: true
-  - name: linds-docker-tautulli
-    service: linds-docker-tautulli
-    port: 8181
-    use-cluster-ip: true
-  routes:
-  - path: /radarr
-    action:
-      proxy:
-        upstream: linds-docker-radarr
-        requestHeaders:
-          pass: true
-        rewritePath: /radarr
-        responseHeaders:
-          pass:
-          - Server
-  - path: /sonarr
-    action:
-      proxy: 
-        upstream: linds-docker-sonarr
-        requestHeaders:
-          pass: true
-        rewritePath: /sonarr
-        responseHeaders:
-          pass:
-          - Server
-  - path: /jackett
-    action:
-      proxy:
-        upstream: linds-docker-jackett
-        requestHeaders:
-          pass: true
-        rewritePath: /jackett
-        responseHeaders:
-          pass:
-          - Server
-  - path: /tautulli
-    action:
-      proxy:
-        upstream: linds-docker-tautulli
-        requestHeaders:
-          pass: true
-        rewritePath: /tautulli
-        responseHeaders:
-          pass:
-          - Server
+    - hosts:
+        - proxy.linds.com.au
+      secretName: linds-docker-ingress-tls
