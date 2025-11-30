@@ -206,6 +206,27 @@ spec:
                     source_labels = ["__syslog_connection_ip_address"]
                     target_label  = "sender_ip"
                   }
+                  rule {
+                    source_labels = ["__syslog_message_severity"]
+                    target_label  = "severity"
+                  }
+
+                  rule { 
+                    source_labels = ["__syslog_message_hostname"]
+                    target_label  = "hostname"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_app_name"]
+                    target_label  = "appname"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_proc_id"]
+                    target_label  = "procid"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_msg_id"]
+                    target_label  = "msgid"
+                  }
                   forward_to = [loki.write.default.receiver]
                 }
 
