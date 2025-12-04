@@ -31,6 +31,8 @@ spec:
           - --rfc2136-zone=linds.com.au
           - --rfc2136-insecure
           - --rfc2136-tsig-axfr
+          - --fqdn-template={{ `{{ .Name }}.linds.com.au` }}
+          - --service-type-filter=LoadBalancer
         registry: txt
         txtOwnerId: k8s-home
 
