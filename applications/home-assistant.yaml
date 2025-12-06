@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: home-assistant
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-assistant
+  source:
+    repoURL: https://pajikos.github.io/home-assistant-helm-chart
+    chart: home-assistant
+    targetRevision: 0.3.33
+    helm:
+      values: |
+        hostNetwork: false
+        ingress:
+          enabled: true
+          className: nginx
+          annotations:
+            cert-manager.io/cluster-issuer: linds-ca
+            nginx.org/websocket-services: "home-assistant"
+          hosts:
+            - host: home.linds.com.au
+              paths:
+                - path: /
+                  pathType: ImplementationSpecific
+          tls:
+            - secretName: home.linds.com.au
+              hosts:
+                - home.linds.com.au
+        service:
+          type: LoadBalancer
+        persistence:
+          enabled: true
+          type: pvc
+          storageClass: nfs-client
+          size: 5Gi
+          accessMode: ReadWriteOnce
+        configuration:
+          enabled: true
+          forceInit: false
+          trusted_proxies:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 127.0.0.0/8
+          templateConfig: |-
+            default_config:
+            {{- if or .Values.ingress.enabled .Values.ingress.external }}
+            http:
+              use_x_forwarded_for: true
+              trusted_proxies:
+                {{- range .Values.configuration.trusted_proxies }}
+                - {{ . }}
+                {{- end }}
+            {{- end}}
+
+            # Load frontend themes from the themes folder
+            frontend:
+              themes: !include_dir_merge_named themes
+
+            automation: !include automations.yaml
+            script: !include scripts.yaml
+            scene: !include scenes.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
