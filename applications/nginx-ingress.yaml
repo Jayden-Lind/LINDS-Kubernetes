@@ -20,10 +20,14 @@ spec:
           hostNetwork: false
           disableIPV6: true
           enableExternalDNS: true
+          service:
+            create: true
+            type: LoadBalancer
+            externalTrafficPolicy: Cluster
           mgmt:
             resolver:
               ipv6: false
-          replicaCount: 1 
+          replicaCount: 1
           enableLatencyMetrics: true
           ingressClass:
             name: nginx
