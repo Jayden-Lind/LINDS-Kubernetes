@@ -14,7 +14,7 @@ spec:
     targetRevision: 0.3.33
     helm:
       values: |
-        hostNetwork: false
+        hostNetwork: true
         ingress:
           enabled: true
           className: nginx
@@ -40,7 +40,7 @@ spec:
           accessMode: ReadWriteOnce
         configuration:
           enabled: true
-          forceInit: false
+          forceInit: true
           trusted_proxies:
             - 10.0.0.0/8
             - 172.16.0.0/12
@@ -56,6 +56,8 @@ spec:
                 - {{ . }}
                 {{- end }}
             {{- end}}
+            logger:
+              default: warning
 
             # Load frontend themes from the themes folder
             frontend:
