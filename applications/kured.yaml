@@ -2,24 +2,24 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: kured
-  namespace: argocd          
+  namespace: argocd
   labels:
     app.kubernetes.io/managed-by: argocd
 spec:
-  project: default 
+  project: default
   source:
-    repoURL: https://kubereboot.github.io/charts          
+    repoURL: https://kubereboot.github.io/charts
     chart: kured
-    targetRevision: "5.10.0" 
+    targetRevision: "5.10.0"
     helm:
       releaseName: kured
       values: |
         namespace: kube-system
 
         configuration:
-          period: 1h0m0s
+          period: 10m0s
           timeZone: "Etc/UTC"
-          lockTtl: 30m
+          lockTtl: 10m
           drainTimeout: 10m
           forceReboot: true
           annotateNodes: true
@@ -28,9 +28,8 @@ spec:
     server: https://kubernetes.default.svc
     namespace: kube-system
   syncPolicy:
-    automated:                 
+    automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true   
-
+      - CreateNamespace=true

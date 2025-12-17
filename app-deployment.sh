@@ -10,7 +10,7 @@ helm upgrade --install calico projectcalico/tigera-operator \
   --set installation.calicoNetwork.bgp=Enabled \
   --set installation.calicoNetwork.mtu=1300 \
   --set installation.calicoNetwork.kubeProxyManagement=Enabled \
-  --set installation.calicoNetwork.bpfNetworkBootstrap=Enabled \
+  --set installation.calicoNetwork.bpfNetworkBootstrap=Disabled \
   --set installation.calicoNetwork.linuxDataplane=BPF \
   --set installation.calicoNetwork.ipPools[0].name=default-ipv4-ippool \
   --set installation.calicoNetwork.ipPools[0].cidr=10.244.0.0/16 \
