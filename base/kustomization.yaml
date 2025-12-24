@@ -1,7 +1,6 @@
 resources:
   # Local resources
   - coredns.yml
-  - rpf.yaml
 
   - calico/calico-bgp.yml
 
