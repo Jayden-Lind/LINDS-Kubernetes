@@ -20,3 +20,4 @@ spec:
     server: jd-truenas-01.linds.com.au
     path: /mnt/NAS
     readOnly: false
+

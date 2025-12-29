@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft
+  labels:
+    app: minecraft
+spec:
+  annotations:
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+    argocd-image-updater.argoproj.io/minecraft.update-strategy: digest
+    argocd-image-updater.argoproj.io/image-list: minecraft=itzg/minecraft-server:java23-graalvm
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minecraft
+  template:
+    metadata:
+      labels:
+        app: minecraft
+    spec:
+      nodeSelector:
+        datacenter: jd
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-server:java23-graalvm
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: VERSION
+              value: "LATEST"
+            - name: MEMORY
+              value: "10240M"
+            - name: USE_AIKAR_FLAGS
+              value: "true"
+            - name: TZ
+              value: Australia/Melbourne
+            - name: DIFFICULTY
+              value: hard
+            - name: SYNC_CHUNK_WRITES
+              value: "false"
+            - name: REGION_FILE_COMPRESSION
+              value: "lz4"
+          ports:
+            - containerPort: 25565
+              name: minecraft
+          volumeMounts:
+            - name: minecraft-data
+              mountPath: /data
+      volumes:
+        - name: minecraft-data
+          persistentVolumeClaim:
+            claimName: jd-nfs-pvc-minecraft

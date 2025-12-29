@@ -17,3 +17,4 @@ spec:
       name: factorio-tcp
   externalIPs:
     - 172.16.1.10
+

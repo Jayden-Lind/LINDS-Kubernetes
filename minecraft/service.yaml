@@ -18,3 +18,4 @@ spec:
       name: minecraft-tcp
   externalIPs:
     - 172.16.1.25
+

@@ -1,8 +1,0 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: minecraft 
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: minecraft=itzg/minecraft-server:java23-graalvm
-    argocd-image-updater.argoproj.io/minecraft.update-strategy: digest
-    argocd-image-updater.argoproj.io/write-back-method: argocd

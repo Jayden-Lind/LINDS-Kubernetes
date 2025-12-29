@@ -1,11 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: jd-nfs-pvc-minecraft
+  name: jd-nfs-pvc
 spec:
-  storageClassName: nfs-client
+  storageClassName: "manual"
+  volumeName: jd-nfs-truenas
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 1Gi
+
