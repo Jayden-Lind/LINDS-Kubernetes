@@ -8,21 +8,24 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
-  source:
-    repoURL: quay.io/jetstack/charts
-    chart: cert-manager
-    targetRevision: v1.19.1
-    helm:
-      values: |
-        crds:
-          enabled: true
-        global:
-          leaderElection:
-            namespace: cert-manager
-        ingressShim:
-          defaultIssuerName: linds-ca
-          defaultIssuerKind: ClusterIssuer
-          defaultIssuerGroup: cert-manager.io
+  sources:
+    - repoURL: quay.io/jetstack/charts
+      chart: cert-manager
+      targetRevision: v1.19.1
+      helm:
+        values: |
+          crds:
+            enabled: true
+          global:
+            leaderElection:
+              namespace: cert-manager
+          ingressShim:
+            defaultIssuerName: linds-ca
+            defaultIssuerKind: ClusterIssuer
+            defaultIssuerGroup: cert-manager.io
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: cert-manager/
   syncPolicy:
     automated:
       prune: true
