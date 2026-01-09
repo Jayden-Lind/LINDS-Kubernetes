@@ -26,11 +26,9 @@ kind: Cluster
 metadata:
   name: linds-postgres
   namespace: postgresql-linds
-  annotations:
-    nfs.io/storage-path: "postgresql-nfs"
 spec:
   instances: 2
-  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
   enableSuperuserAccess: true
   superuserSecret:
     name: postgres-user
@@ -62,7 +60,7 @@ spec:
         enabled: "true"
         isWALArchiver: "true"
         barmanObjectName: minio-store
-        serverName: linds-postgres-restored-3
+        serverName: linds-postgres-restored-4
   bootstrap:
     recovery:
       source: backup-truenas          # matches externalClusters[].name
@@ -72,7 +70,7 @@ spec:
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: minio-store # read from this object store
-        serverName: linds-postgres-restored-2
+        serverName: linds-postgres-restored-3
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
