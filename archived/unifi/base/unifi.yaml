@@ -12,7 +12,7 @@ metadata:
   name: jd-nfs-pvc-unifi
   namespace: unifi
 spec:
-  storageClassName: nfs-client
+  storageClassName: nfs-csi
   accessModes:
     - ReadWriteOnce
   resources:

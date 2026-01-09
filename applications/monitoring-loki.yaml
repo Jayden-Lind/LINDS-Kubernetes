@@ -53,7 +53,7 @@ spec:
             persistence:
               enabled: true
               size: 20Gi
-              storageClass: nfs-client
+              storageClass: nfs-csi
             resources:
               limits:
                 cpu: 3

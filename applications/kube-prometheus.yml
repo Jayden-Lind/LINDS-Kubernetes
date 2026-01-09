@@ -20,7 +20,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClassName: nfs-client
+            storageClassName: nfs-csi
           service:
             type: ClusterIP
           ingress:
@@ -53,14 +53,14 @@ spec:
           storageSpec:
             volumeClaimTemplate:
               spec:
-                storageClassName: nfs-client
+                storageClassName: nfs-csi
                 accessModes: ["ReadWriteOnce"]
         alertmanager:
           alertmanagerSpec:
             storage:
               volumeClaimTemplate:
                 spec:
-                  storageClassName: nfs-client
+                  storageClassName: nfs-csi
                   accessModes: ["ReadWriteOnce"]
         kubeControllerManager:
           enabled: false

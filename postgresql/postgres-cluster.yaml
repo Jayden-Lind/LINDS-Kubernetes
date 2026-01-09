@@ -36,7 +36,7 @@ spec:
     name: postgres-user
   storage:
     size: 50Gi
-    storageClass: nfs-client
+    storageClass: nfs-csi
   monitoring:
     enablePodMonitor: true
   managed:

@@ -17,13 +17,13 @@ spec:
           dataStorage:
             enabled: true
             size: 10Gi
-            storageClass: "nfs-client"
+            storageClass: "nfs-csi"
             accessMode: ReadWriteOnce
 
           auditStorage:
             enabled: true
             size: 10Gi
-            storageClass: "nfs-client"
+            storageClass: "nfs-csi"
             accessMode: ReadWriteOnce
 
           ha:

@@ -9,7 +9,7 @@ metadata:
   name: jd-nfs-pvc-registry
   namespace: container-registry
 spec:
-  storageClassName: nfs-client
+  storageClassName: nfs-csi
   accessModes:
     - ReadWriteOnce
   resources:
