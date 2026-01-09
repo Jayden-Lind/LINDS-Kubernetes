@@ -28,7 +28,7 @@ metadata:
   namespace: postgresql-linds
 spec:
   instances: 2
-  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
   enableSuperuserAccess: true
   superuserSecret:
     name: postgres-user
