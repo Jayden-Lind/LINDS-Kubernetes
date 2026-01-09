@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: csi-driver-nfs
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
+    chart: csi-driver-nfs
+    targetRevision: v4.12.1
+    helm:
+      releaseName: csi-driver-nfs
+      valuesObject:
+        storageClass:
+          create: true
+          name: nfs-csi
+          annotations: {}
+          parameters:
+            server: jd-truenas-01.linds.com.au
+            share: /mnt/NAS
+            subDir: "${pvc.metadata.namespace}/${pvc.metadata.name}"
+            onDelete: retain
+          reclaimPolicy: Retain
+          volumeBindingMode: Immediate
+          mountOptions:
+            - nfsvers=4.2
+            - soft
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true
+

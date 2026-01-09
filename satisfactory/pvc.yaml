@@ -3,7 +3,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: jd-nfs-pvc-satisfactory
 spec:
-  storageClassName: nfs-client
+  storageClassName: nfs-csi
   accessModes:
     - ReadWriteOnce
   resources:
