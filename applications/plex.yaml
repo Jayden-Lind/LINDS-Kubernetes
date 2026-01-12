@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plex-jd
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: plex-jd
+  sources:
+    - repoURL: https://raw.githubusercontent.com/plexinc/pms-docker/gh-pages
+      chart: plex-media-server
+      targetRevision: 1.4.0
+      helm:
+        values: |
+          image:
+            tag: latest
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            url: plex.linds.com.au
+            tls:
+              - hosts:
+                - plex.linds.com.au
+          pms:
+            storageClassName: nfs-csi
+            configStorage: 50Gi
+          nodeSelector:
+            datacenter: jd
+          extraVolumeMounts:
+            - name: nas
+              mountPath: /data/media
+            - name: holiday
+              mountPath: /data/holiday
+          extraVolumes:
+            - name: holiday
+              persistentVolumeClaim:
+                claimName: holiday-videos-pvc
+            - name: nas
+              persistentVolumeClaim:
+                claimName: jd-torrent-pvc
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: plex-jd/
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+

@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: holiday-videos-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Ti
+  volumeName: holiday-videos-jd
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: holiday-videos-jd
+spec:
+  capacity:
+    storage: 10Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:
+    - vers=3.0
+    - file_mode=0777
+    - dir_mode=0777
+    - soft
+    - nounix
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: pv-plex-jd-holiday-videos-handle
+    readOnly: false
+    volumeAttributes:
+      source: "//jd-dc-01.linds.com.au/nas/holiday videos"
+    nodePublishSecretRef:
+      name: smb-plex-secret
+      namespace: plex-jd
+    nodeStageSecretRef:
+      name: smb-plex-secret
+      namespace: plex-jd
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jd-torrent-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Ti
+  volumeName: jd-torrent
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jd-torrent
+spec:
+  capacity:
+    storage: 10Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:
+    - nfsvers=4.1
+    - soft
+  nfs:
+    server: jd-truenas-01.linds.com.au
+    path: /mnt/HDD/torrent
