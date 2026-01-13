@@ -26,6 +26,11 @@ spec:
           pms:
             storageClassName: nfs-csi
             configStorage: 50Gi
+          service:
+            type: LoadBalancer
+            annotations: 
+              projectcalico.org/ipv4pools: '["lb-172-16-1"]'
+              projectcalico.org/loadBalancerIPs: '["172.16.1.50"]'
           nodeSelector:
             datacenter: jd
           extraVolumeMounts:
