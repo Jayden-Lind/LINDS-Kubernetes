@@ -24,6 +24,7 @@ spec:
             tls:
               - hosts:
                 - plex.linds.com.au
+                secretName: plex.linds.com.au
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
           pms:
