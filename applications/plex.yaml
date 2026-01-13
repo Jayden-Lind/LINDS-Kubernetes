@@ -16,6 +16,7 @@ spec:
         values: |
           image:
             tag: latest
+          nameOverride: plex-jd
           ingress:
             enabled: true
             ingressClassName: nginx
