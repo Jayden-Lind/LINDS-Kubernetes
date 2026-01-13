@@ -24,6 +24,8 @@ spec:
             tls:
               - hosts:
                 - plex.linds.com.au
+            annotations:
+              cert-manager.io/cluster-issuer: linds-ca
           pms:
             storageClassName: nfs-csi
             configStorage: 50Gi
