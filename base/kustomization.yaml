@@ -4,11 +4,6 @@ resources:
 
   - calico/calico-bgp.yml
 
-  - nfs-provisioner/class.yml
-  - nfs-provisioner/deployment.yml
-  - nfs-provisioner/namespace.yml
-  - nfs-provisioner/rbac.yml
-
   - nginx/linds-virtualserver.yml
   - nginx/pdf.yml
   - nginx/argocd.yml

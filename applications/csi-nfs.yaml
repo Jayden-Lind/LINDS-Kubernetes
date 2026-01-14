@@ -26,6 +26,12 @@ spec:
           mountOptions:
             - nfsvers=4.2
             - soft
+            - nconnect=4
+            - rsize=1048576
+            - wsize=1048576
+            - timeo=600
+            - retrans=2
+            - noatime
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
