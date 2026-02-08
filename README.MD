@@ -1,10 +1,12 @@
 # LINDS Kubernetes Homelab
 
-This repository contains my personal Kubernetes homelab setup, designed to run on bare metal servers with a focus on networking performance, GitOps, and automation.
+This repository hosts the configuration for my personal Kubernetes homelab. The cluster is provisioned on **Proxmox Virtual Environment** using **Talos Linux**, with a strong focus on high-performance networking, GitOps, and automation.
+
+![Architecture](img/Kubernetes%202026.drawio.png)
 
 ## Cluster Overview
 
-* **OS:** Ubuntu 24.04 LTS (control and worker nodes)
+* **OS:** Talos Linux (running on Proxmox VE)
 * **Networking:** [Calico](https://www.tigera.io/project-calico/) with **eBPF dataplane**, **BGP peering** directly to my VyOS routers
 * **Service Load Balancing:** Provided natively by Calico BGP (no MetalLB)
 * **Proxy:** Kube-proxy is **disabled**; Calico eBPF handles service load balancing and cluster networking
@@ -13,18 +15,18 @@ This repository contains my personal Kubernetes homelab setup, designed to run o
 
 ## Bootstrap
 
-After building the cluster with [Ansible](https://github.com/Jayden-Lind/LINDS-Ansible/tree/main/roles/kubernetes), the initial application deployment can be bootstrapped by running:
+After building the cluster with [Terraform](https://github.com/Jayden-Lind/LINDS-Terraform/blob/main/proxmox/talos.tf), the initial application deployment can be bootstrapped by running:
 
 ```bash
 ./app-deployment.sh
 ```
 
-This script installs the base Argo CD configuration, which then provisions everything else declaratively.
+This script initializes **Argo CD**, applies the root application manifests, and bootstraps the cluster services. Once executed, Argo CD takes over to hydrate the cluster with the remaining applications.
 
 ## Provisioning
 
 * **Argo CD** manages all workloads, applications, monitoring, logging, and supporting services.
-* **Exception:** Calico (with eBPF + BGP) is installed and configured manually as part of cluster bootstrap.
+* **Exception:** Calico CNI is installed via Talos configuration, while BGP peering and IP pools are configured declaratively via GitOps.
 
 ## Key Features
 
