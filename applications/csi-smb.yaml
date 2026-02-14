@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts"
     chart: csi-driver-smb
-    targetRevision: v1.19.1
+    targetRevision: v1.20.0
     helm:
       releaseName: csi-driver-smb
   destination:

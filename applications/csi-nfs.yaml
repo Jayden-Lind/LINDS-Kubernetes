@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
     chart: csi-driver-nfs
-    targetRevision: v4.12.1
+    targetRevision: v4.13.1
     helm:
       releaseName: csi-driver-nfs
       valuesObject:
