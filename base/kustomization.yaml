@@ -2,8 +2,6 @@ resources:
   # Local resources
   - coredns.yml
 
-  - calico/calico-bgp.yml
-
   - nginx/linds-virtualserver.yml
   - nginx/pdf.yml
   - nginx/argocd.yml
