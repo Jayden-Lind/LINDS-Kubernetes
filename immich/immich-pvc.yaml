@@ -44,6 +44,34 @@ spec:
       namespace: immich
 ---
 apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-immich-data
+spec:
+  capacity:
+    storage: 10Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  mountOptions:
+    - vers=3.0
+    - file_mode=0777
+    - dir_mode=0777
+    - nounix
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: pv-immich-data-handle
+    readOnly: false
+    volumeAttributes:
+      source: "//jd-dc-01.linds.com.au/nas/immich"
+    nodePublishSecretRef:
+      name: smb-immich-creds
+      namespace: immich
+    nodeStageSecretRef:
+      name: smb-immich-creds
+      namespace: immich
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: immich-nfs-pvc
@@ -53,5 +81,6 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 10Gi
-  storageClassName: nfs-csi
+      storage: 10Ti
+  volumeName: pv-immich-data
+  storageClassName: ""

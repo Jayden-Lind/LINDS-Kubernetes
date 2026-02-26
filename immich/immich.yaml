@@ -141,7 +141,7 @@ spec:
             value: /cache
           - name: TZ
             value: Australia/Melbourne
-          image: ghcr.io/immich-app/immich-machine-learning:v2.2.1
+          image: ghcr.io/immich-app/immich-machine-learning:v2.5.6
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -243,7 +243,7 @@ spec:
             value: immich-valkey
           - name: TZ
             value: Australia/Melbourne
-          image: ghcr.io/immich-app/immich-server:v2.2.1
+          image: ghcr.io/immich-app/immich-server:v2.5.6
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -423,3 +423,27 @@ spec:
       scheme: http
     - port: metrics-ms
       scheme: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: photos.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: immich-server
+                port:
+                  number: 2283
+  tls:
+    - hosts:
+        - photos.linds.com.au
+      secretName: photos-linds-tls
