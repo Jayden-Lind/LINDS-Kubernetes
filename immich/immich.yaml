@@ -92,6 +92,8 @@ metadata:
     helm.sh/chart: immich-0.10.1
   namespace: immich
 spec:
+  nodeSelector:
+    datacenter: jd
   revisionHistoryLimit: 3
   replicas: 1
   strategy:
@@ -306,6 +308,8 @@ metadata:
     helm.sh/chart: immich-0.10.1
   namespace: immich
 spec:
+  nodeSelector:
+    datacenter: jd
   revisionHistoryLimit: 3
   replicas: 1
   strategy:
