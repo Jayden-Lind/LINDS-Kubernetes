@@ -95,7 +95,7 @@ spec:
   nodeSelector:
     datacenter: jd
   revisionHistoryLimit: 3
-  replicas: 1
+  replicas: 3
   strategy:
     type: RollingUpdate
   selector:
@@ -135,8 +135,6 @@ spec:
                 name: immich-auth
           - name: IMMICH_MACHINE_LEARNING_URL
             value: http://immich-machine-learning:3003
-          - name: LOG_LEVEL
-            value: verbose
           - name: REDIS_HOSTNAME
             value: immich-valkey
           - name: TRANSFORMERS_CACHE
