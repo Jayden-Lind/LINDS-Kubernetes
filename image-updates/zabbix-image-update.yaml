@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationImageUpdate
+metadata:
+  name: zabbix
+  namespace: argocd
+spec:
+  appName: zabbix
+  writeBackMethod: argocd
+  images:
+    - name: zabbix-server
+      image: zabbix/zabbix-server-pgsql
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+    - name: zabbix-web
+      image: zabbix/zabbix-web-nginx-pgsql
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+    - name: zabbix-java-gateway
+      image: zabbix/zabbix-java-gateway
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+    - name: zabbix-web-service
+      image: zabbix/zabbix-web-service
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+    - name: zabbix-agent
+      image: zabbix/zabbix-agent
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+    - name: zabbix-snmptraps
+      image: zabbix/zabbix-snmptraps
+      tag: alpine-7.0-latest
+      updateStrategy: digest
+

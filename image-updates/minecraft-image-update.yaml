@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationImageUpdate
+metadata:
+  name: minecraft
+  namespace: argocd
+spec:
+  appName: minecraft
+  writeBackMethod: argocd
+  images:
+    - name: minecraft
+      image: itzg/minecraft-server
+      tag: latest
+      updateStrategy: digest
+

@@ -68,9 +68,6 @@ spec:
           enabled: false
         kubeEtcd:
           enabled: false
-  - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
-    targetRevision: master
-    path: prometheus
   syncPolicy:
     automated:
       prune: true

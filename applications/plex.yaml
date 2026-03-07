@@ -14,8 +14,6 @@ spec:
       targetRevision: 1.4.0
       helm:
         values: |
-          image:
-            tag: latest
           nameOverride: plex-jd
           ingress:
             enabled: true

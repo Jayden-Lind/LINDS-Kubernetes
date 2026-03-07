@@ -5,10 +5,6 @@ metadata:
   labels:
     app: minecraft
 spec:
-  annotations:
-    argocd-image-updater.argoproj.io/write-back-method: argocd
-    argocd-image-updater.argoproj.io/minecraft.update-strategy: digest
-    argocd-image-updater.argoproj.io/image-list: minecraft=itzg/minecraft-server:java23-graalvm
   replicas: 1
   selector:
     matchLabels:

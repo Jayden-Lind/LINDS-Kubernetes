@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationImageUpdate
+metadata:
+  name: satisfactory
+  namespace: argocd
+spec:
+  appName: satisfactory-app
+  writeBackMethod: argocd
+  images:
+    - name: satisfactory
+      image: wolveix/satisfactory-server
+      tag: latest
+      updateStrategy: digest
+

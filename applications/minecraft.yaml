@@ -3,10 +3,6 @@ kind: Application
 metadata:
   name: minecraft
   namespace: argocd
-  annotations:
-    argocd-image-updater.argoproj.io/image-list: minecraft=itzg/minecraft-server:latest
-    argocd-image-updater.argoproj.io/minecraft.update-strategy: digest
-    argocd-image-updater.argoproj.io/write-back-method: argocd
 spec:
   project: default
   source:
