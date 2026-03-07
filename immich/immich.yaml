@@ -92,8 +92,6 @@ metadata:
     helm.sh/chart: immich-0.10.1
   namespace: immich
 spec:
-  nodeSelector:
-    datacenter: jd
   revisionHistoryLimit: 3
   replicas: 3
   strategy:
@@ -110,6 +108,8 @@ spec:
         app.kubernetes.io/instance: immich
         app.kubernetes.io/name: machine-learning
     spec: 
+      nodeSelector:
+        datacenter: jd
       enableServiceLinks: false
       serviceAccountName: default
       automountServiceAccountToken: true
@@ -306,8 +306,6 @@ metadata:
     helm.sh/chart: immich-0.10.1
   namespace: immich
 spec:
-  nodeSelector:
-    datacenter: jd
   revisionHistoryLimit: 3
   replicas: 1
   strategy:
@@ -324,6 +322,8 @@ spec:
         app.kubernetes.io/instance: immich
         app.kubernetes.io/name: valkey
     spec: 
+      nodeSelector:
+        datacenter: jd
       enableServiceLinks: false
       serviceAccountName: default
       automountServiceAccountToken: true
