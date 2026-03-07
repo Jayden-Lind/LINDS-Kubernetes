@@ -13,42 +13,42 @@ spec:
         - alias: zabbix-server
           imageName: zabbix/zabbix-server-pgsql:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-server-pgsql
         - alias: zabbix-web
           imageName: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-web-nginx-pgsql
         - alias: zabbix-java-gateway
           imageName: zabbix/zabbix-java-gateway:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-java-gateway
         - alias: zabbix-web-service
           imageName: zabbix/zabbix-web-service:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-web-service
         - alias: zabbix-agent
           imageName: zabbix/zabbix-agent:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-agent
         - alias: zabbix-snmptraps
           imageName: zabbix/zabbix-snmptraps:alpine-7.0-latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-snmptraps

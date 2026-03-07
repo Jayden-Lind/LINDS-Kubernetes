@@ -13,7 +13,7 @@ spec:
         - alias: factorio
           imageName: factoriotools/factorio:stable
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: factoriotools/factorio

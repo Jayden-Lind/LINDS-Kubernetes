@@ -13,7 +13,7 @@ spec:
         - alias: plex
           imageName: index.docker.io/plexinc/pms-docker:latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             helm:
               name: image.repository

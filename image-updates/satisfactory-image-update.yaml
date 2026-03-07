@@ -13,7 +13,7 @@ spec:
         - alias: satisfactory
           imageName: wolveix/satisfactory-server:latest
           commonUpdateSettings:
-            updateStrategy: newest-build
+            updateStrategy: digest
           manifestTargets:
             kustomize:
               name: wolveix/satisfactory-server
