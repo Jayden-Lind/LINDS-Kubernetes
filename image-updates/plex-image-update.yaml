@@ -1,17 +1,20 @@
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationImageUpdate
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
 metadata:
   name: plex-jd
   namespace: argocd
 spec:
-  appName: plex-jd
-  writeBackMethod: argocd
-  images:
-    - name: plex
-      image: docker.io/plexinc/pms-docker
-      updateStrategy: latest
-      helm:
-        imageName: image.repository
-        imageTag: image.tag
-        sourceIndex: 0
-
+  namespace: argocd
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: plex-jd
+      images:
+        - alias: plex
+          imageName: index.docker.io/plexinc/pms-docker:latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            helm:
+              name: image.repository
+              tag: image.tag

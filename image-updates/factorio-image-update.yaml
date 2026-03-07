@@ -1,14 +1,19 @@
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationImageUpdate
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
 metadata:
   name: factorio
   namespace: argocd
 spec:
-  appName: factorio
-  writeBackMethod: argocd
-  images:
-    - name: factorio
-      image: factoriotools/factorio
-      tag: stable
-      updateStrategy: digest
-
+  namespace: argocd
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: factorio
+      images:
+        - alias: factorio
+          imageName: factoriotools/factorio:stable
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: factoriotools/factorio

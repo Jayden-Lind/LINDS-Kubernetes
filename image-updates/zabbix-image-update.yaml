@@ -1,34 +1,54 @@
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationImageUpdate
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
 metadata:
   name: zabbix
   namespace: argocd
 spec:
-  appName: zabbix
-  writeBackMethod: argocd
-  images:
-    - name: zabbix-server
-      image: zabbix/zabbix-server-pgsql
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-    - name: zabbix-web
-      image: zabbix/zabbix-web-nginx-pgsql
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-    - name: zabbix-java-gateway
-      image: zabbix/zabbix-java-gateway
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-    - name: zabbix-web-service
-      image: zabbix/zabbix-web-service
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-    - name: zabbix-agent
-      image: zabbix/zabbix-agent
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-    - name: zabbix-snmptraps
-      image: zabbix/zabbix-snmptraps
-      tag: alpine-7.0-latest
-      updateStrategy: digest
-
+  namespace: argocd
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: zabbix
+      images:
+        - alias: zabbix-server
+          imageName: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-server-pgsql
+        - alias: zabbix-web
+          imageName: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-web-nginx-pgsql
+        - alias: zabbix-java-gateway
+          imageName: zabbix/zabbix-java-gateway:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-java-gateway
+        - alias: zabbix-web-service
+          imageName: zabbix/zabbix-web-service:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-web-service
+        - alias: zabbix-agent
+          imageName: zabbix/zabbix-agent:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-agent
+        - alias: zabbix-snmptraps
+          imageName: zabbix/zabbix-snmptraps:alpine-7.0-latest
+          commonUpdateSettings:
+            updateStrategy: newest-build
+          manifestTargets:
+            kustomize:
+              name: zabbix/zabbix-snmptraps
