@@ -1,0 +1,34 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: arr-linds
+  namespace: argocd
+spec:
+  namespace: argocd
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: argocd
+      images:
+        - alias: jackett
+          imageName: index.docker.io/linuxserver/jackett:latest
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: linuxserver/jackett
+        - alias: radarr
+          imageName: index.docker.io/linuxserver/radarr:latest
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: linuxserver/radarr
+        - alias: sonarr
+          imageName: index.docker.io/linuxserver/sonarr:latest
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: linuxserver/sonarr
+

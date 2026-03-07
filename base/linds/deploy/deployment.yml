@@ -84,14 +84,11 @@ spec:
       labels:
         app: v1
         name: linds-docker
-      annotations:
-        diun.enable: "true"
     spec:
       terminationGracePeriodSeconds: 120
       containers:
         - name: jacket
           image: linuxserver/jackett:latest
-          imagePullPolicy: Always
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
@@ -105,7 +102,6 @@ spec:
             - name: PUID
               value: "1000"
           image: linuxserver/radarr:latest
-          imagePullPolicy: Always
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
@@ -127,7 +123,6 @@ spec:
             - name: SONARR_BRANCH
               value: main
           image: linuxserver/sonarr:latest
-          imagePullPolicy: Always
           volumeMounts:
             - mountPath: /config
               name: linds-nfs-pvc
