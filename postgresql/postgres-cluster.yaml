@@ -16,7 +16,7 @@ spec:
         key: SECRET_ACCESS_KEY
     wal:
       compression: zstd
-      maxParallel: 4
+      maxParallel: 8
     data:
       compression: bzip2
   retentionPolicy: 7d
@@ -35,8 +35,32 @@ spec:
   storage:
     size: 50Gi
     storageClass: nfs-csi
+  resources:
+    requests:
+      memory: "2048Mi"
+      cpu: "500m"
+    limits:
+      memory: "409Gi"
   monitoring:
     enablePodMonitor: true
+  postgresql:
+    parameters:
+      shared_buffers: "1024MB"
+      effective_cache_size: "3072MB"
+      work_mem: "16MB"
+      maintenance_work_mem: "128MB"
+      max_connections: "400"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      wal_buffers: "16MB"
+      max_wal_size: "1GB"
+      min_wal_size: "256MB"
+      checkpoint_completion_target: "0.9"
+      log_min_duration_statement: "1000"
+      idle_in_transaction_session_timeout: "300000"
+      tcp_keepalives_idle: "600"
+      tcp_keepalives_interval: "30"
+      tcp_keepalives_count: "10"
   managed:
     roles:
       - name: catcrawl
