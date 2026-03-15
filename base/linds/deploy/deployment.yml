@@ -86,6 +86,8 @@ spec:
         name: linds-docker
     spec:
       terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
       containers:
         - name: jacket
           image: linuxserver/jackett:latest
@@ -131,13 +133,35 @@ spec:
               mountPath: /mnt/torrent
               subPath: torrent
             - name: linds-nfs-nas
-              mountPath: "/mnt/TV Shows"
-              subPath: "TV Shows"
+              mountPath: "/mnt/TVShows"
+              subPath: "TVShows"
             - name: linds-nfs-nas
               mountPath: "/mnt/Movies"
               subPath: "Movies"
           ports:
             - containerPort: 8989
+        - name: bazarr
+          env:
+            - name: GUID
+              value: "0"
+            - name: PUID
+              value: "1000"
+          image: linuxserver/bazarr:latest
+          volumeMounts:
+            - mountPath: /config
+              name: linds-nfs-pvc
+              subPath: bazarr
+            - name: linds-nfs-nas
+              mountPath: "/mnt/TVShows"
+              subPath: "TVShows"
+            - name: linds-nfs-nas
+              mountPath: "/mnt/Movies"
+              subPath: "Movies"
+            - name: linds-nfs-nas
+              mountPath: /mnt/torrent
+              subPath: torrent
+          ports:
+            - containerPort: 6767
       restartPolicy: Always
       volumes:
         - name: linds-nfs-pvc
@@ -168,5 +192,9 @@ spec:
       targetPort: 7878
       protocol: TCP
       name: radarr-service
+    - port: 6767
+      targetPort: 6767
+      protocol: TCP
+      name: bazarr-service
   selector:
     name: linds-docker

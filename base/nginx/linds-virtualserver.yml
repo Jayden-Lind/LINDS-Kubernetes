@@ -34,6 +34,13 @@ spec:
                 name: linds-docker
                 port:
                   number: 9117
+          - path: /bazarr
+            pathType: Prefix
+            backend:
+              service:
+                name: linds-docker
+                port:
+                  number: 6767
           - path: /tautulli
             pathType: Prefix
             backend:
