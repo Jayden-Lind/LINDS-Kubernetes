@@ -16,7 +16,7 @@ spec:
       releaseName: nginx-ingress
       valuesObject:
         controller:
-          kind: deployment
+          kind: daemonset
           hostNetwork: false
           disableIPV6: true
           enableExternalDNS: true
@@ -27,7 +27,6 @@ spec:
           mgmt:
             resolver:
               ipv6: false
-          replicaCount: 1
           enableLatencyMetrics: true
           ingressClass:
             name: nginx
