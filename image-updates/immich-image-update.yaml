@@ -1,0 +1,33 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: immich
+  namespace: argocd
+spec:
+  namespace: argocd
+  writeBackConfig:
+    method: argocd
+  applicationRefs:
+    - namePattern: immich
+      images:
+        - alias: immich-server
+          imageName: ghcr.io/immich-app/immich-server:v2
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: ghcr.io/immich-app/immich-server
+        - alias: immich-machine-learning
+          imageName: ghcr.io/immich-app/immich-machine-learning:v2
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: ghcr.io/immich-app/immich-machine-learning
+        - alias: immich-valkey
+          imageName: docker.io/valkey/valkey:9.0-alpine
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            kustomize:
+              name: docker.io/valkey/valkey

@@ -15,3 +15,6 @@ resources:
 
 commonLabels:
   app: zabbix
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
