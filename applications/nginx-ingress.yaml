@@ -23,7 +23,7 @@ spec:
           service:
             create: true
             type: LoadBalancer
-            externalTrafficPolicy: Cluster
+            externalTrafficPolicy: Local
           mgmt:
             resolver:
               ipv6: false
