@@ -1,19 +1,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: gha-runner-scale-set-controller
+  name: mumble
   namespace: argocd
 spec:
   project: default
   destination:
     server: https://kubernetes.default.svc
-    namespace: arc-systems
+    namespace: mumble
   source:
-    chart: gha-runner-scale-set-controller
-    repoURL: ghcr.io/actions/actions-runner-controller-charts
-    targetRevision: 0.14.0
+    repoURL: https://syntax3rror404.github.io/helm-charts/charts
+    chart: mumble
+    targetRevision: 1.0.2
     helm:
-      releaseName: arc
+      values: |
+        service:
+          type: LoadBalancer
+        persistence:
+          storageClass: nfs-csi
   syncPolicy:
     automated:
       prune: true
@@ -21,3 +25,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+
