@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-descheduler
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  source:
+    repoURL: https://kubernetes-sigs.github.io/descheduler/
+    chart: descheduler
+    targetRevision: 0.35.1
+    helm:
+      values: |
+        schedule: "*/30 * * * *"
+        deschedulerPolicy:
+          profiles:
+            - name: default
+              pluginConfig:
+                - name: DefaultEvictor
+                  args:
+                    ignorePvcPods: true
+                - name: LowNodeUtilization
+                  args:
+                    thresholds:
+                      cpu: 30
+                      memory: 30
+                      pods: 30
+                    targetThresholds:
+                      cpu: 70
+                      memory: 70
+                      pods: 70
+              plugins:
+                balance:
+                  enabled:
+                    - LowNodeUtilization
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
