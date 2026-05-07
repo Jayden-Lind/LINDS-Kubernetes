@@ -5,19 +5,175 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
-    targetRevision: HEAD
-    path: "zabbix/base"
   destination:
-    server: "https://kubernetes.default.svc"
+    server: https://kubernetes.default.svc
     namespace: zabbix
+  sources:
+    - repoURL: https://zabbix-community.github.io/helm-zabbix/
+      chart: zabbix
+      targetRevision: 7.0.12
+      helm:
+        releaseName: zabbix
+        values: |
+          zabbixImageTag: alpine-7.4-latest
+
+          postgresAccess:
+            existingSecretName: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+            secretHostKey: ""
+            secretPortKey: ""
+            secretUserKey: username
+            secretPasswordKey: password
+            secretDBKey: ""
+            host: linds-postgres-rw.postgresql-linds.svc.cluster.local
+            port: "5432"
+            database: zabbix
+
+          postgresql:
+            enabled: false
+
+          zabbixServer:
+            enabled: true
+            replicaCount: 2
+            podAntiAffinity: true
+            zabbixServerHA:
+              enabled: true
+              dbCreateUpgradeJob:
+                image:
+                  tagSuffix: "20250802113243"
+            image:
+              pullPolicy: Always
+            securityContext:
+              privileged: true
+            extraEnv:
+              - { name: ZBX_CACHESIZE, value: "1024M" }
+              - { name: ZBX_TRENDCACHESIZE, value: "1024M" }
+              - { name: ZBX_HISTORYCACHESIZE, value: "2048M" }
+              - { name: ZBX_HISTORYINDEXCACHESIZE, value: "1024M" }
+              - { name: ZBX_STARTTRAPPERS, value: "5" }
+              - { name: ZBX_STARTPREPROCESSORS, value: "10" }
+              - { name: ZBX_STARTDBSYNCERS, value: "10" }
+              - { name: ZBX_ENABLE_SNMP_TRAPS, value: "true" }
+              - { name: ZBX_STARTPROXYPOLLERS, value: "5" }
+              - { name: ZBX_PROXYCONFIGFREQUENCY, value: "60" }
+              - { name: ZBX_STARTVMWARECOLLECTORS, value: "10" }
+              - { name: ZBX_VMWAREFREQUENCY, value: "60" }
+              - { name: ZBX_VMWAREPERFFREQUENCY, value: "60" }
+              - { name: ZBX_VMWARETIMEOUT, value: "10" }
+              - { name: ZBX_STARTIPMIPOLLERS, value: "3" }
+              - { name: ZBX_TIMEOUT, value: "10" }
+              - { name: ZBX_STARTPOLLERS, value: "8" }
+              - { name: ZBX_STARTPINGERS, value: "2" }
+              - { name: ZBX_STARTSNMPPOLLERS, value: "2" }
+              - { name: ZBX_SERVICEMANAGERSYNCFREQUENCY, value: "10" }
+              - { name: ZBX_PROBLEMHOUSEKEEPINGFREQUENCY, value: "60" }
+              - { name: ZBX_ALLOWUNSUPPORTEDDBVERSIONS, value: "1" }
+            extraContainers:
+              - name: zabbix-snmptraps
+                image: zabbix/zabbix-snmptraps:alpine-7.4-latest
+                imagePullPolicy: Always
+                ports:
+                  - containerPort: 1162
+                    protocol: UDP
+                    name: snmp-trap
+                volumeMounts:
+                  - name: zabbix-snmptraps
+                    mountPath: /var/lib/zabbix/snmptraps/
+            extraVolumes:
+              - name: zabbix-snmptraps
+                emptyDir: {}
+            extraVolumeMounts:
+              - name: zabbix-snmptraps
+                mountPath: /var/lib/zabbix/snmptraps
+                readOnly: true
+
+          zabbixWeb:
+            enabled: true
+            replicaCount: 2
+            podAntiAffinity: true
+            image:
+              pullPolicy: Always
+            extraEnv:
+              - { name: ZBX_SERVER_NAME, value: "LINDS-Zabbix" }
+              - { name: PHP_TZ, value: "Australia/Melbourne" }
+              - { name: ZBX_DB_VERIFY_HOST, value: "false" }
+              - { name: ENABLE_WEB_ACCESS_LOG, value: "true" }
+
+          zabbixAgent:
+            enabled: true
+            runAsSidecar: false
+            runAsDaemonSet: true
+            image:
+              repository: zabbix/zabbix-agent2
+              pullPolicy: Always
+            ZBX_SERVER_HOST: zabbix-zabbix-server
+            ZBX_PASSIVE_ALLOW: true
+            ZBX_ACTIVE_ALLOW: true
+            ZBX_DEBUGLEVEL: 3
+            ZBX_TIMEOUT: 4
+            hostNetwork: true
+            hostRootFsMount: true
+            resources:
+              requests: { cpu: 100m, memory: 64Mi }
+              limits:   { cpu: 200m, memory: 128Mi }
+            securityContext:
+              privileged: true
+            extraEnv:
+              - { name: ZBX_DENYKEY,             value: "system.run[*]" }
+              - { name: ZBX_LOGREMOTECOMMANDS,   value: "1" }
+              - { name: ZBX_UNSAFEUSERPARAMETERS, value: "0" }
+              - { name: DEBUG_MODE,              value: "3" }
+
+          zabbixJavaGateway:
+            enabled: true
+            image:
+              pullPolicy: Always
+            ZBX_START_POLLERS: 5
+            ZBX_STARTJAVAPOLLERS: 5
+            ZBX_TIMEOUT: 3
+            ZBX_DEBUGLEVEL: info
+
+          zabbixWebService:
+            enabled: false
+
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              cert-manager.io/cluster-issuer: linds-ca
+            pathType: Prefix
+            hosts:
+              - host: zabbix.linds.com.au
+                paths:
+                  - path: /
+                    pathType: Prefix
+            tls:
+              - secretName: zabbix.linds.com.au
+                hosts:
+                  - zabbix.linds.com.au
+
+          extraManifests:
+            - apiVersion: v1
+              kind: Service
+              metadata:
+                name: zabbix-snmptraps
+                labels:
+                  app.kubernetes.io/name: zabbix
+                  app.kubernetes.io/component: snmptraps
+              spec:
+                type: ClusterIP
+                ports:
+                  - name: snmp-trap
+                    port: 162
+                    targetPort: 1162
+                    protocol: UDP
+                selector:
+                  app.kubernetes.io/name: zabbix
+                  app.kubernetes.io/instance: zabbix
+                  app.kubernetes.io/component: server
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - ApplyOutOfSyncOnly=true
-      - Validate=false
-      - ServerSideApply=true
       - CreateNamespace=true
+      - ServerSideApply=true
