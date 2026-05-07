@@ -25,7 +25,7 @@ spec:
          emptyDir: {}
       containers:
         - name: zabbix-server
-          image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          image: zabbix/zabbix-server-pgsql:alpine-7.4-latest
           imagePullPolicy: Always
           ports:
           - containerPort: 10051
@@ -107,7 +107,7 @@ spec:
             capabilities: {}
             privileged: true
         - name: zabbix-snmptraps
-          image: zabbix/zabbix-snmptraps:alpine-7.0-latest
+          image: zabbix/zabbix-snmptraps:alpine-7.4-latest
           imagePullPolicy: Always
           ports:
           - containerPort: 1162

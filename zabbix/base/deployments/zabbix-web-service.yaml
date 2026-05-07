@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: zabbix-web-service
-          image: zabbix/zabbix-web-service:alpine-7.0-latest
+          image: zabbix/zabbix-web-service:alpine-7.4-latest
           imagePullPolicy: Always
           resources:
            limits:

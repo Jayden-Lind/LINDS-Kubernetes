@@ -28,7 +28,7 @@ spec:
       serviceAccountName: zabbix-agent
       containers:
         - name: zabbix-agent
-          image: zabbix/zabbix-agent:alpine-7.0-latest
+          image: zabbix/zabbix-agent:alpine-7.4-latest
           imagePullPolicy: Always
           resources:
            limits:
