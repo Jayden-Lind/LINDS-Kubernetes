@@ -87,8 +87,8 @@ metadata:
   name: catcrawl-coles-chrome-profile
   namespace: default
 spec:
-  accessModes: ["ReadWriteOnce"]
+  accessModes: ["ReadWriteMany"]   # NFS supports RWX, useful if you ever want a parallel debug pod
   resources:
     requests:
       storage: 1Gi
-  # storageClassName:                # uncomment + set if your cluster needs an explicit class
+  storageClassName: nfs-csi
