@@ -4,51 +4,91 @@ metadata:
   name: catcrawl-col-scheduler
   namespace: default
 spec:
-  schedule: "0 2 * * 3" 
+  schedule: "0 2 * * 3"            # Wednesdays at 02:00
+  concurrencyPolicy: Forbid        # never overlap two crawls
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 14400 # 4h hard cap per run
+      backoffLimit: 1
       template:
         spec:
-          containers:
-          - name: catcrawl-coles
-            image: ghcr.io/jayden-lind/cat-crawl-coles:latest
-            imagePullPolicy: Always
-            env:
-              - name: DB_HOST
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: DB_HOST
-              - name: DB_USER
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: DB_USER
-              - name: DB_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: DB_PASSWORD
-              - name: DB_PORT
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: DB_PORT
-              - name: CAT_STORE_ID
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: CAT_STORE_ID
-              - name: API_KEY
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: API_KEY
-              - name: API_URL
-                valueFrom:
-                  secretKeyRef:
-                    name: catcrawl-coles-env-secret
-                    key: API_URL
-          imagePullSecrets:
-          - name: ghcr-pull-secret
           restartPolicy: Never
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          securityContext:
+            fsGroup: 1001
+            fsGroupChangePolicy: OnRootMismatch
+          # busybox initContainer fixes ownership of the PVC on first
+          # mount so the non-root main container (UID 1001) can write
+          # Chromium's SingletonLock and cookie store.
+          initContainers:
+            - name: fix-profile-perms
+              image: busybox:1.36
+              command:
+                - sh
+                - -c
+                - "chown -R 1001:1001 /data/chrome-profile && chmod -R u+rwX /data/chrome-profile"
+              securityContext:
+                runAsUser: 0
+              volumeMounts:
+                - name: chrome-profile
+                  mountPath: /data/chrome-profile
+          containers:
+            - name: catcrawl-coles
+              image: ghcr.io/jayden-lind/cat-crawl-coles:latest
+              imagePullPolicy: Always
+              args:
+                - "-source=website"
+                - "-chrome-profile=/data/chrome-profile"
+              env:
+                - name: DB_HOST
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
+                - name: DB_USER
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_USER } }
+                - name: DB_PASSWORD
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
+                - name: DB_PORT
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+                - name: CAT_STORE_ID
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: CAT_STORE_ID } }
+                - name: API_KEY
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: API_KEY } }
+                - name: API_URL
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: API_URL } }
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "2"
+                  memory: "2Gi"
+              volumeMounts:
+                - name: chrome-profile
+                  mountPath: /data/chrome-profile
+                - name: dshm
+                  mountPath: /dev/shm
+          volumes:
+            - name: chrome-profile
+              persistentVolumeClaim:
+                claimName: catcrawl-coles-chrome-profile
+            # Chromium uses /dev/shm for shared memory between processes.
+            # The kubelet's default 64MB tmpfs runs out mid-page; backing
+            # /dev/shm with a memory-medium emptyDir avoids that.
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: catcrawl-coles-chrome-profile
+  namespace: default
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+  # storageClassName:                # uncomment + set if your cluster needs an explicit class
