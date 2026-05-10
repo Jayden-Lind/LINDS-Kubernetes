@@ -23,15 +23,22 @@ spec:
           # busybox initContainer fixes ownership of the PVC on first
           # mount so the non-root main container (UID 1001) can write
           # Chromium's SingletonLock and cookie store.
+          # The PVC is pre-chowned to 1001:1001 on the NFS server; every
+          # file Chromium writes thereafter is already owned by 1001
+          # (the main container's UID). All this initContainer needs to
+          # do is clear the stale Chromium singleton lock files left
+          # behind by the previous pod — they're symlinks containing
+          # <hostname>-<pid>, and a new pod with a different hostname
+          # makes Chromium refuse to start ("profile appears to be in
+          # use ... on another computer"). concurrencyPolicy: Forbid
+          # already prevents two real concurrent runs.
           initContainers:
-            - name: fix-profile-perms
+            - name: clear-chrome-locks
               image: busybox:1.36
               command:
                 - sh
                 - -c
-                - "chown -R 1001:1001 /data/chrome-profile && chmod -R u+rwX /data/chrome-profile"
-              securityContext:
-                runAsUser: 0
+                - "rm -f /data/chrome-profile/Singleton* /data/chrome-profile/*/Singleton* 2>/dev/null; echo done"
               volumeMounts:
                 - name: chrome-profile
                   mountPath: /data/chrome-profile
