@@ -105,6 +105,9 @@ spec:
   cluster:
     name: linds-postgres
   name: lindrea
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -115,6 +118,9 @@ spec:
   cluster:
     name: linds-postgres
   name: lindrea_th
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -125,6 +131,9 @@ spec:
   cluster:
     name: linds-postgres
   name: zabbix
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -136,6 +145,9 @@ spec:
     name: linds-postgres
   name: catcrawl
   owner: catcrawl
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -147,6 +159,9 @@ spec:
     name: linds-postgres
   name: catcrawl-coles
   owner: catcrawl
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
