@@ -31,7 +31,7 @@ spec:
             ingester:
               chunk_encoding: zstd
             tracing:
-              enabled: true
+              enabled: false
             querier:
               max_concurrent: 2
             storage:
@@ -52,8 +52,11 @@ spec:
             replicas: 1
             persistence:
               enabled: true
+              enableStatefulSetAutoDeletePVC: false
               size: 20Gi
               storageClass: nfs-csi
+              accessModes:
+                - ReadWriteOnce
             resources:
               limits:
                 cpu: 3
@@ -82,6 +85,29 @@ spec:
           # Enable minio for storage
           minio:
             enabled: false
+
+          # Not needed for SingleBinary
+          gateway:
+            enabled: false
+
+          # Logs + metrics only. Keep dashboards; drop canary/selfMonitoring/rules.
+          monitoring:
+            serviceMonitor:
+              enabled: true
+              labels:
+                release: monitoring-kube-prometheus-stack
+              metricsInstance:
+                enabled: false
+            selfMonitoring:
+              enabled: false
+              grafanaAgent:
+                installOperator: false
+            lokiCanary:
+              enabled: false
+            rules:
+              enabled: false
+            dashboards:
+              enabled: true
 
           # Zero out replica counts of other deployment modes
           backend:
@@ -128,11 +154,16 @@ spec:
           service:
             enabled: true
             type: LoadBalancer
-            internalTrafficPolicy: Local
+            # Preserve real syslog client source IP (no SNAT to cluster IP)
+            externalTrafficPolicy: Local
             annotations:
-              projectcalico.org/ipv4pools: '["lb-172-16-1"]'
-              projectcalico.org/loadBalancerIPs: '["172.16.1.23"]'
+              lbipam.cilium.io/ips: "172.16.1.23"
 
+          # Metrics: let kube-prometheus scrape Alloy's own metrics
+          serviceMonitor:
+            enabled: true
+            additionalLabels:
+              release: monitoring-kube-prometheus-stack
 
           alloy:
             extraPorts:
