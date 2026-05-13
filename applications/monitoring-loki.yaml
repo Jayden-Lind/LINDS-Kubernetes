@@ -34,6 +34,15 @@ spec:
               enabled: false
             querier:
               max_concurrent: 2
+            # 30-day log retention; enforced by the compactor below
+            limits_config:
+              retention_period: 720h
+            compactor:
+              working_directory: /var/loki/compactor
+              retention_enabled: true
+              retention_delete_delay: 2h
+              retention_delete_worker_count: 150
+              delete_request_store: s3
             storage:
               bucketNames:
                 chunks: loki-chunks

@@ -23,6 +23,15 @@ spec:
             storageClassName: nfs-csi
           service:
             type: ClusterIP
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              uid: loki
+              access: proxy
+              url: http://loki.monitoring.svc.cluster.local:3100
+              jsonData:
+                timeout: 60
+                maxLines: 5000
           ingress:
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
@@ -39,22 +48,25 @@ spec:
           ingress:
             enabled: false
           prometheusSpec:
-            retention: 15d
+            # Whichever hits first triggers deletion: 30 days OR 25GB
+            retention: 30d
             retentionSize: "25GB"
             scrapeInterval: 30s
             evaluationInterval: 30s
-            podMonitorSelectorNilUsesHelmValues: false
             serviceMonitorSelectorNilUsesHelmValues: false
             serviceMonitorSelector: {}
             serviceMonitorNamespaceSelector: {}
             podMonitorSelectorNilUsesHelmValues: false
             podMonitorSelector: {}
             podMonitorNamespaceSelector: {}
-          storageSpec:
-            volumeClaimTemplate:
-              spec:
-                storageClassName: nfs-csi
-                accessModes: ["ReadWriteOnce"]
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: nfs-csi
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 30Gi
         alertmanager:
           alertmanagerSpec:
             storage:
@@ -62,6 +74,9 @@ spec:
                 spec:
                   storageClassName: nfs-csi
                   accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 5Gi
         kubeControllerManager:
           enabled: false
         kubeScheduler:
