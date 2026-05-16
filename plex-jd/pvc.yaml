@@ -22,11 +22,12 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   mountOptions:
-    - vers=3.0
+    - vers=3.1.1
     - file_mode=0777
     - dir_mode=0777
     - soft
     - nounix
+    - mfsymlinks
   csi:
     driver: smb.csi.k8s.io
     volumeHandle: pv-plex-jd-holiday-videos-handle
