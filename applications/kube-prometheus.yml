@@ -21,31 +21,31 @@ spec:
                 gnetId: 21431
                 revision: 1
                 datasource:
-                  - name: ds_prometheus
+                  - name: DS_PROMETHEUS
                     value: prometheus
               cilium-operator:
                 gnetId: 16612
                 revision: 1
                 datasource:
-                  - name: ds_prometheus
+                  - name: DS_PROMETHEUS
                     value: prometheus
               cilium-hubble:
                 gnetId: 16613
                 revision: 1
                 datasource:
-                  - name: ds_prometheus
+                  - name: DS_PROMETHEUS
                     value: prometheus
               cilium-policy-verdicts:
                 gnetId: 18015
                 revision: 1
                 datasource:
-                  - name: ds_prometheus
+                  - name: DS_PROMETHEUS
                     value: prometheus
               cilium-flows:
                 gnetId: 23862
                 revision: 1
                 datasource:
-                  - name: ds_prometheus
+                  - name: DS_PROMETHEUS
                     value: prometheus
           dashboardProviders:
             dashboardproviders.yaml:
