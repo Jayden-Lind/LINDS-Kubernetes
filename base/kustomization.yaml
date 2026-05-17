@@ -1,6 +1,7 @@
 resources:
   # Local resources
   - coredns.yml
+  - argocd-servicemonitor.yaml
 
   - nginx/linds-virtualserver.yml
   - nginx/pdf.yml

@@ -47,6 +47,31 @@ spec:
                 datasource:
                   - name: DS_PROMETHEUS
                     value: prometheus
+            infrastructure:
+              cert-manager:
+                gnetId: 20842
+                revision: 1
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              external-dns:
+                gnetId: 15038
+                revision: 1
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              external-secrets:
+                gnetId: 21640
+                revision: 1
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              vault:
+                gnetId: 12904
+                revision: 1
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
           dashboardProviders:
             dashboardproviders.yaml:
               apiVersion: 1
@@ -59,6 +84,14 @@ spec:
                 editable: true
                 options:
                   path: /var/lib/grafana/dashboards/default
+              - name: infrastructure
+                orgId: 1
+                folder: Infrastructure
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/infrastructure
           admin:
             existingSecret: grafana-credentials
           persistence:

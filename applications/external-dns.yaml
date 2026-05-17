@@ -39,6 +39,8 @@ spec:
         policy: upsert-only
         logLevel: info
         interval: 1m
+        serviceMonitor:
+          enabled: true
   syncPolicy:
     automated:
       selfHeal: true

@@ -23,6 +23,10 @@ spec:
             defaultIssuerName: linds-ca
             defaultIssuerKind: ClusterIssuer
             defaultIssuerGroup: cert-manager.io
+          prometheus:
+            enabled: true
+            serviceMonitor:
+              enabled: true
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
       targetRevision: HEAD
       path: cert-manager/
