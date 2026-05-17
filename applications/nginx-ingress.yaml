@@ -39,6 +39,21 @@ spec:
             create: true
           serviceMonitor:
             create: true
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.conversion
+    - kind: Service
+      jqPathExpressions:
+        - .spec.clusterIP
+        - .spec.clusterIPs
+        - .spec.ipFamilies
+        - .spec.ipFamilyPolicy
+        - .spec.internalTrafficPolicy
+        - .spec.sessionAffinity
+        - .spec.allocateLoadBalancerNodePorts
+        - .spec.healthCheckNodePort
   syncPolicy:
     automated:
       selfHeal: true

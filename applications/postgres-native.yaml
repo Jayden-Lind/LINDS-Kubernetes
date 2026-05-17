@@ -18,6 +18,16 @@ spec:
     - repoURL: https://cloudnative-pg.github.io/grafana-dashboards
       chart: cluster
       targetRevision: v0.0.5
+  ignoreDifferences:
+    - group: postgresql.cnpg.io
+      kind: Cluster
+      jqPathExpressions:
+        - .spec.managed.roles[].connectionLimit
+        - .spec.managed.roles[].inherit
+        - .spec.plugins[].enabled
+        - .spec.plugins[].isWALArchiver
+        - .spec.externalClusters[].plugin.enabled
+        - .spec.externalClusters[].plugin.isWALArchiver
   syncPolicy:
     automated:
       prune: true
