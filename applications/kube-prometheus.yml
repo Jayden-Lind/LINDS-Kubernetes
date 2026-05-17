@@ -11,10 +11,54 @@ spec:
   sources:
   - repoURL: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
-    targetRevision: 83.6.0
+    targetRevision: 85.1.2
     helm:
       values: |
         grafana:
+          dashboards:
+            default:
+              cilium-metrics:
+                gnetId: 21431
+                revision: 1
+                datasource:
+                  - name: ds_prometheus
+                    value: prometheus
+              cilium-operator:
+                gnetId: 16612
+                revision: 1
+                datasource:
+                  - name: ds_prometheus
+                    value: prometheus
+              cilium-hubble:
+                gnetId: 16613
+                revision: 1
+                datasource:
+                  - name: ds_prometheus
+                    value: prometheus
+              cilium-policy-verdicts:
+                gnetId: 18015
+                revision: 1
+                datasource:
+                  - name: ds_prometheus
+                    value: prometheus
+              cilium-flows:
+                gnetId: 23862
+                revision: 1
+                datasource:
+                  - name: ds_prometheus
+                    value: prometheus
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+              - name: cilium
+                orgId: 1
+                folder: Cilium
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/default
           admin:
             existingSecret: grafana-credentials
           persistence:
