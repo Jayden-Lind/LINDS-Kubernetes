@@ -25,7 +25,7 @@ spec:
             defaultIssuerGroup: cert-manager.io
           prometheus:
             enabled: true
-            serviceMonitor:
+            servicemonitor:
               enabled: true
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
       targetRevision: HEAD
