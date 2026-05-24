@@ -10,7 +10,7 @@ spec:
   storageClassName: ""
   volumeMode: Filesystem
   iscsi:
-    targetPortal: "10.0.53.20:3260"
+    targetPortal: "10.0.50.246:3260"
     portals: []
     iqn: "iqn.2005-10.org.truenas:arr-suite"
     lun: 0

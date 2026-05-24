@@ -6,7 +6,7 @@ metadata:
 spec:
   configuration:
     destinationPath: s3://postgresql-backup
-    endpointURL: http://jd-truenas-01.linds.com.au:9000
+    endpointURL: http://jd-s3-01.linds.com.au:9000
     s3Credentials:
       accessKeyId:
         name: cnpg-s3-creds
