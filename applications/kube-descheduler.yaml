@@ -16,22 +16,24 @@ spec:
       values: |
         schedule: "*/30 * * * *"
         deschedulerPolicy:
+          maxNoOfPodsToEvictPerNode: 5
           profiles:
             - name: default
               pluginConfig:
                 - name: DefaultEvictor
                   args:
-                    ignorePvcPods: true
+                    ignorePvcPods: false
+                    nodeFit: true
                 - name: LowNodeUtilization
                   args:
                     thresholds:
-                      cpu: 30
-                      memory: 30
-                      pods: 30
+                      cpu: 20
+                      memory: 20
+                      pods: 20
                     targetThresholds:
-                      cpu: 70
-                      memory: 70
-                      pods: 70
+                      cpu: 60
+                      memory: 80
+                      pods: 30
               plugins:
                 balance:
                   enabled:
