@@ -28,6 +28,9 @@ spec:
     - dir_mode=0777
     - nounix
     - mfsymlinks
+    # photos share is DFS-replicated (DfsrPrivate); server inode numbers are
+    # inconsistent across DFS targets, so let the client synthesize them.
+    - noserverino
   csi:
     driver: smb.csi.k8s.io
     # unique id for this share in the cluster
