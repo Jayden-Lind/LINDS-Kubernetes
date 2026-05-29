@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opentelemetry-obi
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: obi
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-ebpf-instrumentation
+    targetRevision: 0.9.1
+    helm:
+      releaseName: obi
+      valuesObject:
+        # Privileged eBPF DaemonSet (default). Required to attach probes to
+        # node-local application processes. Coexists with Cilium's eBPF.
+        privileged: true
+
+        # Reduces kube-apiserver load for the k8s metadata decoration below.
+        k8sCache:
+          replicas: 1
+
+        config:
+          data:
+            # Scope instrumentation to a couple of busy HTTP services to start.
+            # Add more `- k8s_namespace: <ns>` entries (or use k8s_deployment_name,
+            # k8s_pod_name, etc.) to widen the net.
+            discovery:
+              instrument:
+                - k8s_namespace: immich
+                - k8s_namespace: home-assistant
+                - k8s_namespace: default
+
+            # Decorate metrics with namespace/pod/deployment labels.
+            # enable:true only makes k8s metadata AVAILABLE — OBI hides it from
+            # metrics by default for cardinality. `select` opts the labels onto
+            # the metrics. The "*" pattern applies to all metric names.
+            attributes:
+              kubernetes:
+                enable: true
+              select:
+                "*":
+                  include:
+                    - k8s.namespace.name
+                    - k8s.pod.name
+                    - k8s.deployment.name
+
+            # Group HTTP paths heuristically so path params don't explode label
+            # cardinality (e.g. /api/asset/{id} instead of one series per id).
+            routes:
+              unmatched: heuristic
+
+            # Pull-based only. The chart's default config.data OTLP-pushes to a
+            # node-local collector on ${HOST_IP}:4317/4318 that doesn't exist here
+            # (OBI logs "connection refused" to :4318). Helm DEEP-MERGES maps, and
+            # `null` key-removal doesn't survive ArgoCD's render — so override the
+            # endpoint with an empty string instead, which disables the exporter
+            # and always wins the merge (scalar replace, not map-key deletion).
+            otel_metrics_export:
+              endpoint: ""
+            otel_traces_export:
+              endpoint: ""
+            prometheus_export:
+              port: 9090
+              path: /metrics
+            internal_metrics:
+              prometheus:
+                port: 6060
+                path: /metrics
+
+        # The ServiceMonitor template is gated on `service.enabled` too:
+        #   {{ if and .service.enabled .serviceMonitor.enabled .config.data.prometheus_export }}
+        # Without this metrics Service, BOTH the Service and the ServiceMonitor
+        # are silently skipped and Prometheus never scrapes OBI.
+        service:
+          enabled: true
+
+        # Let kube-prometheus discover and scrape the metrics endpoint above.
+        serviceMonitor:
+          enabled: true
+          additionalLabels:
+            release: monitoring-kube-prometheus-stack
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
