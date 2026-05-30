@@ -3,7 +3,7 @@ resources:
   - coredns.yml
   - argocd-servicemonitor.yaml
 
-  - nginx/linds-virtualserver.yml
+  - nginx/tautulli-ingress.yml
   - nginx/pdf.yml
   - nginx/argocd.yml
 

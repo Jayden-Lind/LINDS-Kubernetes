@@ -21,7 +21,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: linds-arr-config
-  namespace: default
+  namespace: arr
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
@@ -29,20 +29,6 @@ spec:
       storage: 10Gi
   storageClassName: ""
   volumeName: pv-iscsi-arr-suite
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: linds-nfs-nas-pvc
-  namespace: default
-spec:
-  storageClassName: "manual"
-  volumeName: linds-nfs-nas
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 1Gi
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -67,104 +53,136 @@ spec:
     path: /mnt/ZFS_NAS
     readOnly: false
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: linds-nfs-nas-pvc
+  namespace: arr
+spec:
+  storageClassName: "manual"
+  volumeName: linds-nfs-nas
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: linds-docker
-  namespace: default
+  name: jackett
+  namespace: arr
 spec:
   selector:
     matchLabels:
-      app: v1
-      name: linds-docker
+      app: jackett
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: v1
-        name: linds-docker
+        app: jackett
     spec:
       terminationGracePeriodSeconds: 120
       nodeSelector:
         datacenter: linds
       containers:
-        - name: jacket
+        - name: jackett
           image: linuxserver/jackett:latest
           volumeMounts:
             - mountPath: /config
-              name: linds-nfs-pvc
+              name: arr-config
               subPath: jackett
           ports:
             - containerPort: 9117
+      restartPolicy: Always
+      volumes:
+        - name: arr-config
+          persistentVolumeClaim:
+            claimName: linds-arr-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jackett
+  namespace: arr
+spec:
+  ports:
+    - port: 9117
+      targetPort: 9117
+      protocol: TCP
+      name: http
+  selector:
+    app: jackett
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jackett
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: jackett.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jackett
+                port:
+                  number: 9117
+  tls:
+    - hosts:
+        - jackett.linds.com.au
+      secretName: jackett-linds-com-au-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: radarr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      containers:
         - name: radarr
+          image: linuxserver/radarr:latest
           env:
             - name: GUID
               value: "0"
             - name: PUID
               value: "1000"
-          image: linuxserver/radarr:latest
           volumeMounts:
             - mountPath: /config
-              name: linds-nfs-pvc
+              name: arr-config
               subPath: radarr
             - name: linds-nfs-nas
               mountPath: /mnt/nas/torrent
               subPath: torrent
             - name: linds-nfs-nas
-              mountPath: "/mnt/nas/Movies"
-              subPath: "Movies"
+              mountPath: /mnt/nas/Movies
+              subPath: Movies
           ports:
             - containerPort: 7878
-        - name: sonarr
-          env:
-            - name: GUID
-              value: "0"
-            - name: PUID
-              value: "1000"
-            - name: SONARR_BRANCH
-              value: main
-          image: linuxserver/sonarr:latest
-          volumeMounts:
-            - mountPath: /config
-              name: linds-nfs-pvc
-              subPath: sonarr
-            - name: linds-nfs-nas
-              mountPath: /mnt/torrent
-              subPath: torrent
-            - name: linds-nfs-nas
-              mountPath: "/mnt/TVShows"
-              subPath: "TVShows"
-            - name: linds-nfs-nas
-              mountPath: "/mnt/Movies"
-              subPath: "Movies"
-          ports:
-            - containerPort: 8989
-        - name: bazarr
-          env:
-            - name: GUID
-              value: "0"
-            - name: PUID
-              value: "1000"
-          image: linuxserver/bazarr:latest
-          volumeMounts:
-            - mountPath: /config
-              name: linds-nfs-pvc
-              subPath: bazarr
-            - name: linds-nfs-nas
-              mountPath: "/mnt/TVShows"
-              subPath: "TVShows"
-            - name: linds-nfs-nas
-              mountPath: "/mnt/Movies"
-              subPath: "Movies"
-            - name: linds-nfs-nas
-              mountPath: /mnt/torrent
-              subPath: torrent
-          ports:
-            - containerPort: 6767
       restartPolicy: Always
       volumes:
-        - name: linds-nfs-pvc
+        - name: arr-config
           persistentVolumeClaim:
             claimName: linds-arr-config
         - name: linds-nfs-nas
@@ -174,27 +192,223 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  namespace: default
-  name: linds-docker
-  labels:
-    app: linds-docker
+  name: radarr
+  namespace: arr
+spec:
+  ports:
+    - port: 7878
+      targetPort: 7878
+      protocol: TCP
+      name: http
+  selector:
+    app: radarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: radarr
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: radarr.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: radarr
+                port:
+                  number: 7878
+  tls:
+    - hosts:
+        - radarr.linds.com.au
+      secretName: radarr-linds-com-au-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: sonarr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sonarr
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      containers:
+        - name: sonarr
+          image: linuxserver/sonarr:latest
+          env:
+            - name: GUID
+              value: "0"
+            - name: PUID
+              value: "1000"
+            - name: SONARR_BRANCH
+              value: main
+          volumeMounts:
+            - mountPath: /config
+              name: arr-config
+              subPath: sonarr
+            - name: linds-nfs-nas
+              mountPath: /mnt/torrent
+              subPath: torrent
+            - name: linds-nfs-nas
+              mountPath: /mnt/TVShows
+              subPath: TVShows
+            - name: linds-nfs-nas
+              mountPath: /mnt/Movies
+              subPath: Movies
+          ports:
+            - containerPort: 8989
+      restartPolicy: Always
+      volumes:
+        - name: arr-config
+          persistentVolumeClaim:
+            claimName: linds-arr-config
+        - name: linds-nfs-nas
+          persistentVolumeClaim:
+            claimName: linds-nfs-nas-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: arr
 spec:
   ports:
     - port: 8989
       targetPort: 8989
       protocol: TCP
-      name: sonarr-service
-    - port: 9117
-      targetPort: 9117
-      protocol: TCP
-      name: jackett-service
-    - port: 7878
-      targetPort: 7878
-      protocol: TCP
-      name: radarr-service
+      name: http
+  selector:
+    app: sonarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sonarr
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sonarr.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sonarr
+                port:
+                  number: 8989
+  tls:
+    - hosts:
+        - sonarr.linds.com.au
+      secretName: sonarr-linds-com-au-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: bazarr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: bazarr
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      containers:
+        - name: bazarr
+          image: linuxserver/bazarr:latest
+          env:
+            - name: GUID
+              value: "0"
+            - name: PUID
+              value: "1000"
+          volumeMounts:
+            - mountPath: /config
+              name: arr-config
+              subPath: bazarr
+            - name: linds-nfs-nas
+              mountPath: /mnt/TVShows
+              subPath: TVShows
+            - name: linds-nfs-nas
+              mountPath: /mnt/Movies
+              subPath: Movies
+            - name: linds-nfs-nas
+              mountPath: /mnt/torrent
+              subPath: torrent
+          ports:
+            - containerPort: 6767
+      restartPolicy: Always
+      volumes:
+        - name: arr-config
+          persistentVolumeClaim:
+            claimName: linds-arr-config
+        - name: linds-nfs-nas
+          persistentVolumeClaim:
+            claimName: linds-nfs-nas-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bazarr
+  namespace: arr
+spec:
+  ports:
     - port: 6767
       targetPort: 6767
       protocol: TCP
-      name: bazarr-service
+      name: http
   selector:
-    name: linds-docker
+    app: bazarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bazarr
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: bazarr.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bazarr
+                port:
+                  number: 6767
+  tls:
+    - hosts:
+        - bazarr.linds.com.au
+      secretName: bazarr-linds-com-au-tls
