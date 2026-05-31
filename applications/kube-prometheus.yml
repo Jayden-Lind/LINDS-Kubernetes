@@ -136,6 +136,9 @@ spec:
             podMonitorSelectorNilUsesHelmValues: false
             podMonitorSelector: {}
             podMonitorNamespaceSelector: {}
+            ruleSelectorNilUsesHelmValues: false
+            ruleSelector: {}
+            ruleNamespaceSelector: {}
             storageSpec:
               volumeClaimTemplate:
                 spec:
@@ -145,7 +148,51 @@ spec:
                     requests:
                       storage: 30Gi
         alertmanager:
+          config:
+            global:
+              resolve_timeout: 5m
+            inhibit_rules:
+              - source_matchers:
+                  - severity = critical
+                target_matchers:
+                  - severity =~ warning|info
+                equal:
+                  - namespace
+                  - alertname
+            route:
+              group_by:
+                - alertname
+                - namespace
+                - severity
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 4h
+              receiver: discord
+              routes:
+                - matchers:
+                    - alertname =~ "InfoInhibitor|Watchdog"
+                  receiver: 'null'
+            receivers:
+              - name: 'null'
+              - name: discord
+                discord_configs:
+                  - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord-secret/discord_webhook_url
+                    title: '{{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}: {{ .GroupLabels.alertname }}{{ with .GroupLabels.namespace }} ({{ . }}){{ end }}'
+                    message: |-
+                      {{ range .Alerts -}}
+                      **{{ .Labels.alertname }}** | Severity: {{ .Labels.severity }}
+                      {{ if .Labels.namespace -}}Namespace: `{{ .Labels.namespace }}`
+                      {{ end -}}
+                      {{ if .Labels.pod -}}Pod: `{{ .Labels.pod }}`
+                      {{ end -}}
+                      {{ if .Labels.node -}}Node: `{{ .Labels.node }}`
+                      {{ end -}}
+                      {{ if .Annotations.summary -}}> {{ .Annotations.summary }}
+                      {{ end -}}
+                      {{ end }}
           alertmanagerSpec:
+            secrets:
+              - alertmanager-discord-secret
             storage:
               volumeClaimTemplate:
                 spec:

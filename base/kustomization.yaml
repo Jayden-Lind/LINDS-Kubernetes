@@ -2,6 +2,8 @@ resources:
   # Local resources
   - coredns.yml
   - argocd-servicemonitor.yaml
+  - monitoring/alerts.yaml
+  - monitoring/external-secret.yaml
 
   - nginx/tautulli-ingress.yml
   - nginx/pdf.yml
