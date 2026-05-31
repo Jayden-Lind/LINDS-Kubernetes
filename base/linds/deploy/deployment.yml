@@ -412,3 +412,81 @@ spec:
     - hosts:
         - bazarr.linds.com.au
       secretName: bazarr-linds-com-au-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintainerr
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: maintainerr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: maintainerr
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: maintainerr
+          image: ghcr.io/maintainerr/maintainerr:latest
+          volumeMounts:
+            - mountPath: /opt/data
+              name: arr-config
+              subPath: maintainerr
+          ports:
+            - containerPort: 6246
+      restartPolicy: Always
+      volumes:
+        - name: arr-config
+          persistentVolumeClaim:
+            claimName: linds-arr-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintainerr
+  namespace: arr
+spec:
+  ports:
+    - port: 6246
+      targetPort: 6246
+      protocol: TCP
+      name: http
+  selector:
+    app: maintainerr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: maintainerr
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: maintainerr.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: maintainerr
+                port:
+                  number: 6246
+  tls:
+    - hosts:
+        - maintainerr.linds.com.au
+      secretName: maintainerr-linds-com-au-tls
