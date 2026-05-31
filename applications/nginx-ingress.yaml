@@ -32,6 +32,11 @@ spec:
             name: nginx
             create: true
             setAsDefaultIngress: true
+          config:
+            entries:
+              client-max-body-size: "0"
+              proxy-read-timeout: "3600"
+              proxy-send-timeout: "3600"
         prometheus:
           create: true
           port: 9113
