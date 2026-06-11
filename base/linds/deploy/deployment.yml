@@ -1,34 +1,62 @@
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: pv-iscsi-arr-suite
+  name: jackett-config
+  namespace: arr
 spec:
-  capacity:
-    storage: 10Gi
   accessModes: ["ReadWriteOnce"]
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
-  volumeMode: Filesystem
-  iscsi:
-    targetPortal: "10.0.50.246:3260"
-    portals: []
-    iqn: "iqn.2005-10.org.truenas:arr-suite"
-    lun: 0
-    fsType: ext4
-    readOnly: false
+  storageClassName: zfs-iscsi
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: linds-arr-config
+  name: radarr-config
   namespace: arr
 spec:
   accessModes: ["ReadWriteOnce"]
+  storageClassName: zfs-iscsi
   resources:
     requests:
-      storage: 10Gi
-  storageClassName: ""
-  volumeName: pv-iscsi-arr-suite
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-config
+  namespace: arr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: zfs-iscsi
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bazarr-config
+  namespace: arr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: zfs-iscsi
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: maintainerr-config
+  namespace: arr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: zfs-iscsi
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -92,14 +120,13 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
-              subPath: jackett
           ports:
             - containerPort: 9117
       restartPolicy: Always
       volumes:
         - name: arr-config
           persistentVolumeClaim:
-            claimName: linds-arr-config
+            claimName: jackett-config
 ---
 apiVersion: v1
 kind: Service
@@ -171,7 +198,6 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
-              subPath: radarr
             - name: linds-nfs-nas
               mountPath: /mnt/nas/torrent
               subPath: torrent
@@ -184,7 +210,7 @@ spec:
       volumes:
         - name: arr-config
           persistentVolumeClaim:
-            claimName: linds-arr-config
+            claimName: radarr-config
         - name: linds-nfs-nas
           persistentVolumeClaim:
             claimName: linds-nfs-nas-pvc
@@ -261,7 +287,6 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
-              subPath: sonarr
             - name: linds-nfs-nas
               mountPath: /mnt/torrent
               subPath: torrent
@@ -277,7 +302,7 @@ spec:
       volumes:
         - name: arr-config
           persistentVolumeClaim:
-            claimName: linds-arr-config
+            claimName: sonarr-config
         - name: linds-nfs-nas
           persistentVolumeClaim:
             claimName: linds-nfs-nas-pvc
@@ -352,7 +377,6 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
-              subPath: bazarr
             - name: linds-nfs-nas
               mountPath: /mnt/TVShows
               subPath: TVShows
@@ -368,7 +392,7 @@ spec:
       volumes:
         - name: arr-config
           persistentVolumeClaim:
-            claimName: linds-arr-config
+            claimName: bazarr-config
         - name: linds-nfs-nas
           persistentVolumeClaim:
             claimName: linds-nfs-nas-pvc
@@ -442,14 +466,13 @@ spec:
           volumeMounts:
             - mountPath: /opt/data
               name: arr-config
-              subPath: maintainerr
           ports:
             - containerPort: 6246
       restartPolicy: Always
       volumes:
         - name: arr-config
           persistentVolumeClaim:
-            claimName: linds-arr-config
+            claimName: maintainerr-config
 ---
 apiVersion: v1
 kind: Service
