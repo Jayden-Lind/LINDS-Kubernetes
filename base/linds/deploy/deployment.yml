@@ -513,3 +513,92 @@ spec:
     - hosts:
         - maintainerr.linds.com.au
       secretName: maintainerr-linds-com-au-tls
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tautulli-config
+  namespace: arr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: zfs-iscsi
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tautulli
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: tautulli
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: tautulli
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      containers:
+        - name: tautulli
+          image: linuxserver/tautulli:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "0"
+          volumeMounts:
+            - mountPath: /config
+              name: tautulli-config
+          ports:
+            - containerPort: 8181
+      restartPolicy: Always
+      volumes:
+        - name: tautulli-config
+          persistentVolumeClaim:
+            claimName: tautulli-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tautulli
+  namespace: arr
+spec:
+  ports:
+    - port: 8181
+      targetPort: 8181
+      protocol: TCP
+      name: http
+  selector:
+    app: tautulli
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tautulli
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: tautulli.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tautulli
+                port:
+                  number: 8181
+  tls:
+    - hosts:
+        - tautulli.linds.com.au
+      secretName: tautulli-linds-com-au-tls
