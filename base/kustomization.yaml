@@ -5,7 +5,6 @@ resources:
   - monitoring/alerts.yaml
   - monitoring/external-secret.yaml
 
-  - nginx/tautulli-ingress.yml
   - nginx/pdf.yml
   - nginx/argocd.yml
 
