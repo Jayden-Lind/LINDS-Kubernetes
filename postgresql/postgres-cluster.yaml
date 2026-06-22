@@ -40,7 +40,7 @@ spec:
       memory: "2048Mi"
       cpu: "500m"
     limits:
-      memory: "409Gi"
+      memory: "4Gi"
   monitoring:
     enablePodMonitor: true
   postgresql:
