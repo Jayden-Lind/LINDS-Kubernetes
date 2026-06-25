@@ -602,3 +602,74 @@ spec:
     - hosts:
         - tautulli.linds.com.au
       secretName: tautulli-linds-com-au-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: arr
+spec:
+  selector:
+    matchLabels:
+      app: flaresolverr
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: flaresolverr
+    spec:
+      terminationGracePeriodSeconds: 120
+      nodeSelector:
+        datacenter: linds
+      containers:
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:latest
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: TZ
+              value: Australia/Sydney
+          ports:
+            - containerPort: 8191
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: arr
+spec:
+  ports:
+    - port: 8191
+      targetPort: 8191
+      protocol: TCP
+      name: http
+  selector:
+    app: flaresolverr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flaresolverr
+  namespace: arr
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: flaresolverr.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: flaresolverr
+                port:
+                  number: 8191
+  tls:
+    - hosts:
+        - flaresolverr.linds.com.au
+      secretName: flaresolverr-linds-com-au-tls
