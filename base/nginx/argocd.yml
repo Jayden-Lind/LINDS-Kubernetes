@@ -6,7 +6,12 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.org/ssl-redirect: "true"
-    nginx.org/grpc-services: "argocd-server"
+    # argocd-server runs in insecure mode (plaintext HTTP on :8080).
+    # Do NOT use nginx.org/grpc-services here: this controller only proxies
+    # native gRPC when http2 is enabled globally, and once it is, grpc_pass
+    # takes over the whole "/" location and breaks the web UI (502). ArgoCD's
+    # UI and CLI both work over gRPC-Web on plain HTTP, so a normal HTTP
+    # backend is all that's needed. For the CLI use: argocd login --grpc-web.
     nginx.org/backend-protocol: "HTTP"
 spec:
   ingressClassName: nginx
