@@ -237,6 +237,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.org/websocket-services: "radarr"
 spec:
   ingressClassName: nginx
   rules:
@@ -329,6 +330,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.org/websocket-services: "sonarr"
 spec:
   ingressClassName: nginx
   rules:
@@ -419,6 +421,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.org/websocket-services: "bazarr"
 spec:
   ingressClassName: nginx
   rules:
@@ -496,6 +499,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.org/websocket-services: "maintainerr"
 spec:
   ingressClassName: nginx
   rules:
@@ -585,6 +589,7 @@ metadata:
   namespace: arr
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
+    nginx.org/websocket-services: "tautulli"
 spec:
   ingressClassName: nginx
   rules:

@@ -25,6 +25,10 @@ spec:
                 secretName: plex.linds.com.au
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
+              # Stream media through instead of buffering (seeking / direct play)
+              nginx.org/proxy-buffering: "false"
+              # Plex uses websockets for live notifications (/:/websockets/...)
+              nginx.org/websocket-services: "plex-jd"
           pms:
             storageClassName: nfs-csi
             configStorage: 50Gi
