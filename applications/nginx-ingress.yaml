@@ -41,6 +41,18 @@ spec:
               # This controller defaults http2 to false; there is no per-Ingress
               # toggle, so it must be set here on the ConfigMap.
               http2: "true"
+              # Reuse upstream connections (off by default) - throughput win for
+              # the chatty UIs (arr, grafana) and APIs.
+              keepalive: "32"
+              # Force HTTPS on every host. Safe because linds-ca is a private CA
+              # issuer (no HTTP-01 challenge on :80 to break).
+              redirect-to-https: "true"
+              # Stop advertising the nginx version.
+              server-tokens: "false"
+              # HSTS on all TLS hosts. Sticky in browsers - only because every
+              # *.linds.com.au host is (and stays) HTTPS.
+              hsts: "true"
+              hsts-max-age: "31536000"
         prometheus:
           create: true
           port: 9113

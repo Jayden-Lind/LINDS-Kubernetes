@@ -112,9 +112,11 @@ spec:
           ingress:
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
+              # Grafana Live (dashboards, log tail) uses websockets
+              nginx.org/websocket-services: "monitoring-kube-prometheus-stack-grafana"
             enabled: true
             ingressClassName: nginx
-            hosts: 
+            hosts:
               - grafana.linds.com.au
             tls:
               - secretName: grafana.linds.com.au
