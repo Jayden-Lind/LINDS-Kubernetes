@@ -37,6 +37,10 @@ spec:
               client-max-body-size: "0"
               proxy-read-timeout: "3600"
               proxy-send-timeout: "3600"
+              # Enable HTTP/2 for all TLS servers on this controller.
+              # This controller defaults http2 to false; there is no per-Ingress
+              # toggle, so it must be set here on the ConfigMap.
+              http2: "true"
         prometheus:
           create: true
           port: 9113

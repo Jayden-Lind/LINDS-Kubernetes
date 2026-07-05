@@ -452,7 +452,17 @@ metadata:
     helm.sh/chart: immich-0.13.1
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # NOTE: this cluster runs the F5/NGINX Inc controller (nginx/nginx-ingress),
+    # which only reads nginx.org/* annotations. Upload size (client-max-body-size: 0)
+    # and proxy-read/send-timeout (3600) are set globally on the controller
+    # ConfigMap via applications/nginx-ingress.yaml, so they aren't repeated here.
+    #
+    # Stream video/media straight through instead of buffering it in nginx, so
+    # seeking (HTTP Range) and progressive/HLS playback aren't held up.
+    nginx.org/proxy-buffering: "false"
+    # This controller does NOT auto-upgrade WebSockets; Immich uses them for
+    # real-time updates, so its backing service must be listed explicitly.
+    nginx.org/websocket-services: "immich-server"
   namespace: immich
 spec:
   ingressClassName: nginx
