@@ -152,8 +152,6 @@ spec:
       hostNetwork: false
       hostPID: false
       dnsPolicy: ClusterFirst
-      nodeSelector:
-        datacenter: jd
       containers:
         - env:
           - name: DB_DATABASE_NAME
