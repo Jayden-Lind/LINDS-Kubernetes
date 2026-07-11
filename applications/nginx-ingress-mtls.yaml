@@ -1,0 +1,102 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-ingress-mtls
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nginx-ingress-mtls
+  sources:
+    - chart: nginx-ingress
+      repoURL: ghcr.io/nginx/charts
+      targetRevision: 2.5.2
+      helm:
+        releaseName: nginx-ingress-mtls
+        # CRDs are owned by the primary nginx-ingress Application; installing
+        # them twice makes the two apps fight over the same cluster objects.
+        skipCrds: true
+        valuesObject:
+          controller:
+            kind: deployment
+            replicaCount: 2
+            hostNetwork: false
+            disableIPV6: true
+            enableExternalDNS: false
+            # Required for the ConfigMap server-snippets below.
+            enableSnippets: true
+            # Public cert of linds-ca, synced from Vault by external-secrets
+            # (linds-ca-cert). The CA private key never enters this namespace.
+            volumes:
+              - name: linds-ca-cert
+                secret:
+                  secretName: linds-ca-cert
+            volumeMounts:
+              - name: linds-ca-cert
+                mountPath: /etc/nginx/mtls
+                readOnly: true
+            service:
+              create: true
+              type: LoadBalancer
+              externalTrafficPolicy: Local
+              annotations:
+                # Dedicated VIP for the mTLS-only endpoint.
+                lbipam.cilium.io/ips: "172.16.1.12"
+              # mTLS-only endpoint: do not expose plain HTTP at all.
+              httpPort:
+                enable: false
+            mgmt:
+              resolver:
+                ipv6: false
+            enableLatencyMetrics: true
+            ingressClass:
+              name: nginx-mtls
+              create: true
+              setAsDefaultIngress: false
+            config:
+              entries:
+                client-max-body-size: "0"
+                # Long timeouts so Home Assistant websockets survive.
+                proxy-read-timeout: "3600"
+                proxy-send-timeout: "3600"
+                http2: "true"
+                keepalive: "32"
+                server-tokens: "false"
+                hsts: "true"
+                hsts-max-age: "31536000"
+                # This is what makes the class mTLS-only: every server block
+                # this controller generates demands a client certificate
+                # signed by linds-ca (client certs live in pki.yaml). Requests
+                # without a valid cert are rejected before reaching any app.
+                server-snippets: |
+                  ssl_client_certificate /etc/nginx/mtls/ca.crt;
+                  ssl_verify_client on;
+                  ssl_verify_depth 1;
+          prometheus:
+            create: true
+            port: 9113
+            service:
+              create: true
+            serviceMonitor:
+              create: true
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: nginx-ingress-mtls/
+  ignoreDifferences:
+    - kind: Service
+      jqPathExpressions:
+        - .spec.clusterIP
+        - .spec.clusterIPs
+        - .spec.ipFamilies
+        - .spec.ipFamilyPolicy
+        - .spec.internalTrafficPolicy
+        - .spec.sessionAffinity
+        - .spec.allocateLoadBalancerNodePorts
+        - .spec.healthCheckNodePort
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,32 @@
+# mTLS-only exposure of Home Assistant. The nginx-mtls class (see
+# applications/nginx-ingress-mtls.yaml) enforces client-certificate
+# verification on every server it hosts, so this Ingress is unreachable
+# without a cert from the mtls-client-ca (nginx-ingress-mtls/pki.yaml).
+#
+# Any other service gets an mTLS endpoint the same way: a second Ingress
+# with ingressClassName nginx-mtls and a distinct "<name>-mtls" host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: home-assistant-mtls
+  namespace: home-assistant
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    nginx.org/websocket-services: "home-assistant"
+spec:
+  ingressClassName: nginx-mtls
+  rules:
+    - host: home-mtls.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: home-assistant
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - home-mtls.linds.com.au
+      secretName: home-mtls-linds-com-au-tls

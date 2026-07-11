@@ -1,0 +1,35 @@
+# Client certificates for the mTLS-only ingress class (nginx-mtls), issued
+# by the existing linds-ca ClusterIssuer and auto-renewed by cert-manager.
+# The controller trusts linds-ca via the linds-ca-cert secret (public cert
+# only, synced from Vault by external-secrets) and rejects any connection
+# not presenting a cert signed by it.
+#
+# To enrol a new device, copy the Certificate block below with a new name,
+# then pull the ready-made PKCS#12 bundle:
+#   kubectl get secret -n nginx-ingress-mtls mtls-client-<name> \
+#     -o jsonpath='{.data.keystore\.p12}' | base64 -d > <name>.p12
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mtls-client-jayden
+  namespace: nginx-ingress-mtls
+spec:
+  commonName: jayden
+  secretName: mtls-client-jayden
+  duration: 17520h # 2 years, auto-renewed by cert-manager at ~2/3 lifetime
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  usages:
+    - digital signature
+    - client auth
+  keystores:
+    pkcs12:
+      create: true
+      # Only protects the .p12 file itself on its way to the phone; the
+      # bundle never leaves the cluster otherwise, so a literal is fine.
+      password: home-mtls
+  issuerRef:
+    name: linds-ca
+    kind: ClusterIssuer
