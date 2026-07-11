@@ -33,6 +33,7 @@ This script initializes **Argo CD**, applies the root application manifests, and
 * **eBPF dataplane:** Improves performance and observability, removes the need for kube-proxy.
 * **BGP integration:** Calico peers with my VyOS routers, advertising cluster services and pod CIDRs for seamless external access.
 * **Declarative GitOps:** All apps are managed through Git with Argo CD, enabling full reproducibility and rollback.
+* **mTLS-only ingress:** A dedicated ingress class for publishing services to the internet behind client-certificate auth — see [nginx-ingress-mtls/](nginx-ingress-mtls/README.md).
 
 ---
 
