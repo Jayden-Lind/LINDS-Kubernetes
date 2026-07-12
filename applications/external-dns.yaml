@@ -26,6 +26,10 @@ spec:
           - linds.com.au
 
         extraArgs:
+          # Ignore Kyverno-generated mTLS mirror Ingresses (kyverno/) so the
+          # primary DNS records never get pointed at the mTLS VIP. Sources
+          # without the label still match (!key = label absent).
+          - --label-filter=!linds.com.au/mtls-mirror-of
           - --rfc2136-host=10.0.50.200
           - --rfc2136-port=53
           - --rfc2136-zone=linds.com.au

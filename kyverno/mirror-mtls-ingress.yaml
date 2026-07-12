@@ -1,0 +1,66 @@
+# Mirrors opted-in Ingresses onto the mTLS-only ingress class (nginx-mtls,
+# VIP 172.16.1.12) so the same hostname is also reachable through the
+# client-cert endpoint without hand-writing a second Ingress per app.
+#
+# Opt-in: label any Ingress with
+#   linds.com.au/mtls-mirror: "true"
+# and Kyverno generates <name>-mtls in the same namespace with the same
+# rules and TLS block (reusing the app's existing cert-manager secret) but
+# ingressClassName: nginx-mtls. The mirror tracks source changes and is
+# garbage-collected when the source Ingress is deleted.
+---
+# Kyverno's background controller ships with no rights on Ingresses; this
+# aggregates the verbs the generate rule needs into its ClusterRole.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:background-controller:ingresses
+  labels:
+    app.kubernetes.io/component: background-controller
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mirror-mtls-ingress
+spec:
+  rules:
+    - name: clone-ingress-to-nginx-mtls
+      match:
+        any:
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+              selector:
+                matchLabels:
+                  linds.com.au/mtls-mirror: "true"
+      generate:
+        generateExisting: true # also mirror Ingresses that predate the policy
+        synchronize: true # keep mirrors updated / GC'd with their source
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        name: "{{ request.object.metadata.name }}-mtls"
+        namespace: "{{ request.object.metadata.namespace }}"
+        data:
+          metadata:
+            labels:
+              # external-dns runs with --label-filter=!linds.com.au/mtls-mirror-of
+              # (applications/external-dns.yaml) so mirrors never repoint the
+              # primary DNS records at the mTLS VIP. Deliberately NOT the
+              # opt-in label, or the policy would match its own output.
+              linds.com.au/mtls-mirror-of: "{{ request.object.metadata.name }}"
+              app.kubernetes.io/managed-by: kyverno
+            # Annotations are copied wholesale so per-app nginx.org/* tuning
+            # (websockets, proxy-buffering) carries over. That includes
+            # cert-manager.io/cluster-issuer, which is benign here: the
+            # Certificate for the shared TLS secret is owned by the source
+            # Ingress, so ingress-shim logs "already exists" and skips it.
+            annotations: "{{ request.object.metadata.annotations || `{}` }}"
+          spec:
+            ingressClassName: nginx-mtls
+            tls: "{{ request.object.spec.tls || `[]` }}"
+            rules: "{{ request.object.spec.rules }}"

@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  sources:
+    - chart: kyverno
+      repoURL: https://kyverno.github.io/kyverno
+      targetRevision: 3.8.2
+      helm:
+        releaseName: kyverno
+        valuesObject:
+          # Only the admission + background controllers are needed for the
+          # mTLS ingress-mirroring generate policy (kyverno/). The reports
+          # and cleanup controllers are dead weight without audit/cleanup
+          # policies, so keep them off.
+          reportsController:
+            enabled: false
+          cleanupController:
+            enabled: false
+    # Policies live here; ArgoCD-managed from GitHub, so they must be
+    # pushed to master before they take effect.
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: kyverno/
+  ignoreDifferences:
+    # Kyverno's ClusterRoles use RBAC aggregation: kube-controller-manager
+    # fills in .rules at runtime, which otherwise shows as permanent drift.
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      jqPathExpressions:
+        - .rules
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

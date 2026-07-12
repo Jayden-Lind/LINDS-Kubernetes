@@ -448,6 +448,9 @@ metadata:
     app.kubernetes.io/name: server
     app.kubernetes.io/version: v3.0.0
     helm.sh/chart: immich-0.13.1
+    # Kyverno (kyverno/mirror-mtls-ingress.yaml) generates immich-server-mtls
+    # on the nginx-mtls class from this Ingress.
+    linds.com.au/mtls-mirror: "true"
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     # NOTE: this cluster runs the F5/NGINX Inc controller (nginx/nginx-ingress),
