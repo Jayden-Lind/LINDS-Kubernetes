@@ -73,6 +73,12 @@ spec:
                   ssl_client_certificate /etc/nginx/mtls/ca.crt;
                   ssl_verify_client on;
                   ssl_verify_depth 1;
+                  # Drop connections without a valid client cert (444 closes
+                  # the socket with no response) instead of serving a 400 page.
+                  error_page 495 496 = @mtls_drop;
+                  location @mtls_drop {
+                    return 444;
+                  }
           prometheus:
             create: true
             port: 9113
