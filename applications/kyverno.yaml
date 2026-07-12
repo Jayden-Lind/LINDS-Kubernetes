@@ -35,6 +35,15 @@ spec:
       kind: ClusterRole
       jqPathExpressions:
         - .rules
+    # Chart 3.8.2 renders the new policies.kyverno.io CRDs with literal
+    # empty labels/annotations maps ({}), which ArgoCD diffs against the
+    # live objects' absent fields — permanent OutOfSync. crds.additionalLabels
+    # doesn't reach those templates either, so ignore both entirely.
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .metadata.labels
+        - .metadata.annotations
   syncPolicy:
     automated:
       selfHeal: true

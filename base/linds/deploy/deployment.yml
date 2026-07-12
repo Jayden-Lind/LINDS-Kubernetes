@@ -238,6 +238,7 @@ metadata:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.org/websocket-services: "radarr"
+    linds.com.au/mtls-mirror: "true"
 spec:
   ingressClassName: nginx
   rules:
@@ -331,6 +332,7 @@ metadata:
     cert-manager.io/cluster-issuer: linds-ca
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.org/websocket-services: "sonarr"
+    linds.com.au/mtls-mirror: "true"
 spec:
   ingressClassName: nginx
   rules:

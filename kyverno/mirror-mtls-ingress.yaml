@@ -28,6 +28,11 @@ kind: ClusterPolicy
 metadata:
   name: mirror-mtls-ingress
 spec:
+  # Kyverno's admission webhook defaults these onto the live object; declare
+  # them so ArgoCD doesn't report the policy as permanently OutOfSync.
+  admission: true
+  background: true
+  emitWarning: false
   rules:
     - name: clone-ingress-to-nginx-mtls
       match:

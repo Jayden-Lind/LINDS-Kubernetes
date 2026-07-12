@@ -21,6 +21,7 @@ spec:
           annotations:
             cert-manager.io/cluster-issuer: linds-ca
             nginx.org/websocket-services: "home-assistant"
+            linds.com.au/mtls-mirror: "true"
           hosts:
             - host: home.linds.com.au
               paths:

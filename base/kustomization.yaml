@@ -8,7 +8,5 @@ resources:
   - nginx/pdf.yml
   - nginx/argocd.yml
 
-  - home-assistant/mtls.yml
-
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml
