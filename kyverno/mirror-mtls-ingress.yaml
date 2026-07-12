@@ -2,7 +2,7 @@
 # VIP 172.16.1.12) so the same hostname is also reachable through the
 # client-cert endpoint without hand-writing a second Ingress per app.
 #
-# Opt-in: label any Ingress with
+# Opt-in: give any Ingress the label OR annotation
 #   linds.com.au/mtls-mirror: "true"
 # and Kyverno generates <name>-mtls in the same namespace with the same
 # rules and TLS block (reusing the app's existing cert-manager secret) but
@@ -37,12 +37,32 @@ spec:
     - name: clone-ingress-to-nginx-mtls
       match:
         any:
+          # Opt-in via label...
           - resources:
               kinds:
                 - networking.k8s.io/v1/Ingress
               selector:
                 matchLabels:
                   linds.com.au/mtls-mirror: "true"
+          # ...or annotation.
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+              annotations:
+                linds.com.au/mtls-mirror: "true"
+      exclude:
+        any:
+          # Never match generated mirrors themselves: source annotations are
+          # copied wholesale onto the mirror, so an annotation opt-in would
+          # otherwise recurse (<name>-mtls-mtls-...). Mirrors always carry
+          # the mtls-mirror-of label.
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+              selector:
+                matchExpressions:
+                  - key: linds.com.au/mtls-mirror-of
+                    operator: Exists
       generate:
         generateExisting: true # also mirror Ingresses that predate the policy
         synchronize: true # keep mirrors updated / GC'd with their source
