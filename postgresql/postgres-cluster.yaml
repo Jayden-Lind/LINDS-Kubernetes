@@ -56,7 +56,13 @@ spec:
   postgresql:
     shared_preload_libraries:
       - pg_prewarm # autoprewarm reloads the buffer cache after restarts/switchovers
+      - pg_stat_statements
     parameters:
+      # Any pg_stat_statements.* parameter marks the extension "used" — without
+      # one, CNPG's managed-extensions logic DROPs it in every database, fighting
+      # the Database CRs that ensure it present.
+      pg_stat_statements.track: "top"
+      pg_stat_statements.max: "5000"
       shared_buffers: "4GB"
       effective_cache_size: "7GB"
       work_mem: "32MB"
