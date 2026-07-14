@@ -44,26 +44,32 @@ spec:
     size: 50Gi
     storageClass: nfs-csi
   resources:
+    # 8Gi fits both jd workers alongside existing requests; larger would only
+    # schedule on one node and defeat the anti-affinity spread.
     requests:
-      memory: "4Gi"
+      memory: "8Gi"
       cpu: "500m"
     limits:
-      memory: "4Gi"
+      memory: "8Gi"
   monitoring:
     enablePodMonitor: true
   postgresql:
+    shared_preload_libraries:
+      - pg_prewarm # autoprewarm reloads the buffer cache after restarts/switchovers
     parameters:
-      shared_buffers: "1024MB"
-      effective_cache_size: "3072MB"
-      work_mem: "16MB"
-      maintenance_work_mem: "128MB"
+      shared_buffers: "4GB"
+      effective_cache_size: "7GB"
+      work_mem: "32MB"
+      maintenance_work_mem: "512MB"
       max_connections: "400"
       random_page_cost: "1.1"
       effective_io_concurrency: "200"
-      wal_buffers: "16MB"
-      max_wal_size: "1GB"
-      min_wal_size: "256MB"
+      wal_buffers: "64MB"
+      wal_compression: "lz4"
+      max_wal_size: "4GB"
+      min_wal_size: "512MB"
       checkpoint_completion_target: "0.9"
+      track_io_timing: "on"
       log_min_duration_statement: "1000"
       idle_in_transaction_session_timeout: "300000"
       tcp_keepalives_idle: "600"
