@@ -301,6 +301,24 @@ spec:
             summary: "PostgreSQL {{ $labels.cluster }} replication lag"
             description: "PostgreSQL cluster {{ $labels.cluster }} has replication lag exceeding 50MB — standby is falling behind."
 
+        - alert: PostgreSQLWALArchivingFailing
+          expr: cnpg_pg_stat_archiver_last_failed_time > cnpg_pg_stat_archiver_last_archived_time
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL {{ $labels.cluster }} WAL archiving is failing"
+            description: "WAL archiving to the backup object store has been failing for 15 minutes on {{ $labels.pod }}. PITR recovery window is not growing and pg_wal may fill up."
+
+        - alert: PostgreSQLWALArchivingStale
+          expr: cnpg_pg_stat_archiver_seconds_since_last_archival > 129600
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL {{ $labels.cluster }} has not archived WAL in 36h"
+            description: "No WAL segment has been archived for over 36 hours on {{ $labels.pod }}. The nightly base backup forces a segment switch, so this indicates backups or archiving have silently stopped."
+
     - name: nginx
       rules:
         - alert: NginxHighErrorRate

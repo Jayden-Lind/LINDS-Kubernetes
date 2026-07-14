@@ -18,7 +18,7 @@ spec:
       compression: zstd
       maxParallel: 8
     data:
-      compression: bzip2
+      compression: lz4 # requires plugin >= 0.13; much faster backups than bzip2
   retentionPolicy: 7d
 ---
 apiVersion: postgresql.cnpg.io/v1
@@ -26,9 +26,17 @@ kind: Cluster
 metadata:
   name: linds-postgres
   namespace: postgresql-linds
+  annotations:
+    # Allows a rebuilt cluster to restore from and archive to the same
+    # serverName path (see README.md) instead of bumping serverName each time.
+    cnpg.io/skipEmptyWalArchiveCheck: enabled
 spec:
   instances: 2
-  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  # Pinned by digest: floating tags caused instances to run different builds
+  # (pgvector 0.8.1 vs 0.8.2), breaking Immich. Update tag + digest together.
+  # "standard" flavour ships pgvector; the plain ":18" system images are deprecated.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie@sha256:802cb43a4d482acf1037b418e421c865b16959ba22e07f16fc003e06cb21084c
+  primaryUpdateMethod: switchover
   enableSuperuserAccess: true
   superuserSecret:
     name: postgres-user
@@ -37,7 +45,7 @@ spec:
     storageClass: nfs-csi
   resources:
     requests:
-      memory: "2048Mi"
+      memory: "4Gi"
       cpu: "500m"
     limits:
       memory: "4Gi"
@@ -85,16 +93,20 @@ spec:
         isWALArchiver: "true"
         barmanObjectName: minio-store
         serverName: linds-postgres-restored-4
+  # bootstrap is only consulted at cluster creation. It restores from this
+  # cluster's own archive path (same serverName as the plugin above); the
+  # skipEmptyWalArchiveCheck annotation makes that legal, so a rebuild is just
+  # "delete cluster, re-apply this manifest" — no serverName bump needed.
   bootstrap:
     recovery:
-      source: backup-truenas          # matches externalClusters[].name
+      source: own-archive             # matches externalClusters[].name
   externalClusters:
-  - name: backup-truenas
+  - name: own-archive
     plugin:
       name: barman-cloud.cloudnative-pg.io
       parameters:
         barmanObjectName: minio-store # read from this object store
-        serverName: linds-postgres-restored-3
+        serverName: linds-postgres-restored-4
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
@@ -190,4 +202,3 @@ spec:
     name: barman-cloud.cloudnative-pg.io
     parameters:
       barmanObjectName: minio-store
-      serverName: linds-postgres

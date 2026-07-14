@@ -1,171 +1,128 @@
-# CloudNativePG – Bootstrap from MinIO Backups (Barman Cloud plugin)
+# CloudNativePG — `linds-postgres`
 
-This doc shows how to **rebuild** the `linds-postgres` cluster **from backups in MinIO** using the **Barman Cloud plugin**. It also explains the common _“Expected empty archive”_ error and how to avoid it.
+PostgreSQL cluster managed by the CNPG operator, with backups and WAL archiving
+to MinIO via the **Barman Cloud plugin** (CNPG-I).
 
-## TL;DR
+| Component | Where | Version source |
+|---|---|---|
+| Operator | `applications/postgres-native.yaml` (Helm chart `cloudnative-pg`) | chart `targetRevision` |
+| Barman Cloud plugin | `kustomization.yaml` (release manifest URL) | URL tag |
+| Postgres image | `postgres-cluster.yaml` `spec.imageName` | pinned tag **and digest** |
 
-1. Make sure **cert-manager**, **CNPG operator**, and the **Barman Cloud plugin** are installed in `postgresql-linds`.  
-2. Ensure the MinIO creds Secret exists: `cnpg-s3-creds` (ACCESS_KEY_ID/SECRET_ACCESS_KEY).  
-3. Apply (or keep) the `ObjectStore` named `minio-store`.  
-4. **Restore** by creating a `Cluster` that:
-   - reads backups from the **old** path (e.g., `serverName: linds-postgres`) via `externalClusters`.
-   - registers the plugin on the **Cluster** with **`isBackupExecutor: true`** and a **new** `serverName` (e.g., `linds-postgres-new`) to avoid WAL path collisions.
-5. (Optional) Add a `ScheduledBackup` so new full backups run nightly.
+## Image pinning (important)
 
----
+`spec.imageName` is pinned to an exact tag **plus digest**
+(e.g. `18.4-standard-trixie@sha256:…`). Never use a floating tag like `:18` —
+nodes pull it at different times, so instances end up on different builds. This
+bit us once: the primary had pgvector 0.8.1 while the DB catalog was at 0.8.2,
+and Immich refused to start.
 
-## Prereqs
+Also note:
 
-- Namespace: `postgresql-linds`
-- Secrets:
-  - `cnpg-s3-creds` → MinIO keys
-  - `app-postgres-superuser` → desired `postgres` user/password for the new cluster
-- Backups already present in MinIO under bucket `postgresql-backup`, server name **`linds-postgres`** (your original cluster name).
+- The plain `ghcr.io/cloudnative-pg/postgresql:18` "system" images are
+  **deprecated**. Use the `-standard-` flavour — it includes pgvector, which
+  Immich needs (`-minimal-` does not).
+- All databases use `LC_COLLATE=C`, so Debian base / glibc jumps
+  (bullseye→trixie) are safe for indexes.
 
----
+**To upgrade Postgres:** find the new tag, resolve its digest, update both in
+`postgres-cluster.yaml`, push to master. CNPG rolls replicas first, then does a
+switchover (`primaryUpdateMethod: switchover`).
 
-## ObjectStore (MinIO)
+```sh
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:cloudnative-pg/postgresql:pull" | jq -r .token)
+curl -sI -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.oci.image.index.v1+json" \
+  "https://ghcr.io/v2/cloudnative-pg/postgresql/manifests/<TAG>" | grep -i docker-content-digest
+```
 
-    apiVersion: barmancloud.cnpg.io/v1
-    kind: ObjectStore
-    metadata:
-      name: minio-store
-      namespace: postgresql-linds
-    spec:
-      configuration:
-        destinationPath: s3://postgresql-backup
-        endpointURL: http://jd-truenas-01.linds.com.au:9000
-        s3ForcePathStyle: true
-        s3Region: us-east-1
-        s3Credentials:
-          accessKeyId:
-            name: cnpg-s3-creds
-            key: ACCESS_KEY_ID
-          secretAccessKey:
-            name: cnpg-s3-creds
-            key: SECRET_ACCESS_KEY
-      retentionPolicy: 7d
+## Backups
 
-> `s3ForcePathStyle: true` is recommended for MinIO.
+- **Nightly base backup** (`ScheduledBackup`, midnight) + **continuous WAL
+  archiving** (`isWALArchiver: true`) → full **PITR** within the 7-day
+  retention window.
+- Everything lives in `s3://postgresql-backup/<serverName>/` on MinIO
+  (`jd-s3-01.linds.com.au:9000`). The active `serverName` is set **once** on the
+  Cluster's plugin config (currently `linds-postgres-restored-4`). Base backups
+  and WALs must share one serverName path or restores are impossible — the
+  plugin ignores any `serverName` in `ScheduledBackup.pluginConfiguration`, so
+  don't set one there.
 
----
+Check backup health:
 
-## Restore the cluster (from the latest backup)
+```sh
+kubectl -n postgresql-linds get backups | tail -3
+kubectl -n postgresql-linds get cluster linds-postgres -o yaml | grep -A5 conditions
+# WAL archiving state (runs on the primary):
+kubectl get --raw "/api/v1/namespaces/postgresql-linds/pods/<primary-pod>:9187/proxy/metrics" \
+  | grep cnpg_pg_stat_archiver
+```
 
-> **Key idea:** read **from** the old path `linds-postgres`, but write future backups **to a new path** `linds-postgres-new`. This avoids the _“Expected empty archive”_ safety check.
+Prometheus alerts for failed/stale WAL archiving live in
+`base/monitoring/alerts.yaml`.
 
-    apiVersion: postgresql.cnpg.io/v1
-    kind: Cluster
-    metadata:
-      name: linds-postgres
-      namespace: postgresql-linds
-    spec:
-      instances: 2
-      imageName: ghcr.io/cloudnative-pg/postgresql:17
-      enableSuperuserAccess: true
-      superuserSecret:
-        name: app-postgres-superuser
-      storage:
-        size: 50Gi
-        storageClass: nfs-client
-      monitoring:
-        enablePodMonitor: true
-      affinity:
-        nodeSelector:
-          datacenter: "jd"
-        enablePodAntiAffinity: true
+## Rebuilding the cluster from backup (no serverName bump needed)
 
-      # Register the plugin for BACKUPS ONLY (no WAL archiving)
-      plugins:
-        - name: barman-cloud.cloudnative-pg.io
-          isBackupExecutor: true
-          parameters:
-            barmanObjectName: minio-store
-            serverName: linds-postgres-new    # NEW path for future backups
+Historically every rebuild required inventing a new serverName
+(`linds-postgres` → `-new` → `-restored-3` → `-restored-4`) because the plugin
+refuses to archive WAL into a non-empty path ("Expected empty archive" — a
+guard against two clusters writing one archive).
 
-      # Bootstrap this cluster FROM existing backups
-      bootstrap:
-        recovery:
-          source: backup-truenas
+That hack is gone. The Cluster now carries:
 
-      externalClusters:
-        - name: backup-truenas
-          plugin:
-            name: barman-cloud.cloudnative-pg.io
-            parameters:
-              barmanObjectName: minio-store
-              serverName: linds-postgres      # OLD path where backups already exist
-              # Optional (restore to specific backup/time):
-              # backupID: "LATEST"
-              # recoveryTarget:
-              #   targetTime: "YYYY-MM-DD HH:MM:SS+00"
+- `cnpg.io/skipEmptyWalArchiveCheck: enabled` annotation — both the operator
+  and the barman-cloud plugin honour it during recovery, and
+- a permanent `bootstrap.recovery` + `externalClusters` block pointing at **its
+  own** archive path.
 
-Apply & watch:
+So disaster recovery is simply:
 
-    kubectl apply -f objectstore.yaml
-    kubectl apply -f cluster-restore.yaml
+```sh
+kubectl -n postgresql-linds delete cluster linds-postgres   # if it still exists
+# then let ArgoCD re-apply, or:
+kubectl apply -k postgresql/
+```
 
-    kubectl -n postgresql-linds get pods,jobs
-    kubectl -n postgresql-linds describe cluster linds-postgres | sed -n '/Events:/,$p'
-    kubectl -n postgresql-linds logs job/linds-postgres-1-full-recovery --all-containers -f
+The new cluster restores from the latest backup in its own path, starts a new
+timeline, and archives to the same path. WAL filenames embed the timeline ID so
+histories don't collide, and the 7-day retention ages out the old timeline.
+`ScheduledBackup.immediate: true` takes a fresh base backup as soon as it's
+created.
 
-When recovery finishes, the primary will start and replicas will follow.
+The safety trade-off: the annotation disables the "is this archive really
+mine?" check at bootstrap. That's fine while exactly one cluster uses this
+path — never point a second live cluster at the same serverName.
 
----
+For point-in-time recovery instead of latest, add under
+`bootstrap.recovery`:
 
-## Nightly full backups (no WAL archiving)
+```yaml
+      recoveryTarget:
+        targetTime: "2026-07-10 03:00:00+10"
+```
 
-    apiVersion: postgresql.cnpg.io/v1
-    kind: ScheduledBackup
-    metadata:
-      name: linds-postgres-nightly
-      namespace: postgresql-linds
-    spec:
-      cluster:
-        name: linds-postgres
-      schedule: "0 18 * * *"   # 18:00 UTC ≈ 04:00 AEST
-      immediate: true
-      backupOwnerReference: self
-      method: plugin
-      pluginConfiguration:
-        name: barman-cloud.cloudnative-pg.io
-        parameters:
-          barmanObjectName: minio-store
-          serverName: linds-postgres-new     # keep new backups separate from the old path
+(Remove it again after the rebuild.)
 
-> We’re using **backup-only** mode (no PITR). You can still restore to the **latest full** backup later by setting `backupID: "LATEST"` in a future recovery.
+## Operator / plugin upgrades
 
----
+- Operator: bump the chart `targetRevision` in
+  `applications/postgres-native.yaml`.
+- Plugin: bump the release-manifest URL in `kustomization.yaml`. Plugin CRD
+  features must match — e.g. `data.compression: lz4` needs plugin ≥ 0.13.
+- Known issue ([cloudnative-pg#9107](https://github.com/cloudnative-pg/cloudnative-pg/issues/9107)):
+  operator upgrades with the plugin installed have been seen to stall after
+  upgrading one standby. If instances stop rolling, check
+  `kubectl -n postgresql-linds get cluster` and delete the stuck pod to nudge it.
 
-## Common error & fix
+## Housekeeping
 
-**Error:**  
-`barman-cloud-check-wal-archive ... ERROR: WAL archive check failed ... Expected empty archive`
+Stale bucket prefixes from the old serverName bumps (`linds-postgres`,
+`linds-postgres-new`, `linds-postgres-restored-3`) still hold dead data —
+retention only prunes the **active** path. Safe to delete manually once
+comfortable:
 
-**Meaning:** The plugin refuses to write into a path that already contains WAL/backups (prevents mixing timelines).
-
-**Fix:** Set a **different `serverName`** on the Cluster’s plugin (e.g. `linds-postgres-new`) so the cluster writes to a **new, empty** archive path. Keep the **source** path under `externalClusters` pointing at the **old** server name (`linds-postgres`) for reading backups.
-
----
-
-## Useful commands
-
-    # Check plugin & cert-manager are healthy
-    kubectl -n postgresql-linds get deploy | egrep 'cloud|barman'
-    kubectl get crds | grep cert-manager.io
-
-    # List backup CRs
-    kubectl -n postgresql-linds get backups
-    kubectl -n postgresql-linds describe backup <name>
-
-    # Inspect MinIO bucket layout (from any host with mc):
-    mc alias set minio http://jd-truenas-01.linds.com.au:9000 <USER> '<PASS>'
-    mc tree --depth 2 minio/postgresql-backup
-
----
-
-## Notes
-
-- If you later want **PITR**, add WAL archiving by setting the plugin on the Cluster with `isWALArchiver: true` and keep its `serverName` on a **fresh** path.
-- The `Database` CRs are optional: backups already contain your DBs/roles. Keep them only if you want declarative creation in case of fresh init.
-
+```sh
+mc alias set minio http://jd-s3-01.linds.com.au:9000 <USER> '<PASS>'
+mc rb --force minio/postgresql-backup/linds-postgres \
+  minio/postgresql-backup/linds-postgres-new \
+  minio/postgresql-backup/linds-postgres-restored-3
+```
