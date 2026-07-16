@@ -1,6 +1,8 @@
 ---
-# App-of-apps: syncs every Application manifest in applications/ (including
-# itself and argocd). Adding a new app = committing a new file here.
+# App-of-apps: syncs every Application manifest directly in applications/
+# (including itself and argocd). Adding a new app = committing a new file here.
+# Subdirectories are NOT synced (recurse is off) - park apps you don't want
+# deployed in applications/disabled/ and they are ignored.
 # Pruning the root app only deletes the Application object, not the
 # workloads it deployed (no finalizer is set on the child apps).
 apiVersion: argoproj.io/v1alpha1
@@ -14,6 +16,8 @@ spec:
     repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
     targetRevision: HEAD
     path: "applications"
+    directory:
+      recurse: false
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd
