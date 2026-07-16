@@ -16,5 +16,3 @@ spec:
       targetPort: 7777
       protocol: TCP
   type: LoadBalancer
-  externalIPs:
-    - 172.16.1.1

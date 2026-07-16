@@ -16,6 +16,4 @@ spec:
       targetPort: 25565
       protocol: TCP
       name: minecraft-tcp
-  externalIPs:
-    - 172.16.1.25
 
