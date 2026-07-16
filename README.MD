@@ -15,13 +15,20 @@ This repository hosts the configuration for my personal Kubernetes homelab. The 
 
 ## Bootstrap
 
-After building the cluster with [Terraform](https://github.com/Jayden-Lind/LINDS-Terraform/blob/main/proxmox/talos.tf), the initial application deployment can be bootstrapped by running:
+After building the cluster with [Terraform](https://github.com/Jayden-Lind/LINDS-Terraform/blob/main/proxmox/talos.tf), the cluster is hydrated with three `kubectl` commands:
 
 ```bash
-./app-deployment.sh
+# 1. Vault bootstrap token for External Secrets (gitignored - not in this repo)
+kubectl apply -f base/linds-secret.yml
+
+# 2. Install Argo CD (pinned version + config baked in via kustomize)
+kubectl apply --server-side -k bootstrap/
+
+# 3. Create the root app-of-apps - Argo CD takes over from here
+kubectl apply -f applications/root.yaml
 ```
 
-This script initializes **Argo CD**, applies the root application manifests, and bootstraps the cluster services. Once executed, Argo CD takes over to hydrate the cluster with the remaining applications.
+The [root Application](applications/root.yaml) syncs everything in [`applications/`](applications/), which includes [Argo CD itself](applications/argocd.yaml) (self-managed from [`bootstrap/`](bootstrap/)). Adding a new app is just committing a new `Application` manifest to `applications/` — no manual `kubectl` needed. Argo CD upgrades are done by bumping the pinned version in [`bootstrap/kustomization.yaml`](bootstrap/kustomization.yaml).
 
 ## Provisioning
 
@@ -37,4 +44,4 @@ This script initializes **Argo CD**, applies the root application manifests, and
 
 ---
 
-This setup prioritizes clean GitOps workflows, minimal moving parts, and high-performance networking using Calico.
+This setup prioritizes clean GitOps workflows, minimal moving parts, and high-performance networking using Cilium.

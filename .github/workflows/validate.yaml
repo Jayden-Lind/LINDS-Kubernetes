@@ -1,0 +1,38 @@
+name: Validate manifests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Build and validate kustomizations
+        run: |
+          set -euo pipefail
+          # CRDs-catalog gives real schemas for Application/ExternalSecret/etc.
+          # instead of skipping them entirely.
+          for dir in $(git ls-files '*kustomization.yaml' | xargs -n1 dirname); do
+            echo "--- ${dir}"
+            kubectl kustomize "${dir}" | kubeconform -strict -summary \
+              -ignore-missing-schemas \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          done
+
+      - name: Validate Argo CD Applications
+        run: |
+          kubeconform -strict -summary \
+            -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            applications/

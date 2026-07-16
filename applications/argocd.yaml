@@ -1,16 +1,17 @@
 ---
+# Argo CD manages its own installation from bootstrap/.
+# Upgrades are done by bumping the pinned version in bootstrap/kustomization.yaml.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: argocd
   namespace: argocd
-
 spec:
   project: default
   source:
     repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
     targetRevision: HEAD
-    path: "base"
+    path: "bootstrap"
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd
@@ -19,11 +20,11 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - ApplyOutOfSyncOnly=true
-      - Validate=false
+      # Argo CD's CRDs are too large for client-side apply annotations
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
     retry:
-      limit: 5 # number of failed sync attempt retries; unlimited number of attempts if less than 0
+      limit: 5
       backoff:
         duration: 5s
         factor: 2
