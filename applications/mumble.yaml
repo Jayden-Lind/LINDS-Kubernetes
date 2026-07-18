@@ -16,6 +16,8 @@ spec:
       values: |
         service:
           type: LoadBalancer
+        nodeSelector:
+          datacenter: jd
         persistence:
           storageClass: nfs-csi
   syncPolicy:

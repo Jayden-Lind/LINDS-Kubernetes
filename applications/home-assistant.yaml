@@ -33,10 +33,13 @@ spec:
                 - home.linds.com.au
         service:
           type: LoadBalancer
+        # SQLite config DB on JD-side iSCSI; keep the pod next to the volume.
+        nodeSelector:
+          datacenter: jd
         persistence:
           enabled: true
           type: pvc
-          storageClass: nfs-csi
+          storageClass: zfs-iscsi
           size: 5Gi
           accessMode: ReadWriteOnce
         configuration:

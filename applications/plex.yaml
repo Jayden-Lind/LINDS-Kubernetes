@@ -30,7 +30,8 @@ spec:
               # Plex uses websockets for live notifications (/:/websockets/...)
               nginx.org/websocket-services: "plex-jd"
           pms:
-            storageClassName: nfs-csi
+            # Plex's SQLite library DB belongs on block storage, not NFS.
+            storageClassName: zfs-iscsi
             configStorage: 50Gi
           service:
             type: LoadBalancer

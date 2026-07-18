@@ -94,6 +94,12 @@ spec:
                   path: /var/lib/grafana/dashboards/infrastructure
           admin:
             existingSecret: grafana-credentials
+          nodeSelector:
+            datacenter: jd
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
           persistence:
             enabled: true
             size: 10Gi
@@ -132,6 +138,13 @@ spec:
             retentionSize: "25GB"
             scrapeInterval: 30s
             evaluationInterval: 30s
+            # TSDB lives on JD-side iSCSI now; keep the pod next to it.
+            nodeSelector:
+              datacenter: jd
+            resources:
+              requests:
+                cpu: 200m
+                memory: 1536Mi
             serviceMonitorSelectorNilUsesHelmValues: false
             serviceMonitorSelector: {}
             serviceMonitorNamespaceSelector: {}
@@ -144,7 +157,7 @@ spec:
             storageSpec:
               volumeClaimTemplate:
                 spec:
-                  storageClassName: nfs-csi
+                  storageClassName: zfs-iscsi
                   accessModes: ["ReadWriteOnce"]
                   resources:
                     requests:
@@ -160,6 +173,8 @@ spec:
               name: global-alertmanager-config
               global:
                 resolveTimeout: 5m
+            nodeSelector:
+              datacenter: jd
             storage:
               volumeClaimTemplate:
                 spec:
@@ -174,6 +189,19 @@ spec:
           enabled: false
         kubeEtcd:
           enabled: false
+        kubeProxy:
+          # kube-proxy is replaced by Cilium (kubeProxyReplacement) - scraping
+          # it only produced a permanent KubeProxyDown false positive.
+          enabled: false
+        prometheusOperator:
+          prometheusConfigReloader:
+            # The default limit OOM-killed the reloader on 2026-07-13.
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
   syncPolicy:
     automated:
       prune: true

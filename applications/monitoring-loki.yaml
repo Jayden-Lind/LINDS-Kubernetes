@@ -59,11 +59,14 @@ spec:
           deploymentMode: SingleBinary
           singleBinary:
             replicas: 1
+            # WAL/index live on JD-side iSCSI; keep the pod next to the volume.
+            nodeSelector:
+              datacenter: jd
             persistence:
               enabled: true
               enableStatefulSetAutoDeletePVC: false
               size: 20Gi
-              storageClass: nfs-csi
+              storageClass: zfs-iscsi
               accessModes:
                 - ReadWriteOnce
             resources:
