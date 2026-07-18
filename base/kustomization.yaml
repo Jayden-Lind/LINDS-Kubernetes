@@ -3,6 +3,7 @@ resources:
   - coredns.yml
   - argocd-servicemonitor.yaml
   - monitoring/alerts.yaml
+  - monitoring/alertmanager-config.yaml
   - monitoring/external-secret.yaml
 
   - nginx/pdf.yml

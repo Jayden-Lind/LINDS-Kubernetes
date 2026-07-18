@@ -150,51 +150,16 @@ spec:
                     requests:
                       storage: 30Gi
         alertmanager:
-          config:
-            global:
-              resolve_timeout: 5m
-            inhibit_rules:
-              - source_matchers:
-                  - severity = critical
-                target_matchers:
-                  - severity =~ warning|info
-                equal:
-                  - namespace
-                  - alertname
-            route:
-              group_by:
-                - alertname
-                - namespace
-                - severity
-              group_wait: 30s
-              group_interval: 5m
-              repeat_interval: 4h
-              receiver: discord
-              routes:
-                - matchers:
-                    - alertname =~ "InfoInhibitor|Watchdog"
-                  receiver: 'null'
-            receivers:
-              - name: 'null'
-              - name: discord
-                discord_configs:
-                  - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord-secret/discord_webhook_url
-                    title: '{{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}: {{ .GroupLabels.alertname }}{{ with .GroupLabels.namespace }} ({{ . }}){{ end }}'
-                    message: |-
-                      {{ range .Alerts -}}
-                      **{{ .Labels.alertname }}** | Severity: {{ .Labels.severity }}
-                      {{ if .Labels.namespace -}}Namespace: `{{ .Labels.namespace }}`
-                      {{ end -}}
-                      {{ if .Labels.pod -}}Pod: `{{ .Labels.pod }}`
-                      {{ end -}}
-                      {{ if .Labels.node -}}Node: `{{ .Labels.node }}`
-                      {{ end -}}
-                      {{ if .Annotations.summary -}}> {{ .Annotations.summary }}
-                      {{ end -}}
-                      {{ end }}
+          # Routes/receivers live in the AlertmanagerConfig CR
+          # (base/monitoring/alertmanager-config.yaml). The chart's raw config
+          # path cannot reference the Discord webhook from a secret - the
+          # operator's parser has no webhook_url_file - and it silently fell
+          # back to a null config (no alerts delivered at all).
           alertmanagerSpec:
-            secrets:
-              - alertmanager-discord-secret
+            alertmanagerConfiguration:
+              name: global-alertmanager-config
+              global:
+                resolveTimeout: 5m
             storage:
               volumeClaimTemplate:
                 spec:

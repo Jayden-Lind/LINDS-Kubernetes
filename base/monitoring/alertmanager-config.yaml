@@ -1,0 +1,63 @@
+# Global Alertmanager configuration (referenced by name from
+# alertmanagerSpec.alertmanagerConfiguration in applications/kube-prometheus.yml).
+#
+# Why a CRD and not the chart's raw alertmanager.config: the raw path is parsed
+# by the operator with a strict schema that has NO webhook_url_file for Discord
+# (only webhook_url), so a file/secret-based webhook silently fails to provision
+# and Alertmanager falls back to a null default config - alerts go nowhere.
+# Here the webhook URL comes from a proper secret reference (ESO-synced from
+# Vault, monitoring/external-secret.yaml) and never touches git.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: global-alertmanager-config
+  namespace: monitoring
+spec:
+  route:
+    receiver: discord
+    groupBy:
+      - alertname
+      - namespace
+      - severity
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    routes:
+      - receiver: "null"
+        matchers:
+          - name: alertname
+            matchType: "=~"
+            value: "InfoInhibitor|Watchdog"
+  receivers:
+    - name: "null"
+    - name: discord
+      discordConfigs:
+        - apiURL:
+            name: alertmanager-discord-secret
+            key: discord_webhook_url
+          sendResolved: true
+          title: '{{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}: {{ .GroupLabels.alertname }}{{ with .GroupLabels.namespace }} ({{ . }}){{ end }}'
+          message: |-
+            {{ range .Alerts -}}
+            **{{ .Labels.alertname }}** | Severity: {{ .Labels.severity }}
+            {{ if .Labels.namespace -}}Namespace: `{{ .Labels.namespace }}`
+            {{ end -}}
+            {{ if .Labels.pod -}}Pod: `{{ .Labels.pod }}`
+            {{ end -}}
+            {{ if .Labels.node -}}Node: `{{ .Labels.node }}`
+            {{ end -}}
+            {{ if .Annotations.summary -}}> {{ .Annotations.summary }}
+            {{ end -}}
+            {{ end }}
+  inhibitRules:
+    - sourceMatch:
+        - name: severity
+          value: critical
+          matchType: "="
+      targetMatch:
+        - name: severity
+          value: "warning|info"
+          matchType: "=~"
+      equal:
+        - namespace
+        - alertname
