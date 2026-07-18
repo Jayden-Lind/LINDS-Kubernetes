@@ -18,7 +18,9 @@ spec:
           zabbixImageTag: alpine-7.4-latest
 
           postgresAccess:
-            existingSecretName: postgres.linds-postgresql.credentials.postgresql.acid.zalan.do
+            # Copy of the old zalando-operator-named secret; rotation is still
+            # manual (must match the CNPG postgres-user secret).
+            existingSecretName: zabbix-db-creds
             secretHostKey: ""
             secretPortKey: ""
             secretUserKey: username
@@ -44,11 +46,16 @@ spec:
               pullPolicy: Always
             securityContext:
               privileged: true
+            resources:
+              requests: { cpu: 100m, memory: 1Gi }
+              limits: { memory: 2Gi }
             extraEnv:
-              - { name: ZBX_CACHESIZE, value: "1024M" }
-              - { name: ZBX_TRENDCACHESIZE, value: "1024M" }
-              - { name: ZBX_HISTORYCACHESIZE, value: "2048M" }
-              - { name: ZBX_HISTORYINDEXCACHESIZE, value: "1024M" }
+              # Sized for a ~10-host homelab; the previous 1-2G caches held
+              # ~5GB of shared memory per replica for no benefit.
+              - { name: ZBX_CACHESIZE, value: "256M" }
+              - { name: ZBX_TRENDCACHESIZE, value: "128M" }
+              - { name: ZBX_HISTORYCACHESIZE, value: "256M" }
+              - { name: ZBX_HISTORYINDEXCACHESIZE, value: "64M" }
               - { name: ZBX_STARTTRAPPERS, value: "5" }
               - { name: ZBX_STARTPREPROCESSORS, value: "10" }
               - { name: ZBX_STARTDBSYNCERS, value: "10" }
