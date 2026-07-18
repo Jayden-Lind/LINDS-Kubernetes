@@ -25,7 +25,10 @@ spec:
           volumeBindingMode: Immediate
           mountOptions:
             - nfsvers=4.2
-            - soft
+            # hard (not soft): these volumes hold databases and app state; a
+            # soft mount returns EIO after timeo*retrans and corrupts them on
+            # any NFS blip. hard blocks until the server returns instead.
+            - hard
             - nconnect=8
             - rsize=1048576
             - wsize=1048576

@@ -42,7 +42,14 @@ spec:
     name: postgres-user
   storage:
     size: 50Gi
-    storageClass: nfs-csi
+    # Block storage (JD-local via the 10.0.53.246 portal) instead of NFS: the
+    # nfs-csi share is served over a network path Postgres shouldn't fsync
+    # across, and CNPG recommends block storage. Only applies to NEW instance
+    # PVCs - existing instances must be rebuilt one at a time to migrate.
+    # NOTE: democratic-csi creates zvols with sync=disabled (VPN tuning for the
+    # arr SQLite volumes); the postgres zvols are flipped back to sync=standard
+    # on jd-proxmox-02 so fsync durability holds.
+    storageClass: zfs-iscsi
   resources:
     # 8Gi fits both jd workers alongside existing requests; larger would only
     # schedule on one node and defeat the anti-affinity spread.
