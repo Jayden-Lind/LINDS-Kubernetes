@@ -8,6 +8,9 @@ spec:
   selector:
     matchLabels:
       app: factorio
+  # Never run two servers against the same NFS save during a rollout.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -19,6 +22,10 @@ spec:
         - name: factorio
           image: factoriotools/factorio:stable
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
           ports:
             - containerPort: 34197
               protocol: UDP

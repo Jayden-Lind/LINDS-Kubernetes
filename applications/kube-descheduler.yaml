@@ -22,7 +22,9 @@ spec:
               pluginConfig:
                 - name: DefaultEvictor
                   args:
-                    ignorePvcPods: false
+                    # Moving RWO iSCSI pods between nodes trips the multi-attach
+                    # delays documented in docs/iscsi-pvc-mount-failures.md.
+                    ignorePvcPods: true
                     nodeFit: true
                 - name: LowNodeUtilization
                   args:
