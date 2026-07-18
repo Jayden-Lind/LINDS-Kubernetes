@@ -20,9 +20,9 @@ data:
       # Forward straight to the real upstreams. The previous /etc/resolv.conf
       # path went through Talos hostDNS (169.254.116.108), which drops queries
       # under Cilium socketLB - constant i/o timeouts and 5s stalls in pods.
-      # sequential = prefer the DC (authoritative for linds.com.au), fall back
-      # to VyOS only when it is down.
-      forward . 10.0.50.200 10.0.53.1 {
+      # sequential = prefer VyOS (full recursion for external names; the DC
+      # answers linds.com.au but does not recurse), DC as fallback.
+      forward . 10.0.53.1 10.0.50.200 {
         policy sequential
         max_concurrent 1000
       }
