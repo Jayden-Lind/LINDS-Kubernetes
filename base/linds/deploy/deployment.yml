@@ -191,7 +191,7 @@ spec:
         - name: radarr
           image: linuxserver/radarr:latest
           env:
-            - name: GUID
+            - name: PGID
               value: "0"
             - name: PUID
               value: "1000"
@@ -280,7 +280,7 @@ spec:
         - name: sonarr
           image: linuxserver/sonarr:latest
           env:
-            - name: GUID
+            - name: PGID
               value: "0"
             - name: PUID
               value: "1000"
@@ -374,7 +374,7 @@ spec:
         - name: bazarr
           image: linuxserver/bazarr:latest
           env:
-            - name: GUID
+            - name: PGID
               value: "0"
             - name: PUID
               value: "1000"

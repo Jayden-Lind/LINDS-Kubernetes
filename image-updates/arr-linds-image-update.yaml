@@ -8,7 +8,7 @@ spec:
   writeBackConfig:
     method: argocd
   applicationRefs:
-    - namePattern: argocd
+    - namePattern: base
       images:
         - alias: jackett
           imageName: index.docker.io/linuxserver/jackett:latest
