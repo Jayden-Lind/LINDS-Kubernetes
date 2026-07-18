@@ -16,8 +16,9 @@ spec:
     repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
     targetRevision: HEAD
     path: "applications"
-    directory:
-      recurse: false
+    # recurse defaults to false (subdirectories like disabled/ are ignored);
+    # declaring it explicitly caused permanent OutOfSync because the API
+    # normalizes the default away.
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd

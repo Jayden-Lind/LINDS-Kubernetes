@@ -75,6 +75,9 @@ spec:
         - .spec.sessionAffinity
         - .spec.allocateLoadBalancerNodePorts
         - .spec.healthCheckNodePort
+        # apiserver assigns nodePorts on LoadBalancer services and attributes
+        # them to the SSA applier - permanent OutOfSync unless ignored.
+        - .spec.ports[].nodePort
   syncPolicy:
     automated:
       selfHeal: true
