@@ -33,8 +33,11 @@ spec:
   admission: true
   background: true
   emitWarning: false
+  validationFailureAction: Audit
   rules:
     - name: clone-ingress-to-nginx-mtls
+      # Webhook-defaulted like the fields above; declared to avoid drift.
+      skipBackgroundRequests: true
       match:
         any:
           # Opt-in via label...

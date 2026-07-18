@@ -20,6 +20,13 @@ spec:
           datacenter: jd
         persistence:
           storageClass: nfs-csi
+  ignoreDifferences:
+    # The chart renders hostNetwork: false explicitly; the API prunes the
+    # default value from the live object - permanent OutOfSync otherwise.
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.template.spec.hostNetwork
   syncPolicy:
     automated:
       prune: true
