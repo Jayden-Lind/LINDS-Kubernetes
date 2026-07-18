@@ -21,12 +21,18 @@ spec:
         persistence:
           storageClass: nfs-csi
   ignoreDifferences:
-    # The chart renders hostNetwork: false explicitly; the API prunes the
-    # default value from the live object - permanent OutOfSync otherwise.
+    # hostNetwork: the chart renders the explicit false and the API prunes the
+    # default from the live object. volumeClaimTemplates: the API decorates
+    # each template item with apiVersion/kind/volumeMode/status the chart
+    # doesn't render. Both are permanent OutOfSync noise otherwise.
     - group: apps
       kind: StatefulSet
       jqPathExpressions:
         - .spec.template.spec.hostNetwork
+        - .spec.volumeClaimTemplates[].apiVersion
+        - .spec.volumeClaimTemplates[].kind
+        - .spec.volumeClaimTemplates[].spec.volumeMode
+        - .spec.volumeClaimTemplates[].status
   syncPolicy:
     automated:
       prune: true
