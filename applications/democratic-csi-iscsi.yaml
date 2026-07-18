@@ -49,8 +49,10 @@ spec:
                 value: nsenter
               - name: ISCSIADM_HOST_PATH
                 value: /usr/local/sbin/iscsiadm
-            iscsiDirHostPath: /var/lib/iscsi
-            iscsiDirHostPathType: ""
+            # NOTE: no iscsiDirHostPath here - the chart already mounts its
+            # built-in iscsi-info hostPath volume at /var/lib/iscsi; declaring
+            # it again produced a duplicate mountPath the typed-patch apply
+            # rejects (permanent sync failure).
   destination:
     server: https://kubernetes.default.svc
     namespace: democratic-csi
