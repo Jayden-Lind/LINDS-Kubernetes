@@ -321,39 +321,43 @@ spec:
 
     - name: nginx
       rules:
+        # NOTE: this cluster runs the NGINX Inc controller (ghcr.io/nginx),
+        # whose metrics differ from kubernetes/ingress-nginx. Per-request
+        # status codes and latency come from the latency-metrics collector
+        # (enableLatencyMetrics: true), labelled by resource_name/namespace.
         - alert: NginxHighErrorRate
           expr: >
             (
-              sum by(ingress, namespace) (rate(nginx_ingress_controller_requests{status=~"5.."}[5m]))
-              / sum by(ingress, namespace) (rate(nginx_ingress_controller_requests[5m]))
+              sum by(resource_name, resource_namespace) (rate(nginx_ingress_controller_upstream_server_response_latency_ms_count{code=~"5.."}[5m]))
+              / sum by(resource_name, resource_namespace) (rate(nginx_ingress_controller_upstream_server_response_latency_ms_count{code=~"[0-9].."}[5m]))
             ) > 0.05
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "NGINX {{ $labels.namespace }}/{{ $labels.ingress }} high 5xx rate"
-            description: "NGINX ingress {{ $labels.ingress }} in {{ $labels.namespace }} has a {{ $value | humanizePercentage }} 5xx error rate."
+            summary: "NGINX {{ $labels.resource_namespace }}/{{ $labels.resource_name }} high 5xx rate"
+            description: "NGINX ingress {{ $labels.resource_name }} in {{ $labels.resource_namespace }} has a {{ $value | humanizePercentage }} 5xx error rate."
 
         - alert: NginxConfigReloadError
-          expr: nginx_ingress_controller_config_last_reload_successful == 0
+          expr: nginx_ingress_controller_nginx_last_reload_status == 0
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: "NGINX Ingress Controller config reload failed"
-            description: "NGINX Ingress Controller failed to reload its configuration on {{ $labels.controller_pod }}."
+            description: "NGINX Ingress Controller failed to reload its configuration ({{ $labels.pod }})."
 
         - alert: NginxHighLatency
           expr: >
-            histogram_quantile(0.99, sum by(le, ingress, namespace) (
-              rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])
-            )) > 5
+            histogram_quantile(0.99, sum by(le, resource_name, resource_namespace) (
+              rate(nginx_ingress_controller_upstream_server_response_latency_ms_bucket[5m])
+            )) > 5000
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "NGINX {{ $labels.namespace }}/{{ $labels.ingress }} high P99 latency"
-            description: "NGINX ingress {{ $labels.ingress }} in {{ $labels.namespace }} P99 latency is {{ $value | humanizeDuration }}."
+            summary: "NGINX {{ $labels.resource_namespace }}/{{ $labels.resource_name }} high P99 latency"
+            description: "NGINX ingress {{ $labels.resource_name }} in {{ $labels.resource_namespace }} P99 upstream latency is {{ $value }}ms."
 
     - name: external-secrets
       rules:
