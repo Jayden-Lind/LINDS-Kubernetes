@@ -49,10 +49,14 @@ spec:
                 value: nsenter
               - name: ISCSIADM_HOST_PATH
                 value: /usr/local/sbin/iscsiadm
-            # NOTE: no iscsiDirHostPath here - the chart already mounts its
-            # built-in iscsi-info hostPath volume at /var/lib/iscsi; declaring
-            # it again produced a duplicate mountPath the typed-patch apply
-            # rejects (permanent sync failure).
+            # The chart's built-in iscsi-info volume already exposes the host's
+            # /var/lib/iscsi (the path that matters on Talos, where iscsiadm
+            # runs via nsenter anyway). iscsi-dir must still point somewhere:
+            # the default /etc/iscsi doesn't exist on Talos (mount failure),
+            # and /var/lib/iscsi duplicates iscsi-info (apply failure) - so
+            # park it on a harmless auto-created path.
+            iscsiDirHostPath: /var/lib/iscsi-cfg
+            iscsiDirHostPathType: ""
   destination:
     server: https://kubernetes.default.svc
     namespace: democratic-csi
