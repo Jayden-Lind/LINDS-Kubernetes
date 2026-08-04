@@ -347,17 +347,11 @@ spec:
             summary: "NGINX Ingress Controller config reload failed"
             description: "NGINX Ingress Controller failed to reload its configuration ({{ $labels.pod }})."
 
-        - alert: NginxHighLatency
-          expr: >
-            histogram_quantile(0.99, sum by(le, resource_name, resource_namespace) (
-              rate(nginx_ingress_controller_upstream_server_response_latency_ms_bucket[5m])
-            )) > 5000
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "NGINX {{ $labels.resource_namespace }}/{{ $labels.resource_name }} high P99 latency"
-            description: "NGINX ingress {{ $labels.resource_name }} in {{ $labels.resource_namespace }} P99 upstream latency is {{ $value }}ms."
+        # NOTE: no P99 upstream-latency alert here on purpose. The latency
+        # collector measures upstream response time, so long-lived connections
+        # (Home Assistant websockets/SSE, etc.) sit in the top histogram bucket
+        # and keep P99 pinned above any useful threshold. 5xx rate and reload
+        # status are the signals that actually indicate a problem.
 
     - name: external-secrets
       rules:
