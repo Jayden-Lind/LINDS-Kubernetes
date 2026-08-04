@@ -43,6 +43,14 @@ spec:
                 image:
                   tagSuffix: "20250802113243"
             image:
+              # Oracle Linux base instead of the global alpine tag: Alpine's
+              # libcurl 8.21.0 leaks memory and file descriptors on TLS
+              # connections, which drains through the http agent poller
+              # (~112 MiB/hr, OOM at the 2Gi limit every ~14h). ol ships
+              # libcurl 8.12.1. Only the server polls over HTTPS, so the
+              # other components stay on the smaller alpine images.
+              # Revert to alpine once curl >8.21.0 carries the fix.
+              tag: ol-7.4-latest
               pullPolicy: Always
             securityContext:
               privileged: true

@@ -11,7 +11,8 @@ spec:
     - namePattern: zabbix
       images:
         - alias: zabbix-server
-          imageName: zabbix/zabbix-server-pgsql:alpine-7.4-latest
+          # ol, not alpine - see applications/zabbix.yaml (libcurl 8.21.0 leak)
+          imageName: zabbix/zabbix-server-pgsql:ol-7.4-latest
           commonUpdateSettings:
             updateStrategy: digest
           manifestTargets:
