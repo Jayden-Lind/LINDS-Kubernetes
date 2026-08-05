@@ -36,6 +36,6 @@
   ],
 
   // A homelab doesn't need 25 PRs in the first hour.
-  prConcurrentLimit: 5,
-  prHourlyLimit: 2,
+  prConcurrentLimit: 0,
+  prHourlyLimit: 0,
 }
