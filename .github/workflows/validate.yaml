@@ -20,7 +20,7 @@ jobs:
         -schema-location crd-schemas/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
         -schema-location https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install kubeconform
         run: |
