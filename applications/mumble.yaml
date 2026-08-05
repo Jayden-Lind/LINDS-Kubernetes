@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://syntax3rror404.github.io/helm-charts/charts
     chart: mumble
-    targetRevision: 1.0.2
+    targetRevision: 1.0.4
     helm:
       values: |
         service:
