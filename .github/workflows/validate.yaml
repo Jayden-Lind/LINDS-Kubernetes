@@ -8,6 +8,17 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      # Schema sources are tried in order. Locally generated schemas (see the
+      # step below) win over the CRDs-catalog, which tracks upstream main and
+      # so can disagree with the versions this repo actually pins.
+      KUBECONFORM_ARGS: >-
+        -strict
+        -summary
+        -ignore-missing-schemas
+        -schema-location default
+        -schema-location crd-schemas/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+        -schema-location https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
     steps:
       - uses: actions/checkout@v4
 
@@ -16,23 +27,36 @@ jobs:
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
           sudo mv kubeconform /usr/local/bin/
 
+      - name: Generate schemas for pinned CRDs
+        run: |
+          set -euo pipefail
+          # The CRDs-catalog lags upstream: it rejected barman-cloud's
+          # data.compression: lz4, which the pinned v0.13.0 ObjectStore CRD
+          # accepts. Rather than pin yet another version here, derive the
+          # schemas from the CRD bundles the kustomizations already pin, so
+          # validation tracks whatever version this repo deploys.
+          curl -sSLO https://raw.githubusercontent.com/yannh/kubeconform/master/scripts/openapi2jsonschema.py
+          # venv keeps this working regardless of the runner's PEP 668 stance.
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pyyaml
+          urls=$(git ls-files '*kustomization.yaml' \
+            | xargs grep -hoE '^[[:space:]]*-[[:space:]]+https://[^[:space:]]+\.ya?ml' \
+            | sed -E 's/^[[:space:]]*-[[:space:]]+//' | sort -u)
+          echo "Deriving CRD schemas from:"; echo "${urls}"
+          mkdir -p crd-schemas
+          # openapi2jsonschema writes into the cwd, so run it from there.
+          root="${PWD}"
+          echo "${urls}" | (cd crd-schemas \
+            && xargs -r "${root}/.venv/bin/python" "${root}/openapi2jsonschema.py")
+
       - name: Build and validate kustomizations
         run: |
           set -euo pipefail
-          # CRDs-catalog gives real schemas for Application/ExternalSecret/etc.
-          # instead of skipping them entirely.
           for dir in $(git ls-files '*kustomization.yaml' | xargs -n1 dirname); do
             echo "--- ${dir}"
-            kubectl kustomize "${dir}" | kubeconform -strict -summary \
-              -ignore-missing-schemas \
-              -schema-location default \
-              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+            kubectl kustomize "${dir}" | kubeconform ${KUBECONFORM_ARGS}
           done
 
       - name: Validate Argo CD Applications
         run: |
-          kubeconform -strict -summary \
-            -ignore-missing-schemas \
-            -schema-location default \
-            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            applications/
+          kubeconform ${KUBECONFORM_ARGS} applications/

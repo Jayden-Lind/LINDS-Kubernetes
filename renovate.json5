@@ -1,0 +1,41 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+
+  // The argocd manager ships with NO default file patterns, so it does
+  // nothing until this is set. Scoped to the top level of applications/
+  // only, mirroring the root app-of-apps (recurse is off): apps parked in
+  // applications/disabled/ are not deployed, so they should not generate
+  // PRs either. .yml is here for applications/kube-prometheus.yml.
+  argocd: {
+    managerFilePatterns: ["/^applications/[^/]+\\.ya?ml$/"],
+  },
+
+  // Container image tags are argocd-image-updater's job (image-updates/),
+  // and it writes back to git itself. Renovate only ever touches
+  // spec.source[s].targetRevision, so the two don't collide.
+  // Majors raise PRs like anything else - no dashboard approval gate. They
+  // still get their own branch (separateMajorMinor), so a major sitting
+  // unmerged doesn't hold up minor/patch bumps for the same chart.
+  packageRules: [
+    {
+      // Controller and scale sets must move together, and three files hold
+      // the same version. Regex matches the OCI packageName, e.g.
+      // ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+      matchPackageNames: ["/gha-runner-scale-set/"],
+      groupName: "actions-runner-controller",
+    },
+    {
+      // nginx-ingress.yaml and nginx-ingress-mtls.yaml, same chart.
+      matchPackageNames: ["/(^|/)nginx-ingress$/"],
+      groupName: "nginx-ingress",
+    },
+    // loki and alloy (both in monitoring-loki.yaml) are deliberately NOT
+    // grouped - they are versioned independently upstream, so grouping
+    // would block one behind the other.
+  ],
+
+  // A homelab doesn't need 25 PRs in the first hour.
+  prConcurrentLimit: 5,
+  prHourlyLimit: 2,
+}

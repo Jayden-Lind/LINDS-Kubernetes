@@ -136,6 +136,7 @@ spec:
   cluster:
     name: linds-postgres
   name: lindrea
+  owner: postgres
   extensions:
     - name: pg_stat_statements
       ensure: present
@@ -149,6 +150,7 @@ spec:
   cluster:
     name: linds-postgres
   name: lindrea_th
+  owner: postgres
   extensions:
     - name: pg_stat_statements
       ensure: present
@@ -162,6 +164,7 @@ spec:
   cluster:
     name: linds-postgres
   name: zabbix
+  owner: postgres
   extensions:
     - name: pg_stat_statements
       ensure: present

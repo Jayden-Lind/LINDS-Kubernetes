@@ -1,0 +1,51 @@
+name: Renovate
+
+# Self-hosted Renovate: bumps Helm chart targetRevisions in applications/
+# (see renovate.json5) and opens a PR per chart. Merging to master is what
+# actually deploys - the root app-of-apps syncs from GitHub HEAD.
+#
+# Requires a RENOVATE_TOKEN secret. The default GITHUB_TOKEN works for
+# creating PRs but PRs it opens do NOT trigger other workflows, so
+# validate.yaml would never run on them - use a PAT (repo scope) or a
+# GitHub App token instead.
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: Log level
+        type: choice
+        default: info
+        options: [info, debug]
+      dryRun:
+        description: Dry run (no branches or PRs)
+        type: boolean
+        default: false
+  # Pick up config changes immediately instead of waiting for the schedule.
+  push:
+    branches: [master]
+    paths:
+      - renovate.json5
+      - .github/workflows/renovate.yaml
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: renovatebot/github-action@v46.2.1
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          # renovate.json5 is discovered from the repo automatically; this
+          # only scopes the run to this one repository.
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
