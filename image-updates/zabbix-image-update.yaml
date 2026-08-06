@@ -4,7 +4,6 @@ metadata:
   name: zabbix
   namespace: argocd
 spec:
-  namespace: argocd
   writeBackConfig:
     method: argocd
   applicationRefs:

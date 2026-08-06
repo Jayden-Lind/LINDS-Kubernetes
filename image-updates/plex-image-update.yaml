@@ -4,7 +4,6 @@ metadata:
   name: plex-jd
   namespace: argocd
 spec:
-  namespace: argocd
   writeBackConfig:
     method: argocd
   applicationRefs:

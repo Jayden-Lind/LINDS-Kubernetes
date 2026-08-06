@@ -4,7 +4,6 @@ metadata:
   name: home-assistant
   namespace: argocd
 spec:
-  namespace: argocd
   applicationRefs:
     - namePattern: home-assistant
       images:
