@@ -1,0 +1,31 @@
+---
+# In-cluster Claude Code web terminal (claude-code/), exposed only on the
+# mTLS-only ingress class.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: claude-code
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "claude-code"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: claude-code
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
