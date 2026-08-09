@@ -1,0 +1,211 @@
+---
+# In-cluster Claude Code terminal: ttyd -> tmux -> claude, reachable only
+# through the mTLS-only ingress class. See README.md in this directory.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: claude-code
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: claude-code
+  namespace: claude-code
+---
+# Full autonomy was an explicit choice: this binding gives the terminal the same
+# rights as a cluster admin. Combined with the Proxmox token and SSH key that
+# external-secrets injects, anyone holding a linds-ca client certificate has
+# root over the lab. The mTLS ingress class is the only thing gating that.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claude-code-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: claude-code
+    namespace: claude-code
+---
+# Managed settings sit at the top of Claude Code's settings hierarchy, so this
+# is the declarative equivalent of always passing --dangerously-skip-permissions
+# without baking the flag into the image or the tmux command.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-code-managed-settings
+  namespace: claude-code
+data:
+  managed-settings.json: |
+    {
+      "permissions": {
+        "defaultMode": "bypassPermissions"
+      },
+      "remoteControlAtStartup": true,
+      "cleanupPeriodDays": 90
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-code
+  namespace: claude-code
+  labels:
+    app.kubernetes.io/name: claude-code
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: claude-code
+  ports:
+    - name: http
+      port: 7681
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: claude-code
+  namespace: claude-code
+  labels:
+    app.kubernetes.io/name: claude-code
+spec:
+  # A single long-lived pod holding one tmux session; a rollout kills the
+  # session, so updates are deliberate rather than rolling.
+  replicas: 1
+  serviceName: claude-code
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: claude-code
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: claude-code
+    spec:
+      serviceAccountName: claude-code
+      # zfs-iscsi is backed by the storage host on VLAN 50, and the S3 tfstate
+      # backend is L2-adjacent to the JD nodes - pinning here keeps both off the
+      # ~52 Mbit/s cross-site IPsec tunnel.
+      nodeSelector:
+        datacenter: jd
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: claude-code
+          image: ghcr.io/jayden-lind/claude-code-workspace:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 7681
+          env:
+            - name: WORKSPACE_REPOS
+              value: >-
+                https://github.com/Jayden-Lind/LINDS-Terraform
+                https://github.com/Jayden-Lind/LINDS-Kubernetes
+            - name: GIT_AUTHOR_NAME
+              value: Jayden Lind
+            - name: GIT_AUTHOR_EMAIL
+              value: jaydenlind@gmail.com
+            # Remote Control server mode - the session manager that makes a
+            # session started here resumable from claude.ai/code and the Claude
+            # mobile app. worktree spawn gives each on-demand session its own
+            # git worktree so parallel sessions don't fight over the same files.
+            - name: RC_ENABLED
+              value: "true"
+            - name: RC_SPAWN
+              value: worktree
+            - name: RC_CAPACITY
+              value: "8"
+            - name: RC_NAME
+              value: linds
+            # Re-install the latest CLI into the volume on every start; the
+            # auto-updater then keeps it current in place between restarts.
+            - name: CLAUDE_UPDATE_ON_START
+              value: "true"
+          # Every key in linds-keyvault/claude-code-secret becomes an env var,
+          # so adding a credential is a Vault write - no manifest change.
+          # NOTE: do NOT put CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in
+          # that Vault entry - Remote Control rejects both. Auth happens once
+          # interactively via /login and persists on the volume.
+          envFrom:
+            - secretRef:
+                name: claude-code-secret
+          volumeMounts:
+            - name: home
+              mountPath: /home/claude
+            - name: managed-settings
+              mountPath: /etc/claude-code
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: managed-settings
+          configMap:
+            name: claude-code-managed-settings
+  volumeClaimTemplates:
+    - metadata:
+        name: home
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: zfs-iscsi
+        resources:
+          requests:
+            storage: 50Gi
+---
+# Deliberately NOT using the linds.com.au/mtls-mirror label: that pattern keeps
+# an unauthenticated Ingress on the plain `nginx` class alongside the mirror.
+# This service is only ever exposed on nginx-mtls, so a connection without a
+# valid linds-ca client certificate is rejected with HTTP 400 by the controller
+# before it reaches ttyd.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: claude-code
+  namespace: claude-code
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+    # This cluster runs the F5/NGINX Inc controller, which does NOT auto-upgrade
+    # WebSocket connections. ttyd is entirely WebSocket after the initial page
+    # load, so without this the terminal loads and then hangs forever.
+    nginx.org/websocket-services: "claude-code"
+    # Stream output as it is produced instead of buffering it in nginx.
+    nginx.org/proxy-buffering: "false"
+spec:
+  ingressClassName: nginx-mtls
+  tls:
+    - hosts:
+        - "claude.linds.com.au"
+      secretName: "claude-linds-tls"
+  rules:
+    - host: "claude.linds.com.au"
+      http:
+        paths:
+          - path: "/"
+            pathType: Prefix
+            backend:
+              service:
+                name: claude-code
+                port:
+                  number: 7681
