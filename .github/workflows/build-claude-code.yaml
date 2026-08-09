@@ -21,7 +21,10 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/claude-code-workspace
+  # Hardcoded lowercase rather than ${{ github.repository_owner }}: the owner is
+  # `Jayden-Lind` and GHCR rejects any uppercase in a repository name. This also
+  # keeps the ref identical to the one in claude-code/claude-code.yaml.
+  IMAGE: ghcr.io/jayden-lind/claude-code-workspace
 
 jobs:
   build:
