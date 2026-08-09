@@ -174,16 +174,27 @@ spec:
           requests:
             storage: 50Gi
 ---
-# Deliberately NOT using the linds.com.au/mtls-mirror label: that pattern keeps
-# an unauthenticated Ingress on the plain `nginx` class alongside the mirror.
-# This service is only ever exposed on nginx-mtls, so a connection without a
-# valid linds-ca client certificate is rejected with HTTP 400 by the controller
-# before it reaches ttyd.
+# Reachable on BOTH classes, same host, following the pattern radarr, sonarr,
+# home-assistant and immich already use:
+#   claude.linds.com.au -> nginx      172.16.1.11  plain TLS, LAN/VPN only
+#                       -> nginx-mtls 172.16.1.12  client cert required
+# Kyverno (kyverno/mirror-mtls-ingress.yaml) generates claude-code-mtls from
+# this Ingress, copying the annotations below so the WebSocket tuning carries
+# over. external-dns runs --label-filter=!linds.com.au/mtls-mirror-of, so the
+# DNS record keeps pointing at the plain VIP and the mTLS VIP is reached
+# explicitly.
+#
+# NOTE: ttyd itself is unauthenticated by choice, so on the plain class the
+# only thing between the network and a cluster-admin shell is reaching
+# 172.16.1.11 - i.e. being on the LAN or the IPsec VPN. Keep that VIP off the
+# internet; the mTLS mirror is the endpoint that is safe to publish.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: claude-code
   namespace: claude-code
+  labels:
+    linds.com.au/mtls-mirror: "true"
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
     # This cluster runs the F5/NGINX Inc controller, which does NOT auto-upgrade
@@ -193,7 +204,7 @@ metadata:
     # Stream output as it is produced instead of buffering it in nginx.
     nginx.org/proxy-buffering: "false"
 spec:
-  ingressClassName: nginx-mtls
+  ingressClassName: nginx
   tls:
     - hosts:
         - "claude.linds.com.au"
