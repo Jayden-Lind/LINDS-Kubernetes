@@ -38,7 +38,7 @@ spec:
     readOnly: false
     # volumeAttributes are driver-specific. For the common smb.csi.k8s.io driver use "source"
     volumeAttributes:
-      source: "//jd-dc-01.linds.com.au/nas/photos"
+      source: "//jd-fs-01.linds.com.au/nas/photos"
     # These must point to a Secret that contains the SMB user/password
     nodePublishSecretRef:
       name: smb-immich-creds
@@ -68,7 +68,7 @@ spec:
     volumeHandle: pv-immich-data-handle
     readOnly: false
     volumeAttributes:
-      source: "//jd-dc-01.linds.com.au/nas/immich"
+      source: "//jd-fs-01.linds.com.au/nas/immich"
     nodePublishSecretRef:
       name: smb-immich-creds
       namespace: immich

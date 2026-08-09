@@ -33,7 +33,7 @@ spec:
     volumeHandle: pv-plex-jd-holiday-videos-handle
     readOnly: false
     volumeAttributes:
-      source: "//jd-dc-01.linds.com.au/nas/holiday videos"
+      source: "//jd-fs-01.linds.com.au/nas/holiday videos"
     nodePublishSecretRef:
       name: smb-plex-secret
       namespace: plex-jd
