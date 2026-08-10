@@ -7,7 +7,7 @@
 #
 # Tool versions are ARGs with Renovate datasource comments so they get bumped by
 # the same automation as the Helm charts in this repo.
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 # renovate: datasource=github-releases depName=kubernetes/kubernetes
 ARG KUBECTL_VERSION=v1.36.3
