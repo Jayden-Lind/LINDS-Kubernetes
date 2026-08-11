@@ -15,6 +15,20 @@ spec:
   destination:
     server: "https://kubernetes.default.svc"
     namespace: claude-code
+  ignoreDifferences:
+    # The API decorates each volumeClaimTemplates item with
+    # apiVersion/kind/volumeMode/status that the manifest doesn't declare, and
+    # the templates are an atomic list, so the whole list reads as changed.
+    # Without this the StatefulSet is permanently OutOfSync and selfHeal
+    # re-applies it every 5 minutes, firing ArgoCDAppOutOfSync forever.
+    # Same workaround as applications/mumble.yaml.
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[].apiVersion
+        - .spec.volumeClaimTemplates[].kind
+        - .spec.volumeClaimTemplates[].spec.volumeMode
+        - .spec.volumeClaimTemplates[].status
   syncPolicy:
     automated:
       prune: true
