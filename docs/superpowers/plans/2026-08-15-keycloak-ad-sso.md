@@ -833,10 +833,16 @@ generatorOptions:
 kustomize build keycloak/ > /tmp/kc-build.yaml && echo "kustomize OK"
 
 # Every $(env:X) in the realm must have a matching env var in the Job.
-# `sed 's/#.*//'` strips comments first - the file's own header comment
-# mentions $(env:NAME) as prose, and without stripping it this check reports
-# a phantom unsatisfied placeholder.
-sed 's/#.*//' keycloak/realm/linds.yaml | grep -o '\$(env:[A-Z_]*)' | sed 's/\$(env:\(.*\))/\1/' | sort -u > /tmp/kc-placeholders
+#
+# Do NOT strip comments before this check. config-cli substitutes variables
+# over the RAW FILE TEXT before any YAML parsing, so a placeholder inside a
+# `#` comment is still resolved - and with
+# IMPORT_VARSUBSTITUTION_UNDEFINEDISERROR=true an undefined one aborts the
+# entire import. A hit inside a comment is a real failure, not a false
+# positive. (This was learned the hard way: an explanatory comment containing
+# the literal placeholder syntax failed the first live run with
+# "Cannot resolve variable 'env:NAME'".)
+grep -o '\$(env:[A-Z_]*)' keycloak/realm/linds.yaml | sed 's/\$(env:\(.*\))/\1/' | sort -u > /tmp/kc-placeholders
 yq -N 'select(.kind == "Job") | .spec.template.spec.containers[0].env[].name' /tmp/kc-build.yaml | sort -u > /tmp/kc-envs
 comm -23 /tmp/kc-placeholders /tmp/kc-envs
 ```

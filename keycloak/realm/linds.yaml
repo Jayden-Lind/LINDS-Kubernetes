@@ -1,9 +1,14 @@
 # Declarative realm, reconciled by keycloak-config-cli on every Argo CD sync.
 #
 # Format is Keycloak's realm-export shape: every value inside a component
-# `config` block is a LIST of strings, never a scalar. $(env:NAME) placeholders
-# are substituted at run time from the Job's environment (config-cli-job.yaml),
-# so no secret is ever committed here.
+# `config` block is a LIST of strings, never a scalar.
+#
+# Environment placeholders are substituted at run time from the Job's
+# environment (config-cli-job.yaml), so no secret is committed here.
+# CAUTION: config-cli substitutes over the RAW FILE TEXT, before any YAML
+# parsing - so a placeholder written inside a comment is still resolved, and
+# an undefined one fails the whole import. Never write the literal placeholder
+# syntax in a comment; that is why this note describes it in prose instead.
 realm: linds
 displayName: LINDS
 enabled: true
