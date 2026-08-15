@@ -1,0 +1,72 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    # The operator CRDs land in the same sync as this CR; wave 1 keeps the CR
+    # from being applied before the CustomResourceDefinition that validates it.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: 2
+
+  # NOTE: spec.image is deliberately NOT set. The operator supplies
+  # quay.io/keycloak/keycloak:26.5.7 itself via RELATED_IMAGE_KEYCLOAK, so the
+  # server version is pinned by the operator version in kustomization.yaml.
+  # Setting spec.image makes the operator assume a pre-augmented image and
+  # start it with --optimized, which fails to boot on the stock image.
+
+  db:
+    vendor: postgres
+    host: linds-postgres-rw.postgresql-linds.svc.cluster.local
+    port: 5432
+    database: keycloak
+    usernameSecret:
+      name: keycloak-auth
+      key: username
+    passwordSecret:
+      name: keycloak-auth
+      key: password
+
+  hostname:
+    hostname: https://keycloak.linds.com.au
+
+  # TLS terminates at nginx, exactly as Argo CD does (bootstrap/). Without
+  # proxy.headers Keycloak builds redirect URLs with the wrong scheme and
+  # every login loops.
+  http:
+    httpEnabled: true
+  proxy:
+    headers: xforwarded
+
+  ingress:
+    enabled: true
+    className: nginx
+    tlsSecret: keycloak-linds-tls
+    annotations:
+      cert-manager.io/cluster-issuer: linds-ca
+    labels:
+      # Kyverno mirrors this onto the nginx-mtls class (kyverno/), so external
+      # Immich OIDC redirects can still reach Keycloak behind a client cert.
+      linds.com.au/mtls-mirror: "true"
+
+  # linds-CA issued both the cluster certificates and the domain controllers'
+  # LDAPS certificates, so this one CA is all Keycloak needs to validate LDAPS
+  # against jd-dc-01 / linds-dc / linds-dc2.
+  truststores:
+    linds-ca:
+      secret:
+        name: linds-ca-cert
+
+  # Break-glass admin in the master realm, which is never federated to AD.
+  # keycloak-config-cli also authenticates as this account.
+  bootstrapAdmin:
+    user:
+      secret: keycloak-bootstrap-admin
+
+  # Sit next to Postgres on the jd workers, matching Prometheus and Loki.
+  unsupported:
+    podTemplate:
+      spec:
+        nodeSelector:
+          datacenter: jd

@@ -1,0 +1,174 @@
+# Declarative realm, reconciled by keycloak-config-cli on every Argo CD sync.
+#
+# Format is Keycloak's realm-export shape: every value inside a component
+# `config` block is a LIST of strings, never a scalar. $(env:NAME) placeholders
+# are substituted at run time from the Job's environment (config-cli-job.yaml),
+# so no secret is ever committed here.
+realm: linds
+displayName: LINDS
+enabled: true
+sslRequired: external
+loginTheme: keycloak
+registrationAllowed: false
+resetPasswordAllowed: false
+editUsernameAllowed: false
+bruteForceProtected: true
+permanentLockout: false
+maxFailureWaitSeconds: 900
+failureFactor: 10
+
+# Short access token, 10h session. Grafana and Argo CD both refresh.
+accessTokenLifespan: 300
+ssoSessionIdleTimeout: 3600
+ssoSessionMaxLifespan: 36000
+
+clientScopes:
+  - name: groups
+    description: AD group membership
+    protocol: openid-connect
+    attributes:
+      include.in.token.scope: "true"
+      display.on.consent.screen: "false"
+    protocolMappers:
+      - name: groups
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        consentRequired: false
+        config:
+          # full.path false emits "k8s-admins", not "/k8s-admins". Every
+          # consumer in this cluster matches on the bare name; a leading slash
+          # makes each of them silently fail to match.
+          full.path: "false"
+          claim.name: groups
+          id.token.claim: "true"
+          access.token.claim: "true"
+          userinfo.token.claim: "true"
+
+clients:
+  - clientId: grafana
+    name: Grafana
+    enabled: true
+    protocol: openid-connect
+    publicClient: false
+    bearerOnly: false
+    standardFlowEnabled: true
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    serviceAccountsEnabled: false
+    secret: $(env:CLIENT_SECRET_GRAFANA)
+    rootUrl: https://grafana.linds.com.au
+    baseUrl: https://grafana.linds.com.au
+    redirectUris:
+      - https://grafana.linds.com.au/login/generic_oauth
+    webOrigins:
+      - https://grafana.linds.com.au
+    defaultClientScopes:
+      - basic
+      - acr
+      - profile
+      - email
+      - roles
+      - web-origins
+      - groups
+    optionalClientScopes:
+      - offline_access
+
+components:
+  org.keycloak.storage.UserStorageProvider:
+    - name: linds-ad
+      providerId: ldap
+      config:
+        enabled: ["true"]
+        priority: ["0"]
+        vendor: ["ad"]
+        # jd-dc-01 first: the Keycloak pods are pinned to datacenter=jd and
+        # that DC is local to them. The other two are cross-site failover.
+        # FQDNs, not IPs - the LDAPS certs are issued to names, so an IP can
+        # never validate against the truststore.
+        connectionUrl: ["ldaps://jd-dc-01.linds.com.au:636 ldaps://linds-dc.linds.com.au:636 ldaps://linds-dc2.linds.com.au:636"]
+        usersDn: ["DC=linds,DC=com,DC=au"]
+        authType: ["simple"]
+        bindDn: ["$(env:LDAP_BIND_DN)"]
+        bindCredential: ["$(env:LDAP_BIND_CREDENTIAL)"]
+        useTruststoreSpi: ["always"]
+        connectionPooling: ["true"]
+        pagination: ["true"]
+        batchSizeForSync: ["1000"]
+        # READ_ONLY: Keycloak never writes to the real directory.
+        editMode: ["READ_ONLY"]
+        importEnabled: ["true"]
+        syncRegistrations: ["false"]
+        # AD is authoritative for identity and there is no SMTP in this
+        # cluster, so verification email would dead-end.
+        trustEmail: ["true"]
+        usernameLDAPAttribute: ["sAMAccountName"]
+        rdnLDAPAttribute: ["cn"]
+        uuidLDAPAttribute: ["objectGUID"]
+        userObjectClasses: ["person, organizationalPerson, user"]
+        searchScope: ["2"]
+        # The import gate. Only members of k8s-users ever become Keycloak
+        # users, so service accounts, computer objects and disabled leavers
+        # are never imported, and revoking all homelab access is one group
+        # removal in AD.
+        customUserSearchFilter: ["(memberOf=CN=k8s-users,OU=Kubernetes,DC=linds,DC=com,DC=au)"]
+        fullSyncPeriod: ["86400"]
+        changedSyncPeriod: ["900"]
+        cachePolicy: ["DEFAULT"]
+      subComponents:
+        org.keycloak.storage.ldap.mappers.LDAPStorageMapper:
+          - name: username
+            providerId: user-attribute-ldap-mapper
+            config:
+              user.model.attribute: ["username"]
+              ldap.attribute: ["sAMAccountName"]
+              read.only: ["true"]
+              always.read.value.from.ldap: ["false"]
+              is.mandatory.in.ldap: ["true"]
+          - name: first name
+            providerId: user-attribute-ldap-mapper
+            config:
+              user.model.attribute: ["firstName"]
+              ldap.attribute: ["givenName"]
+              read.only: ["true"]
+              always.read.value.from.ldap: ["true"]
+              is.mandatory.in.ldap: ["false"]
+          - name: last name
+            providerId: user-attribute-ldap-mapper
+            config:
+              user.model.attribute: ["lastName"]
+              ldap.attribute: ["sn"]
+              read.only: ["true"]
+              always.read.value.from.ldap: ["true"]
+              is.mandatory.in.ldap: ["true"]
+          # userPrincipalName, NOT mail. Verified 2026-08-15: not a single
+          # account in this domain has `mail` populated - there is no Exchange
+          # here - while every real user has a UPN of the form
+          # jayden@linds.com.au. Mapping email<-mail would import every user
+          # with an empty email, and both Grafana and Immich key on it.
+          - name: email
+            providerId: user-attribute-ldap-mapper
+            config:
+              user.model.attribute: ["email"]
+              ldap.attribute: ["userPrincipalName"]
+              read.only: ["true"]
+              always.read.value.from.ldap: ["true"]
+              is.mandatory.in.ldap: ["false"]
+          - name: groups
+            providerId: group-ldap-mapper
+            config:
+              groups.dn: ["OU=Kubernetes,DC=linds,DC=com,DC=au"]
+              group.name.ldap.attribute: ["cn"]
+              group.object.classes: ["group"]
+              membership.ldap.attribute: ["member"]
+              membership.attribute.type: ["DN"]
+              membership.user.ldap.attribute: ["sAMAccountName"]
+              memberof.ldap.attribute: ["memberOf"]
+              mode: ["READ_ONLY"]
+              # Uses AD's LDAP_MATCHING_RULE_IN_CHAIN so nested groups resolve.
+              user.roles.retrieve.strategy: ["LOAD_GROUPS_BY_MEMBER_ATTRIBUTE_RECURSIVELY"]
+              # Keep groups flat in Keycloak. Nesting still resolves via the
+              # recursive strategy above, and this avoids the multi-parent
+              # sync errors the inheritance-preserving mode raises.
+              preserve.group.inheritance: ["false"]
+              ignore.missing.groups: ["false"]
+              drop.non.existing.groups.during.sync: ["false"]
