@@ -1365,9 +1365,12 @@ So validate structurally instead, then let Renovate confirm:
 python3 - <<'EOF'
 import re
 src = open('renovate.json5').read()
-# strip // comments and string literals so their braces don't count
-src = re.sub(r'//[^\n]*', '', src)
+# Blank STRINGS FIRST, then comments. Order matters: existing rules contain
+# regexes like "/(^|/)nginx-ingress$/" whose // would otherwise be stripped
+# as a comment, taking the rest of the line - and its closing brace - with it,
+# reporting a phantom imbalance.
 src = re.sub(r'"(?:[^"\\]|\\.)*"', '""', src)
+src = re.sub(r'//[^\n]*', '', src)
 for open_c, close_c in (('{','}'), ('[',']')):
     if src.count(open_c) != src.count(close_c):
         raise SystemExit(f"UNBALANCED {open_c}{close_c}: {src.count(open_c)} vs {src.count(close_c)}")

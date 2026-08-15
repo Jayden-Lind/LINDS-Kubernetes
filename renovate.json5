@@ -11,6 +11,27 @@
     managerFilePatterns: ["/^applications/[^/]+\\.ya?ml$/"],
   },
 
+  // The argocd manager only reads targetRevision in applications/*.yaml, so
+  // neither Keycloak version is visible by default: one lives in a remote
+  // kustomize URL, the other in a Job's image tag. These bring them in scope.
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^keycloak/kustomization\\.yaml$/"],
+      // All three raw.githubusercontent URLs carry the same version, so the
+      // capture matches once per line and Renovate bumps them together.
+      matchStrings: ["keycloak/keycloak-k8s-resources/(?<currentValue>[0-9.]+)/kubernetes/"],
+      depNameTemplate: "keycloak/keycloak-k8s-resources",
+      datasourceTemplate: "github-releases",
+    },
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^keycloak/config-cli-job\\.yaml$/"],
+      matchStrings: ["image: (?<depName>quay\\.io/adorsys/keycloak-config-cli):(?<currentValue>\\S+)"],
+      datasourceTemplate: "docker",
+    },
+  ],
+
   // Container image tags are argocd-image-updater's job (image-updates/),
   // and it writes back to git itself. Renovate only ever touches
   // spec.source[s].targetRevision, so the two don't collide.
@@ -29,6 +50,23 @@
       // nginx-ingress.yaml and nginx-ingress-mtls.yaml, same chart.
       matchPackageNames: ["/(^|/)nginx-ingress$/"],
       groupName: "nginx-ingress",
+    },
+    {
+      // keycloak-config-cli lags upstream Keycloak: its newest build targets
+      // 26.5.x while Keycloak itself is at 26.7.x. Keycloak's minor line must
+      // never move ahead of config-cli's, or realm reconciliation breaks.
+      //
+      // Renovate CANNOT enforce that ordering - the two use different
+      // versioning schemes (26.5.7 vs 6.5.1-26.5.5) and no constraint
+      // expresses "wait for a matching build". Grouping only puts them in one
+      // PR so the pair is reviewed together. Before merging a Keycloak MINOR
+      // bump, check by hand that a config-cli tag exists for that line:
+      //   curl -s "https://quay.io/api/v1/repository/adorsys/keycloak-config-cli/tag/?limit=100&onlyActiveTags=true" | jq -r '.tags[].name' | sort -u
+      matchPackageNames: [
+        "keycloak/keycloak-k8s-resources",
+        "quay.io/adorsys/keycloak-config-cli",
+      ],
+      groupName: "keycloak",
     },
     // loki and alloy (both in monitoring-loki.yaml) are deliberately NOT
     // grouped - they are versioned independently upstream, so grouping

@@ -41,6 +41,7 @@ The [root Application](applications/root.yaml) syncs everything in [`application
 * **BGP integration:** Calico peers with my VyOS routers, advertising cluster services and pod CIDRs for seamless external access.
 * **Declarative GitOps:** All apps are managed through Git with Argo CD, enabling full reproducibility and rollback.
 * **mTLS-only ingress:** A dedicated ingress class for publishing services to the internet behind client-certificate auth — see [nginx-ingress-mtls/](nginx-ingress-mtls/README.md).
+* **AD-backed SSO:** Keycloak federates users and groups read-only from the `linds.com.au` Active Directory over LDAPS, and fronts the services that speak OIDC/SAML natively — see [keycloak/](keycloak/README.md).
 
 ---
 
