@@ -91,6 +91,21 @@ spec:
               dnsConfig:
                 options:
                   - { name: ndots, value: "2" }
+              # The chart's podAntiAffinity only spreads over hostname, so both
+              # replicas can (and did) land in the same datacenter - which
+              # defeats the point of running two. Spread over the site instead.
+              # ScheduleAnyway, not DoNotSchedule: if one site is down we want
+              # the survivor to keep running, not to block on an unmeetable
+              # constraint or deadlock a rollout on maxSurge.
+              topologySpreadConstraints:
+                - maxSkew: 1
+                  topologyKey: datacenter
+                  whenUnsatisfiable: ScheduleAnyway
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: zabbix
+                      app.kubernetes.io/instance: zabbix
+                      app.kubernetes.io/component: server
             extraContainers:
               - name: zabbix-snmptraps
                 image: zabbix/zabbix-snmptraps:alpine-7.4-latest
@@ -148,6 +163,19 @@ spec:
               dnsConfig:
                 options:
                   - { name: ndots, value: "2" }
+              # The chart's web podAntiAffinity selects on
+              # app.kubernetes.io/instance=zabbix-zabbix-web, but the pods are
+              # labelled instance=zabbix, so it matches nothing and does no
+              # spreading at all. Spread over the site explicitly.
+              topologySpreadConstraints:
+                - maxSkew: 1
+                  topologyKey: datacenter
+                  whenUnsatisfiable: ScheduleAnyway
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: zabbix
+                      app.kubernetes.io/instance: zabbix
+                      app.kubernetes.io/component: web
             extraVolumes:
               - name: nginx-gzip
                 configMap:
