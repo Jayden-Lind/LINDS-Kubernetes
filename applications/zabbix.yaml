@@ -82,6 +82,15 @@ spec:
               - { name: ZBX_SERVICEMANAGERSYNCFREQUENCY, value: "10" }
               - { name: ZBX_PROBLEMHOUSEKEEPINGFREQUENCY, value: "60" }
               - { name: ZBX_ALLOWUNSUPPORTEDDBVERSIONS, value: "1" }
+            extraPodSpecs:
+              # The DB host is a 4-dot name, so the default ndots:5 makes the
+              # resolver walk all four search domains (including linds.com.au,
+              # which leaves the cluster) before trying the real name - ~10 DNS
+              # packets per connection. ndots:2 tries the absolute name first.
+              # Short names like zabbix-zabbix-server still resolve via search.
+              dnsConfig:
+                options:
+                  - { name: ndots, value: "2" }
             extraContainers:
               - name: zabbix-snmptraps
                 image: zabbix/zabbix-snmptraps:alpine-7.4-latest
@@ -93,6 +102,24 @@ spec:
                 volumeMounts:
                   - name: zabbix-snmptraps
                     mountPath: /var/lib/zabbix/snmptraps/
+              # The zabbix-zabbix-server Service selects on
+              # zabbix.com/server-ha-role=active, which this sidecar sets on
+              # whichever pod is the active HA node. Chart 7.1.0 nests it inside
+              # "if zabbixAgent.runAsSidecar" (deployment-zabbix-server.yaml:177),
+              # so running the agent as a DaemonSet silently drops it and the
+              # Service ends up with zero endpoints - the frontend then stalls
+              # ~1-3.5s per page on the server check and active agent checks
+              # break. Declaring it here restores upstream's intent; it needs
+              # only LABEL_NAME, and the chart already gives the pod
+              # shareProcessNamespace and the RBAC to label itself.
+              - name: ha-labels-sidecar
+                image: ghcr.io/zabbix-community/zabbix-server-ha-label-manager:20241230230305
+                imagePullPolicy: IfNotPresent
+                env:
+                  - { name: LABEL_NAME, value: zabbix.com/server-ha-role }
+                resources:
+                  requests: { cpu: 10m, memory: 32Mi }
+                  limits: { memory: 64Mi }
             extraVolumes:
               - name: zabbix-snmptraps
                 emptyDir: {}
@@ -107,6 +134,29 @@ spec:
             podAntiAffinity: true
             image:
               pullPolicy: Always
+            # Was unset, which made these pods BestEffort - first in line for
+            # eviction under node pressure despite being the only user-facing
+            # component. No CPU limit: page renders are bursty and throttling
+            # them is worse than letting them spike.
+            resources:
+              requests: { cpu: 100m, memory: 256Mi }
+              limits: { memory: 1Gi }
+            extraPodSpecs:
+              # See the zabbixServer note - the frontend opens a new DB
+              # connection per request, so the ndots:5 search-domain walk is
+              # paid on every page load.
+              dnsConfig:
+                options:
+                  - { name: ndots, value: "2" }
+            extraVolumes:
+              - name: nginx-gzip
+                configMap:
+                  name: zabbix-web-nginx-gzip
+            extraVolumeMounts:
+              - name: nginx-gzip
+                mountPath: /etc/nginx/http.d/00-gzip.conf
+                subPath: 00-gzip.conf
+                readOnly: true
             extraEnv:
               - { name: ZBX_SERVER_NAME, value: "LINDS-Zabbix" }
               - { name: PHP_TZ, value: "Australia/Melbourne" }
@@ -167,6 +217,23 @@ spec:
                   - zabbix.linds.com.au
 
           extraManifests:
+            # The web image's nginx only gzips text/plain, text/css and the
+            # legacy application/x-javascript type, so jsLoader.php ships
+            # ~1.7 MB uncompressed on every cold load (403 KB gzipped).
+            # gzip_types accumulates within the http context, and
+            # /etc/nginx/http.d/*.conf is included there, so this appends to
+            # the image's list rather than replacing it.
+            - apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: zabbix-web-nginx-gzip
+                labels:
+                  app.kubernetes.io/name: zabbix
+                  app.kubernetes.io/component: web
+              data:
+                00-gzip.conf: |
+                  gzip_types application/javascript application/json application/xml image/svg+xml;
+                  gzip_vary on;
             - apiVersion: v1
               kind: Service
               metadata:
