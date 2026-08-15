@@ -102,6 +102,17 @@ spec:
               secretKeyRef:
                 name: grafana-oidc
                 key: client-secret
+          # Grafana's back-channel token exchange runs from inside the pod,
+          # which trusts only the public CA bundle - so the browser leg
+          # succeeds (domain-joined clients trust linds-CA via AD) and the
+          # token exchange then fails with "certificate signed by unknown
+          # authority". Mount linds-CA and point the OAuth client at it.
+          extraSecretMounts:
+            - name: linds-ca
+              secretName: linds-ca-cert
+              mountPath: /etc/grafana/certs
+              readOnly: true
+              defaultMode: 0440
           grafana.ini:
             server:
               # Required, or OAuth redirects are built against the pod address.
@@ -132,6 +143,10 @@ spec:
               role_attribute_path: "contains(groups[*], 'k8s-admins') && 'Admin' || contains(groups[*], 'k8s-grafana-admins') && 'Admin' || contains(groups[*], 'k8s-grafana-editors') && 'Editor' || 'Viewer'"
               role_attribute_strict: false
               use_refresh_token: true
+              # Scoped to this OAuth client only - deliberately NOT a global
+              # trust change (SSL_CERT_FILE would replace Go's whole file
+              # list) and NOT tls_skip_verify_insecure.
+              tls_client_ca: /etc/grafana/certs/ca.crt
           nodeSelector:
             datacenter: jd
           resources:
