@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: keycloak
+
+resources:
+  # Pinned operator release. The operator also pins the SERVER version through
+  # its RELATED_IMAGE_KEYCLOAK env var (quay.io/keycloak/keycloak:26.5.7), so
+  # bumping these three URLs upgrades both. The upstream manifest already
+  # targets the "keycloak" namespace in its ClusterRoleBinding subject.
+  # Renovate tracks this via a customManager (renovate.json5) - it must stay
+  # in step with the keycloak-config-cli tag in config-cli-job.yaml.
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5.7/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5.7/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5.7/kubernetes/kubernetes.yml
+  - keycloak.yaml
+  - config-cli-job.yaml
+
+configMapGenerator:
+  - name: keycloak-realm
+    files:
+      - realm/linds.yaml
+
+# The Job is recreated on every sync anyway (hook-delete-policy), and a hashed
+# name would leave its volume reference pointing at a name the generator
+# changes on every realm edit. Keep the name stable.
+generatorOptions:
+  disableNameSuffixHash: true

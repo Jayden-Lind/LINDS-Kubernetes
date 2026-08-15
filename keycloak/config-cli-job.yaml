@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-config-cli
+  namespace: keycloak
+  annotations:
+    # Runs after Keycloak itself is healthy. Because config-cli reconciles
+    # rather than imports, re-running on every sync is safe, and a failed
+    # realm apply surfaces as a failed Argo CD sync instead of silent drift.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      name: keycloak-config-cli
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        datacenter: jd
+      containers:
+        - name: config-cli
+          # Must stay in step with the operator version in kustomization.yaml.
+          # config-cli lags upstream Keycloak, so Keycloak's minor line must
+          # never move ahead of config-cli's. Grouped in renovate.json5.
+          image: quay.io/adorsys/keycloak-config-cli:6.5.1-26.5.5
+          imagePullPolicy: IfNotPresent
+          env:
+            # In-cluster plaintext: TLS terminates at the ingress and this
+            # traffic never leaves the cluster network.
+            - name: KEYCLOAK_URL
+              value: http://keycloak-service.keycloak.svc.cluster.local:8080
+            - name: KEYCLOAK_LOGINREALM
+              value: master
+            - name: KEYCLOAK_CLIENTID
+              value: admin-cli
+            - name: KEYCLOAK_USER
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap-admin
+                  key: username
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap-admin
+                  key: password
+            # The operator may still be rolling pods when the hook fires.
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: 300s
+            - name: IMPORT_FILES_LOCATIONS
+              value: /config/*.yaml
+            # Enables $(env:NAME) placeholders. Off by default.
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            # Fail loudly if a placeholder has no matching env var, rather than
+            # writing the literal string "$(env:FOO)" into the realm.
+            - name: IMPORT_VARSUBSTITUTION_UNDEFINEDISERROR
+              value: "true"
+            - name: LDAP_BIND_DN
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-ldap
+                  key: bindDn
+            - name: LDAP_BIND_CREDENTIAL
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-ldap
+                  key: bindCredential
+            - name: CLIENT_SECRET_GRAFANA
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: grafana
+          volumeMounts:
+            - name: realm
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm
