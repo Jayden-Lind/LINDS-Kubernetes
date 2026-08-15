@@ -163,19 +163,25 @@ spec:
               dnsConfig:
                 options:
                   - { name: ndots, value: "2" }
-              # The chart's web podAntiAffinity selects on
-              # app.kubernetes.io/instance=zabbix-zabbix-web, but the pods are
-              # labelled instance=zabbix, so it matches nothing and does no
-              # spreading at all. Spread over the site explicitly.
-              topologySpreadConstraints:
-                - maxSkew: 1
-                  topologyKey: datacenter
-                  whenUnsatisfiable: ScheduleAnyway
-                  labelSelector:
-                    matchLabels:
-                      app.kubernetes.io/name: zabbix
-                      app.kubernetes.io/instance: zabbix
-                      app.kubernetes.io/component: web
+              # Keep the frontend in the same datacenter as Postgres. The
+              # frontend makes ~75 sequential DB round-trips to render a page,
+              # so the same pod measures 0.03s at jd and 3-7s at linds - a 100x
+              # difference that is pure inter-site latency, not tuning.
+              #
+              # This costs no availability: both CNPG instances are at jd, so a
+              # web pod at linds has no database during a site split and could
+              # never serve there anyway. Remote-site resilience needs a Zabbix
+              # proxy at linds, not a frontend replica.
+              #
+              # Note the chart's own web podAntiAffinity is a no-op regardless -
+              # it selects app.kubernetes.io/instance=zabbix-zabbix-web while
+              # the pods are labelled instance=zabbix.
+              #
+              # Expressed as nodeSelector below rather than a nodeAffinity here:
+              # the chart emits its own "affinity:" key after extraPodSpecs, so
+              # an affinity set here is silently overridden by the duplicate.
+            nodeSelector:
+              datacenter: jd
             extraVolumes:
               - name: nginx-gzip
                 configMap:
