@@ -94,6 +94,44 @@ spec:
                   path: /var/lib/grafana/dashboards/infrastructure
           admin:
             existingSecret: grafana-credentials
+          # Only Grafana's own client secret enters this pod - not the whole
+          # keycloak-client-secrets entry, which would hand Grafana every
+          # other app's secret.
+          envValueFrom:
+            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+              secretKeyRef:
+                name: grafana-oidc
+                key: client-secret
+          grafana.ini:
+            server:
+              # Required, or OAuth redirects are built against the pod address.
+              root_url: https://grafana.linds.com.au
+            auth:
+              # Break-glass: the local admin from grafana-credentials must stay
+              # usable. Do NOT set disable_login_form - Keycloak is a new
+              # single point of failure and Grafana keeps a local path.
+              oauth_auto_login: false
+              signout_redirect_url: https://grafana.linds.com.au/login
+            auth.generic_oauth:
+              enabled: true
+              name: Keycloak
+              icon: signin
+              allow_sign_up: true
+              client_id: grafana
+              scopes: openid email profile groups
+              email_attribute_path: email
+              login_attribute_path: preferred_username
+              name_attribute_path: name
+              auth_url: https://keycloak.linds.com.au/realms/linds/protocol/openid-connect/auth
+              token_url: https://keycloak.linds.com.au/realms/linds/protocol/openid-connect/token
+              api_url: https://keycloak.linds.com.au/realms/linds/protocol/openid-connect/userinfo
+              # Roles come from the flat `groups` claim the client scope emits
+              # (bare names, no leading slash). The trailing 'Viewer' is the
+              # fallback, so anyone in k8s-users without a Grafana-specific
+              # group still gets read access.
+              role_attribute_path: "contains(groups[*], 'k8s-admins') && 'Admin' || contains(groups[*], 'k8s-grafana-admins') && 'Admin' || contains(groups[*], 'k8s-grafana-editors') && 'Editor' || 'Viewer'"
+              role_attribute_strict: false
+              use_refresh_token: true
           nodeSelector:
             datacenter: jd
           resources:

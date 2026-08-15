@@ -70,3 +70,14 @@ spec:
       spec:
         nodeSelector:
           datacenter: jd
+        # Both replicas landed on the same node on first deploy, which would
+        # have made "2 instances" no protection at all against losing a node.
+        # Three jd workers are available, so requiring separation is safe and
+        # still leaves room to roll.
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: keycloak
