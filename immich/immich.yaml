@@ -260,6 +260,29 @@ spec:
       dnsPolicy: ClusterFirst
       nodeSelector:
         datacenter: jd
+      initContainers:
+        # Renders immich-config-template into the real config, substituting the
+        # OIDC client secret from the immich-oidc secret. Keeps the secret out
+        # of git while still managing the config declaratively. Reuses the
+        # server image so no extra image is introduced.
+        - name: render-config
+          image: ghcr.io/immich-app/immich-server:v3
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - 'sed "s|__OAUTH_CLIENT_SECRET__|${OAUTH_CLIENT_SECRET}|" /template/immich.json > /immich-config/immich.json'
+          env:
+            - name: OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: immich-oidc
+                  key: client-secret
+          volumeMounts:
+            - mountPath: /template
+              name: immich-config-template
+              readOnly: true
+            - mountPath: /immich-config
+              name: immich-config
       containers:
         - env:
           - name: DB_DATABASE_NAME
@@ -286,6 +309,15 @@ spec:
             value: immich-valkey
           - name: TZ
             value: Australia/Melbourne
+          # Config comes from the file rendered by the render-config init
+          # container, not the database. The admin UI becomes read-only.
+          - name: IMMICH_CONFIG_FILE
+            value: /immich-config/immich.json
+          # Node trusts only the public CA bundle, so without this the OIDC
+          # discovery/token calls to Keycloak fail with a self-signed-chain
+          # error even though the browser leg works.
+          - name: NODE_EXTRA_CA_CERTS
+            value: /etc/ssl/linds/ca.crt
           image: ghcr.io/immich-app/immich-server:v3
           imagePullPolicy: IfNotPresent
           resources:
@@ -332,6 +364,12 @@ spec:
             name: data
           - mountPath: /usr/src/app/library
             name: library
+          - mountPath: /immich-config
+            name: immich-config
+            readOnly: true
+          - mountPath: /etc/ssl/linds
+            name: linds-ca
+            readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -339,6 +377,15 @@ spec:
         - name: library
           persistentVolumeClaim:
             claimName: immich-library-pvc
+        - name: immich-config-template
+          configMap:
+            name: immich-config-template
+        # Holds the rendered config; never leaves the pod.
+        - name: immich-config
+          emptyDir: {}
+        - name: linds-ca
+          secret:
+            secretName: linds-ca-cert
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -74,6 +74,22 @@ spec:
                 secretKeyRef:
                   name: keycloak-client-secrets
                   key: grafana
+            - name: CLIENT_SECRET_ARGOCD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: argocd
+            - name: CLIENT_SECRET_IMMICH
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: immich
+            - name: CLIENT_SECRET_VAULT
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: vault
+            # zabbix is SAML - no client secret, so nothing to inject here.
           volumeMounts:
             - name: realm
               mountPath: /config

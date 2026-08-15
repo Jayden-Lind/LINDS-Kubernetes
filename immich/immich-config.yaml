@@ -1,0 +1,109 @@
+# Immich server configuration, rendered declaratively instead of clicked into
+# the admin UI. Setting IMMICH_CONFIG_FILE makes Immich ignore its database
+# config and the UI read-only, so this file must carry every non-default
+# setting - the values below were exported from the running instance's
+# system_metadata table so nothing is lost.
+#
+# The client secret is NOT here: an initContainer substitutes
+# __OAUTH_CLIENT_SECRET__ from the immich-oidc secret at pod start, so this
+# repository (which is public) never contains it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-config-template
+  namespace: immich
+data:
+  immich.json: |
+    {
+      "backup": {
+        "database": {
+          "keepLastAmount": 7
+        }
+      },
+      "ffmpeg": {
+        "acceptedAudioCodecs": [
+          "aac",
+          "mp3",
+          "opus",
+          "pcm_s16le"
+        ],
+        "acceptedVideoCodecs": [
+          "h264",
+          "hevc"
+        ]
+      },
+      "job": {
+        "faceDetection": {
+          "concurrency": 5
+        },
+        "library": {
+          "concurrency": 10
+        },
+        "metadataExtraction": {
+          "concurrency": 10
+        },
+        "ocr": {
+          "concurrency": 5
+        },
+        "sidecar": {
+          "concurrency": 10
+        },
+        "smartSearch": {
+          "concurrency": 10
+        },
+        "thumbnailGeneration": {
+          "concurrency": 10
+        },
+        "videoConversion": {
+          "concurrency": 5
+        }
+      },
+      "library": {
+        "watch": {
+          "enabled": true
+        }
+      },
+      "machineLearning": {
+        "availabilityChecks": {
+          "timeout": 10000
+        },
+        "clip": {
+          "modelName": "ViT-SO400M-16-SigLIP2-384__webli"
+        },
+        "facialRecognition": {
+          "maxDistance": 0.3,
+          "minFaces": 10,
+          "minScore": 0.8
+        },
+        "ocr": {
+          "modelName": "PP-OCRv5_server"
+        }
+      },
+      "metadata": {
+        "faces": {
+          "import": true
+        }
+      },
+      "oauth": {
+        "autoLaunch": false,
+        "autoRegister": true,
+        "buttonText": "Sign in with Keycloak",
+        "clientId": "immich",
+        "clientSecret": "__OAUTH_CLIENT_SECRET__",
+        "defaultStorageQuota": 0,
+        "enabled": true,
+        "issuerUrl": "https://keycloak.linds.com.au/realms/linds/.well-known/openid-configuration",
+        "mobileOverrideEnabled": false,
+        "mobileRedirectUri": "",
+        "profileSigningAlgorithm": "none",
+        "roleClaim": "immich_role",
+        "scope": "openid email profile",
+        "signingAlgorithm": "RS256",
+        "storageLabelClaim": "preferred_username",
+        "storageQuotaClaim": "immich_quota",
+        "timeout": 30000
+      },
+      "storageTemplate": {
+        "enabled": true
+      }
+    }

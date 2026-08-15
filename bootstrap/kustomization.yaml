@@ -19,6 +19,15 @@ patches:
       data:
         server.insecure: "true"
   # Relax the reconciliation loop - homelab doesn't need 3min polling.
+  # Also carries the Keycloak OIDC config: `url` is required or the OIDC
+  # redirect is built against the pod address instead of the ingress host.
+  #
+  # rootCA is linds-CA. Argo CD's token exchange is a server-to-server call
+  # from the argocd-server pod, which trusts only the public CA bundle - the
+  # browser leg would succeed and login would then fail with
+  # "certificate signed by unknown authority". This is a CA *public*
+  # certificate, presented in every TLS handshake to keycloak.linds.com.au,
+  # so it is not secret; only the private key in Vault is.
   - patch: |-
       apiVersion: v1
       kind: ConfigMap
@@ -27,3 +36,50 @@ patches:
       data:
         timeout.reconciliation: 3600s
         timeout.reconciliation.jitter: 300s
+        url: https://argocd.linds.com.au
+        oidc.config: |
+          name: Keycloak
+          issuer: https://keycloak.linds.com.au/realms/linds
+          clientID: argocd
+          clientSecret: $oidc.keycloak.clientSecret
+          requestedScopes:
+            - openid
+            - profile
+            - email
+            - groups
+          rootCA: |
+            -----BEGIN CERTIFICATE-----
+            MIIDmTCCAoGgAwIBAgIQebLiPyGuFYJJdmJQ94ybkzANBgkqhkiG9w0BAQsFADBT
+            MRIwEAYKCZImiZPyLGQBGRYCYXUxEzARBgoJkiaJk/IsZAEZFgNjb20xFTATBgoJ
+            kiaJk/IsZAEZFgVsaW5kczERMA8GA1UEAxMIbGluZHMtQ0EwHhcNMTkxMjAxMDMz
+            MzQ3WhcNMjkxMjAxMDM0MzQ3WjBTMRIwEAYKCZImiZPyLGQBGRYCYXUxEzARBgoJ
+            kiaJk/IsZAEZFgNjb20xFTATBgoJkiaJk/IsZAEZFgVsaW5kczERMA8GA1UEAxMI
+            bGluZHMtQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDVv38XIdmo
+            ScFi6DhSy0uXElkVbSAOJT14wKbE3ZxnWUKRLzH25hDbMQlV2uQ+G59WnreIhxpN
+            xSOp9RXrJn2IA2tNVOWTRBFg3CSsXRl/EQf1elbx7j4AeEzC4MdB3lPBFV8175Xm
+            cueCcmqlI3uZudbBbIKiI4HK9RJqWjOCDG827YH7Z+Md/sbW1S53WTCZhTux0TUU
+            RMo+114id0JqnQ0cKQRODmCuimJVYEmYjoF/kARf2+jtBWqoRRuyHswBE5D6L4m4
+            s9lnX9m0fNbXjC00IFlRdrIDOameo5VLxkEb0yIGLpMla+nxRmJgdTDqWinzmMw5
+            vUJTKd3SnhRdAgMBAAGjaTBnMBMGCSsGAQQBgjcUAgQGHgQAQwBBMA4GA1UdDwEB
+            /wQEAwIBhjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBRj28IpbX7TLUT4MKtW
+            q+phtkfb7DAQBgkrBgEEAYI3FQEEAwIBADANBgkqhkiG9w0BAQsFAAOCAQEAtts3
+            sQjdaQenOUX0BqW06BAEdPJc6d1K5/79cqfZx15jBxtjoDUQ60g0NB5uj+7aZygS
+            blOammiSyZB1HF/V3sYpFgoPcpgHg0dQyR7ka/fJICK8hj4+5deXQ9lbasdpNQuG
+            jQWC2gXd/y0w0mRcbZbcB2tTLpD8M2tsigZxQjIIIbWhmf4RDYIG8HKhFRRfMTYh
+            1hMOTZVQ626Og8xozfmu6UNBC3Vfr379LR00IM+0YhPy2QLuVQP4SOs6rWllaDeW
+            aqMZ4cawzT1VZ4HvV0gaRl/wtfkdYVu0QuzwYe0m5xAyWdGuidra8cosvUgDGZBb
+            Zitdgc+C93fpcT8UpA==
+            -----END CERTIFICATE-----
+  # AD group -> Argo CD role. The local `admin` account stays enabled as
+  # break-glass; admin.enabled is deliberately never set to false.
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-rbac-cm
+      data:
+        policy.default: role:readonly
+        scopes: '[groups]'
+        policy.csv: |
+          g, k8s-argocd-admins, role:admin
+          g, k8s-admins, role:admin

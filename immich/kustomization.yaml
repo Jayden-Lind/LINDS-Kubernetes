@@ -2,4 +2,5 @@ namespace: immich
 
 resources:
   - immich-pvc.yaml
+  - immich-config.yaml
   - immich.yaml
