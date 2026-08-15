@@ -126,6 +126,21 @@ validates correctly once supplied:
 | Immich | `NODE_EXTRA_CA_CERTS` |
 | Vault | `oidc_discovery_ca_pem` |
 
+**Argo CD needs a restart after `rootCA` changes.** It reads `rootCA` when it
+builds its HTTP transport at *startup*. Editing `argocd-cm` hot-reloads the
+OIDC provider but reuses the stale transport, so a correct `rootCA` appears to
+do nothing and login keeps failing with `x509: certificate signed by unknown
+authority` — on a pod that has been running since before the change. The
+ConfigMap will look right the whole time. After changing it:
+
+```bash
+kubectl -n argocd rollout restart deploy/argocd-server
+```
+
+Give it ~30s afterwards: the OIDC provider initialises lazily on first use, so
+requests during warm-up can return 500 or 400 before settling into a 303
+redirect to Keycloak.
+
 Quick check from inside any pod — the second command should return 200:
 
 ```bash
