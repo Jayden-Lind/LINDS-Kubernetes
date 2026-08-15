@@ -10,6 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-15-keycloak-ad-sso-design.md`
 
+**Status: phases 1 and 2 implemented and verified in the live cluster
+(2026-08-15).** Keycloak runs two clustered replicas on separate nodes,
+AD federation imports exactly the `k8s-users` members, tokens carry the flat
+`groups` claim, and Grafana offers Keycloak sign-in alongside its local admin.
+Deviations found during execution are recorded in Task 0 and in the notes on
+Tasks 4, 6 and 7. The one check still outstanding is the interactive browser
+login and role-demotion test in Task 6 Steps 7-8, which needs a human.
+
 ## Global Constraints
 
 - Keycloak server and operator version: **26.5.7**. Sourced from `https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5.7/kubernetes/`.
