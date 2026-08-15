@@ -16,7 +16,7 @@
 - keycloak-config-cli image: **`quay.io/adorsys/keycloak-config-cli:6.5.1-26.5.5`**. Keycloak's minor line must never move ahead of config-cli's.
 - **Never set `spec.image` on the `Keycloak` CR.** The operator supplies `quay.io/keycloak/keycloak:26.5.7` via its own `RELATED_IMAGE_KEYCLOAK` env var. Setting `spec.image` makes the operator assume a pre-augmented image and start with `--optimized`, which fails to boot on the stock image.
 - Realm name: `linds`. The `master` realm is never federated to AD.
-- AD base DN: `DC=linds,DC=com,DC=au`. Groups OU: `OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au`.
+- AD base DN: `DC=linds,DC=com,DC=au`. Groups OU: `OU=Kubernetes,DC=linds,DC=com,DC=au`.
 - LDAP `editMode` is `READ_ONLY` in every component. Keycloak must never write to AD.
 - Every ESO secret uses `creationPolicy: Orphan`, `deletionPolicy: Retain`, `refreshPolicy: OnChange`, `refreshTime: 1h`, store `vault-backend` / `ClusterSecretStore` — except `argocd-secret`, which stays `Merge`.
 - Nothing is applied with `kubectl apply`. Argo CD syncs `targetRevision: master` from GitHub, so a change is only live once merged to `master` and synced.
@@ -32,122 +32,76 @@ Local validation available: `kustomize` v5.8.1, `kubectl` (cluster access), `hel
 
 ---
 
-## Task 0: Active Directory prerequisites (manual, run by Jayden)
+## Task 0: Active Directory prerequisites — COMPLETE (2026-08-15)
 
-These happen in AD and Vault, not in this repo. Nothing later works without them.
+Done directly over LDAPS with `ldap3`, binding as `LINDS\Administrator` from
+`~/.adcred`. Recorded here rather than as instructions, because the directory
+turned out not to match what the spec assumed and the differences matter.
 
-**Files:** none.
+**What changed from the original plan**
 
-**Interfaces:**
-- Produces: AD service account `svc-keycloak`, the `k8s-*` groups, and four populated Vault paths that Task 1 reads.
+- **Groups OU.** The spec assumed `OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au`.
+  There is no top-level `OU=Groups` in this domain — the existing one is
+  `OU=Groups,OU=Linds - Users`. Creating the specified DN would have added a
+  second, competing top-level `OU=Groups`. Now a new top-level
+  **`OU=Kubernetes,DC=linds,DC=com,DC=au`**.
+- **Email attribute.** **Not a single account in this domain has `mail`
+  populated** — there is no Exchange here. Every real user does have a UPN
+  (`jayden@linds.com.au`). The email LDAP mapper therefore reads
+  `userPrincipalName`, not `mail`; see Task 4. Mapping `email <- mail` would
+  have imported every user with an empty email, which Grafana and Immich both
+  key on.
 
-- [ ] **Step 1: Create the service account in AD**
+**What exists now**
 
-On a domain controller, in PowerShell as a Domain Admin:
+| Object | DN |
+|---|---|
+| OU | `OU=Kubernetes,DC=linds,DC=com,DC=au` |
+| Groups (10) | `CN=k8s-{users,admins,argocd-admins,grafana-admins,grafana-editors,immich-users,immich-admins,vault-admins,zabbix-admins,zabbix-users},OU=Kubernetes,DC=linds,DC=com,DC=au` |
+| Bind account | `CN=svc-keycloak,CN=Users,DC=linds,DC=com,DC=au` |
+| Members | `jayden` in `k8s-users` and `k8s-admins` |
 
-```powershell
-$pw = Read-Host -AsSecureString "svc-keycloak password"
-New-ADUser -Name "svc-keycloak" `
-  -UserPrincipalName "svc-keycloak@linds.com.au" `
-  -SamAccountName "svc-keycloak" `
-  -Path "CN=Users,DC=linds,DC=com,DC=au" `
-  -AccountPassword $pw `
-  -PasswordNeverExpires $true `
-  -CannotChangePassword $true `
-  -Enabled $true `
-  -Description "Keycloak LDAP federation bind account - read only"
-```
+`svc-keycloak` is enabled, `PASSWD_NOTREQD` clear, `DONT_EXPIRE_PASSWORD` set
+(`userAccountControl: 66048`), and holds no group membership beyond
+`Domain Users` — READ_ONLY federation needs nothing more.
 
-No group membership beyond the default `Domain Users` is needed. READ_ONLY federation requires only read access, which Domain Users already has.
+**Vault paths seeded** (`linds-keyvault/`), each generated fresh and never
+printed. The seeding refused to run if any path already existed, so a re-run
+cannot silently rotate a live credential:
 
-- [ ] **Step 2: Create the groups OU and the k8s-* groups**
+| Path | Keys |
+|---|---|
+| `keycloak-auth` | `username`, `password` |
+| `keycloak-bootstrap-admin` | `username`, `password` |
+| `keycloak-ldap` | `bindDn`, `bindCredential` |
+| `keycloak-client-secrets` | `argocd`, `grafana`, `immich`, `vault` |
 
-```powershell
-New-ADOrganizationalUnit -Name "Groups" -Path "DC=linds,DC=com,DC=au" -ErrorAction SilentlyContinue
-New-ADOrganizationalUnit -Name "Kubernetes" -Path "OU=Groups,DC=linds,DC=com,DC=au"
+**Verification performed** — all passed:
 
-$ou = "OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au"
-@(
-  "k8s-users","k8s-admins","k8s-argocd-admins",
-  "k8s-grafana-admins","k8s-grafana-editors",
-  "k8s-immich-users","k8s-immich-admins",
-  "k8s-vault-admins","k8s-zabbix-admins","k8s-zabbix-users"
-) | ForEach-Object {
-  New-ADGroup -Name $_ -GroupScope Global -GroupCategory Security -Path $ou
-}
-```
+- Bound as `svc-keycloak` over LDAPS with **full certificate validation against
+  `linds-CA`**, connecting by FQDN. This is the same trust path Keycloak's
+  truststore will use, so it is direct evidence that Task 3's LDAPS config will
+  work. (Binding by the IP in `~/.adcred` cannot validate — the DC cert is
+  issued to `JD-DC-01.linds.com.au`.)
+- Ran Keycloak's exact `customUserSearchFilter` as `svc-keycloak`: returns
+  exactly one user, `jayden`, with `givenName` and `sn` present.
+- Ran Keycloak's exact group query: all ten `k8s-*` groups visible,
+  `k8s-users` and `k8s-admins` with one member each.
+- **Gate exclusion proven:** user `bl` exists in AD but does not match the gate
+  filter. The filter genuinely excludes, rather than merely including.
+- Re-read `bindDn`/`bindCredential` **back out of Vault** and bound to AD with
+  those values — so what Keycloak will read is confirmed working, not just what
+  was generated.
 
-- [ ] **Step 3: Add yourself to the gate group and an admin group**
+**Re-running:** `scratchpad/ad_provision.py` is idempotent — it checks for each
+object before creating it and leaves an existing `svc-keycloak` password
+untouched.
 
-```powershell
-Add-ADGroupMember -Identity "k8s-users"  -Members "jayden"
-Add-ADGroupMember -Identity "k8s-admins" -Members "jayden"
-```
-
-Replace `jayden` with your actual `sAMAccountName` if it differs. Membership of `k8s-users` is what makes an account visible to Keycloak at all.
-
-- [ ] **Step 4: Verify the groups exist and the account can bind**
-
-```powershell
-Get-ADGroup -Filter 'Name -like "k8s-*"' -SearchBase "OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au" | Select-Object Name
-Get-ADUser -Identity svc-keycloak -Properties Enabled | Select-Object Name,Enabled
-```
-
-Expected: ten groups listed, `svc-keycloak` present and `Enabled: True`.
-
-- [ ] **Step 5: Seed the Vault paths**
-
-Generate a distinct random secret per client. Run from a machine with `vault` and a token:
-
-```bash
-export VAULT_ADDR=https://vault.linds.com.au
-
-vault kv put linds-keyvault/keycloak-auth \
-  username=keycloak \
-  password="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
-
-vault kv put linds-keyvault/keycloak-bootstrap-admin \
-  username=kcadmin \
-  password="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
-
-vault kv put linds-keyvault/keycloak-ldap \
-  bindDn='CN=svc-keycloak,CN=Users,DC=linds,DC=com,DC=au' \
-  bindCredential='<the password from Step 1>'
-
-vault kv put linds-keyvault/keycloak-client-secrets \
-  argocd="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)" \
-  grafana="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)" \
-  immich="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)" \
-  vault="$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)"
-```
-
-The `tr -d '/+='` matters: base64 padding and slashes end up inside LDAP filters, YAML and URLs later, and stripping them avoids a class of quoting bug that is painful to diagnose.
-
-- [ ] **Step 6: Verify the Vault paths read back**
-
-```bash
-for k in keycloak-auth keycloak-bootstrap-admin keycloak-ldap keycloak-client-secrets; do
-  echo "== $k"; vault kv get -format=json linds-keyvault/$k | jq -r '.data.data | keys[]'
-done
-```
-
-Expected: `username,password` / `username,password` / `bindCredential,bindDn` / `argocd,grafana,immich,vault`.
-
-- [ ] **Step 7: Confirm the bind actually works against LDAPS**
-
-From a pod in the cluster, so this tests the real network path and the real trust chain:
-
-```bash
-kubectl run ldaptest --rm -it --restart=Never --image=alpine:3.22 -- \
-  sh -c 'apk add -q openldap-clients ca-certificates >/dev/null && \
-    ldapsearch -x -H ldaps://jd-dc-01.linds.com.au:636 \
-      -D "CN=svc-keycloak,CN=Users,DC=linds,DC=com,DC=au" -W \
-      -b "OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au" "(objectClass=group)" cn'
-```
-
-Enter the `svc-keycloak` password when prompted. Expected: the ten `k8s-*` groups listed, and `result: 0 Success`.
-
-If this fails with `Can't contact LDAP server`, the cause is certificate trust inside the throwaway pod, not a Keycloak problem — add `-o tls_reqcert=never` to confirm the bind itself works, then move on. Keycloak's own trust comes from Task 3's truststore and is verified there.
+**Two observations, not blockers.** `~/.adcred` holds Domain Administrator
+credentials at mode `0644`; `chmod 600` is worth doing, and a delegated account
+scoped to `OU=Kubernetes` would suit a tool-read credential better. Separately,
+adding a user to `k8s-users` is now the single action that grants homelab
+access — worth remembering when onboarding anyone else in the family.
 
 ---
 
@@ -690,7 +644,7 @@ components:
         # The import gate. Only members of k8s-users ever become Keycloak
         # users, so service accounts, computer objects and disabled leavers
         # are never imported, and revoking all access is one group removal.
-        customUserSearchFilter: ["(memberOf=CN=k8s-users,OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au)"]
+        customUserSearchFilter: ["(memberOf=CN=k8s-users,OU=Kubernetes,DC=linds,DC=com,DC=au)"]
         fullSyncPeriod: ["86400"]
         changedSyncPeriod: ["900"]
         cachePolicy: ["DEFAULT"]
@@ -720,18 +674,23 @@ components:
               read.only: ["true"]
               always.read.value.from.ldap: ["true"]
               is.mandatory.in.ldap: ["true"]
+          # userPrincipalName, NOT mail. Verified 2026-08-15: not a single
+          # account in this domain has `mail` populated - there is no Exchange
+          # here - while every real user has a UPN of the form
+          # jayden@linds.com.au. Mapping email<-mail would import every user
+          # with an empty email, and both Grafana and Immich key on it.
           - name: email
             providerId: user-attribute-ldap-mapper
             config:
               user.model.attribute: ["email"]
-              ldap.attribute: ["mail"]
+              ldap.attribute: ["userPrincipalName"]
               read.only: ["true"]
               always.read.value.from.ldap: ["true"]
               is.mandatory.in.ldap: ["false"]
           - name: groups
             providerId: group-ldap-mapper
             config:
-              groups.dn: ["OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au"]
+              groups.dn: ["OU=Kubernetes,DC=linds,DC=com,DC=au"]
               group.name.ldap.attribute: ["cn"]
               group.object.classes: ["group"]
               membership.ldap.attribute: ["member"]

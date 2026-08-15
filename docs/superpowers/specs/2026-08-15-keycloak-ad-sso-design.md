@@ -1,7 +1,7 @@
 # Keycloak SSO federated to Active Directory
 
 Date: 2026-08-15
-Status: Approved, not yet implemented
+Status: Approved. AD and Vault prerequisites complete; cluster manifests in progress.
 
 ## Goal
 
@@ -36,6 +36,16 @@ Verified on 2026-08-15 rather than assumed:
 - CoreDNS resolves all three DC FQDNs from inside pods, and pods can open TCP
   636 to all three, including across the site link.
 - Base DN is `DC=linds,DC=com,DC=au`.
+- Top-level OUs are `Domain Controllers`, `PC's`, `Linds - Users`,
+  `Server-Accounts` and `Servers`. There is **no** top-level `OU=Groups`; the
+  existing groups OU is `OU=Groups,OU=Linds - Users`. The Kubernetes
+  entitlement groups therefore live in a new top-level
+  `OU=Kubernetes,DC=linds,DC=com,DC=au` rather than under a second, competing
+  `OU=Groups`.
+- **No account in the domain has `mail` populated** — there is no Exchange
+  here — but every real user has a `userPrincipalName` of the form
+  `jayden@linds.com.au`. Keycloak's email mapper therefore reads
+  `userPrincipalName`, not `mail`.
 
 Two consequences follow from the shared CA. Keycloak's LDAPS truststore is
 the CA the cluster already syncs from Vault, so no new trust material is
@@ -195,7 +205,7 @@ usernameLDAPAttribute: sAMAccountName
 rdnLDAPAttribute:      cn
 uuidLDAPAttribute:     objectGUID
 userObjectClasses:     person, organizationalPerson, user
-customUserSearchFilter: (memberOf=CN=k8s-users,OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au)
+customUserSearchFilter: (memberOf=CN=k8s-users,OU=Kubernetes,DC=linds,DC=com,DC=au)
 fullSyncPeriod:           86400
 changedSyncPeriod:        900
 ```
@@ -205,8 +215,11 @@ changedSyncPeriod:        900
 failover. FQDNs are used rather than IPs because the LDAPS certificates are
 issued to names and truststore validation is name-based.
 
-`trustEmail: true` is set because AD is authoritative for mail and the cluster
-has no SMTP configured, so verification email would dead-end.
+`trustEmail: true` is set because AD is authoritative for identity here and the
+cluster has no SMTP configured, so verification email would dead-end. Note the
+email mapper reads `userPrincipalName`: no account in this domain populates
+`mail`, so mapping from it would import every user with an empty email — which
+Grafana and Immich both key on.
 
 The `customUserSearchFilter` gates import on membership of `k8s-users` rather
 than carving an OU subtree. Service accounts, computer objects and disabled
@@ -216,7 +229,7 @@ single AD group removal.
 Group mapper (`group-ldap-mapper`):
 
 ```
-groupsDn:                  OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au
+groupsDn:                  OU=Kubernetes,DC=linds,DC=com,DC=au
 groupObjectClasses:        group
 groupNameLDAPAttribute:    cn
 membershipLDAPAttribute:   member
@@ -238,7 +251,7 @@ attached to every client, so every token carries a flat `groups` claim such as
 
 ### AD groups
 
-Created under `OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au`:
+Created under `OU=Kubernetes,DC=linds,DC=com,DC=au`:
 
 | Group | Grants |
 |---|---|
@@ -381,14 +394,17 @@ shape against a different app and are planned separately once phase 2 has been
 verified in the running cluster, so that a wrong assumption about the client
 pattern is caught once rather than baked into five integrations.
 
-## Prerequisites (manual, outside this repo)
+## Prerequisites — COMPLETE (2026-08-15)
 
-1. Create AD service account `svc-keycloak@linds.com.au`: password never
-   expires, no privileges beyond Domain Users read.
-2. Create `OU=Kubernetes,OU=Groups,DC=linds,DC=com,DC=au` and the `k8s-*`
-   groups listed above; add intended users to `k8s-users`.
-3. Seed the four Vault paths under `linds-keyvault/`, generating a distinct
-   random secret per OIDC client.
+Provisioned over LDAPS and recorded in the implementation plan's Task 0:
+
+1. AD service account `CN=svc-keycloak,CN=Users,DC=linds,DC=com,DC=au` —
+   enabled, password never expires, no privileges beyond Domain Users read.
+2. `OU=Kubernetes,DC=linds,DC=com,DC=au` and all ten `k8s-*` groups;
+   `jayden` added to `k8s-users` and `k8s-admins`.
+3. The four Vault paths under `linds-keyvault/`, each with a freshly generated
+   secret. The bind credential was read back out of Vault and used to
+   authenticate to AD, confirming what Keycloak will consume actually works.
 
 Everything else is delivered by commit and Argo CD sync. Nothing in this
 design is applied with `kubectl`.
