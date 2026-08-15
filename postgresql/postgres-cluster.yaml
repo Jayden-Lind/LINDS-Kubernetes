@@ -101,6 +101,12 @@ spec:
         superuser: true
         passwordSecret:
           name: immich-auth
+      # Keycloak owns only its own database - no superuser needed.
+      - name: keycloak
+        ensure: present
+        login: true
+        passwordSecret:
+          name: keycloak-auth
   affinity:
     nodeSelector:
       datacenter: "jd"
@@ -207,6 +213,17 @@ spec:
     name: linds-postgres
   name: immich
   owner: immich
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: linds-postgres-keycloak
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: keycloak
+  owner: keycloak
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
