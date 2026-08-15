@@ -76,6 +76,13 @@ while Keycloak upstream is at 26.7.1. **Keycloak's minor line must never move
 ahead of config-cli's.** A Renovate rule groups the two so they are bumped in
 the same PR instead of drifting apart silently.
 
+The server version is pinned *by the operator*: the operator Deployment sets
+`RELATED_IMAGE_KEYCLOAK=quay.io/keycloak/keycloak:26.5.7`, so bumping the
+operator bumps the server. **`spec.image` must never be set on the `Keycloak`
+CR.** Supplying a custom image makes the operator assume a pre-augmented build
+and start the server with `--optimized`, which fails to boot on the stock
+image.
+
 Operator manifests come from `keycloak/keycloak-k8s-resources` at the matching
 tag:
 
@@ -92,8 +99,7 @@ https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.5.7/kuberne
 ```
 applications/keycloak.yaml       Argo CD Application, path: keycloak/
 keycloak/kustomization.yaml      remote operator manifests + local resources
-keycloak/keycloak.yaml           Keycloak CR
-keycloak/ingress.yaml            nginx Ingress (cert-manager + mTLS mirror label)
+keycloak/keycloak.yaml           Keycloak CR (incl. operator-managed Ingress)
 keycloak/config-cli-job.yaml     PostSync hook Job
 keycloak/realm/linds.yaml        declarative realm: LDAP provider, groups, clients
 keycloak/README.md               Vault seeding + Vault OIDC runbook
@@ -115,11 +121,15 @@ datacenter=jd` to sit alongside Postgres. Notable fields:
 
 - `db`: `postgres`, host `linds-postgres-rw.postgresql-linds.svc.cluster.local`,
   database `keycloak`, credentials from the `keycloak-auth` secret.
-- `http.httpEnabled: true` and `ingress.enabled: false` — TLS terminates at
-  nginx, as Argo CD already does. The Ingress is hand-written so it carries the
-  `cert-manager.io/cluster-issuer: linds-ca` annotation and the
-  `linds.com.au/mtls-mirror: "true"` label; external-dns then creates the DNS
-  record from the Ingress with no further configuration.
+- `http.httpEnabled: true` — TLS terminates at nginx, as Argo CD already does.
+- `ingress.enabled: true` with `className: nginx`. The CRD exposes
+  `ingress.annotations` and `ingress.labels`, so the operator-managed Ingress
+  can carry the `cert-manager.io/cluster-issuer: linds-ca` annotation and the
+  `linds.com.au/mtls-mirror: "true"` label directly. No hand-written Ingress is
+  needed, and external-dns creates the DNS record from it with no further
+  configuration. (An earlier draft of this design hand-wrote the Ingress and
+  set `ingress.enabled: false`; inspecting the 26.5.7 CRD showed the operator
+  supports everything required, so the extra file was dropped.)
 - `proxy.headers: xforwarded` — required behind the nginx.org controller.
   Without it Keycloak builds redirect URLs with the wrong scheme and every
   login loops.
