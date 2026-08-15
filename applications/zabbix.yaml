@@ -186,6 +186,14 @@ spec:
                 subPath: 00-gzip.conf
                 readOnly: true
             extraEnv:
+              # The chart never sets these for the web tier - its env block is
+              # only postgresAccess plus whatever is listed here. Without
+              # ZBX_SERVER_HOST, zabbix.conf.php leaves $ZBX_SERVER unset, so
+              # the frontend has no idea where the server is and System
+              # Information permanently reports "Zabbix server is running: No"
+              # (which also disables Execute now, queue and script actions).
+              - { name: ZBX_SERVER_HOST, value: "zabbix-zabbix-server" }
+              - { name: ZBX_SERVER_PORT, value: "10051" }
               - { name: ZBX_SERVER_NAME, value: "LINDS-Zabbix" }
               - { name: PHP_TZ, value: "Australia/Melbourne" }
               - { name: ZBX_DB_VERIFY_HOST, value: "false" }
