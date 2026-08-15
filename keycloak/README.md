@@ -100,11 +100,45 @@ Keycloak is a single point of failure for all of them.
 3. Add the matching `env:` entry to `config-cli-job.yaml`.
 4. Give the app its own key with an explicit `data:` ExternalSecret — never
    `dataFrom: extract`, which would hand it every other client's secret.
+5. **Give the app `linds-CA`.** Add its namespace to the `linds-ca-cert`
+   ClusterExternalSecret and point the app at the mounted PEM. This is not
+   optional and it is easy to miss, because the browser half of the login works
+   without it — see below.
+
+## The trust gap every OIDC client hits
+
+A login that reaches the app and *then* fails with "failed to get token" or
+`x509: certificate signed by unknown authority` is this:
+
+- The **browser** leg works with no configuration — domain-joined clients trust
+  `linds-CA` through AD's root store.
+- The **token exchange** is a separate server-to-server call from inside the
+  app's pod, and pods trust only the public CA bundle.
+
+Each app has its own setting for this. Use the scoped one rather than altering
+the pod's global trust, and never the "skip TLS verify" option — `linds-CA`
+validates correctly once supplied:
+
+| App | Setting |
+|---|---|
+| Grafana | `auth.generic_oauth.tls_client_ca` |
+| Argo CD | `oidc.config.rootCA` in `argocd-cm` |
+| Immich | `NODE_EXTRA_CA_CERTS` |
+| Vault | `oidc_discovery_ca_pem` |
+
+Quick check from inside any pod — the second command should return 200:
+
+```bash
+curl -sI https://keycloak.linds.com.au/realms/linds/.well-known/openid-configuration
+curl -s -o /dev/null -w '%{http_code}\n' --cacert /path/to/ca.crt \
+  https://keycloak.linds.com.au/realms/linds/.well-known/openid-configuration
+```
 
 ## Troubleshooting
 
 | Symptom | Cause |
 |---|---|
+| "Failed to get token from provider" after returning from Keycloak | The client pod does not trust `linds-CA` — see the trust-gap section above |
 | Login loops, or redirects to `http://` | `proxy.headers: xforwarded` missing |
 | HTTP 400 at login | Large OIDC cookies; set `nginx.org/proxy-buffer-size` on the Ingress |
 | `PKIX path building failed` in sync logs | `linds-ca-cert` absent from this namespace, or holding base64 instead of raw PEM |

@@ -332,6 +332,36 @@ prevents click-ops drift. Auto-registration is enabled.
 with the Keycloak IdP signing certificate mounted into the web container, and
 JIT provisioning mapping the SAML group attribute to Zabbix user groups.
 
+## Every OIDC client must be given linds-CA explicitly
+
+Found the hard way when Grafana's first login failed with *"Failed to get
+token from provider"* / `x509: certificate signed by unknown authority`.
+
+The browser leg of an OIDC login succeeds without any work, because
+domain-joined clients trust `linds-CA` through AD's distributed root store.
+**The token exchange is a separate, server-to-server call made from inside the
+client's pod**, and pods trust only the public CA bundle. So the login gets all
+the way back to the app and *then* fails.
+
+This affects every integration in this design. It is not a Grafana quirk, and
+the earlier claim in "Environment facts" that domain-joined clients already
+trust the login page is true but irrelevant to this leg.
+
+`linds-ca-cert` must therefore be synced into each consuming namespace, and
+each app pointed at it using its own mechanism:
+
+| App | Mechanism |
+|---|---|
+| Grafana | `auth.generic_oauth.tls_client_ca` + `extraSecretMounts` (implemented) |
+| Argo CD | `oidc.config.rootCA` in `argocd-cm` (inline PEM) |
+| Immich | `NODE_EXTRA_CA_CERTS` pointing at the mounted PEM |
+| Vault | `oidc_discovery_ca_pem` on the auth method |
+| Zabbix | SAML validates the IdP signing certificate rather than a TLS chain, so it is affected only if the frontend fetches IdP metadata over HTTPS |
+
+Prefer a scoped setting over changing a pod's global trust store, and never
+reach for the "skip TLS verification" option — `linds-CA` is a real CA whose
+chain validates correctly once supplied.
+
 ## Known gaps and risks
 
 **Vault configuration is not declarative.** This repo has no Terraform or
