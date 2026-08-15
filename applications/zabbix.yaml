@@ -42,6 +42,18 @@ spec:
               dbCreateUpgradeJob:
                 image:
                   tagSuffix: "20250802113243"
+                # This PreSync hook must run next to the database. Scheduled at
+                # linds it read dbversion over the saturated link, got an empty
+                # result back, concluded the schema was missing and tried to
+                # recreate all 207 tables - which aborts the transaction and
+                # leaves the hook running until it is killed, blocking every
+                # Argo sync behind it. (Nothing was applied; the transaction
+                # rolls back.) The template's own nodeSelector comes from
+                # zabbixServer.nodeSelector, which would pin the server too, so
+                # set it here instead - safe while that value stays empty.
+                extraPodSpecs:
+                  nodeSelector:
+                    datacenter: jd
             image:
               # Oracle Linux base instead of the global alpine tag: Alpine's
               # libcurl 8.21.0 leaks memory and file descriptors on TLS
