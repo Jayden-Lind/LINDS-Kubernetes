@@ -17,6 +17,7 @@ configMapGenerator:
       - config/inventory.yml
       - config/bootstrap.yml
       - config/hostgroups.yml
+      - config/proxies.yml
       - config/templates.yml
       - config/hosts.yml
       - config/template_tweaks.yml

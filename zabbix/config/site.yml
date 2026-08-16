@@ -38,6 +38,11 @@
       ansible.builtin.import_tasks: hostgroups.yml
       tags: [hostgroups]
 
+    # Before hosts: a host cannot name a proxy that does not exist yet.
+    - name: Proxies
+      ansible.builtin.import_tasks: proxies.yml
+      tags: [proxies]
+
     - name: Templates
       ansible.builtin.import_tasks: templates.yml
       tags: [templates]

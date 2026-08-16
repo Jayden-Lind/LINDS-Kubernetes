@@ -279,6 +279,78 @@ spec:
               - { name: ZBX_UNSAFEUSERPARAMETERS, value: "0" }
               - { name: DEBUG_MODE,              value: "3" }
 
+          # A proxy at the linds site, so the hosts that live there are polled
+          # from 0.4ms away instead of 13ms across the inter-site link.
+          # Measured from the two sites (ICMP avg):
+          #
+          #   target            from linds    from jd
+          #   192.168.6.1        0.42 ms      13.10 ms
+          #   192.168.6.205      0.48 ms      12.79 ms
+          #   192.168.6.210      1.94 ms      13.99 ms
+          #   10.3.1.50          0.40 ms      12.92 ms
+          #   10.0.50.246       14.71 ms       0.19 ms
+          #
+          # Everything is routed and reachable from both sites, so this buys
+          # latency and link resilience, not connectivity. The active server
+          # sits at jd (it follows Postgres), which is why the linds hosts were
+          # paying the crossing on every single check.
+          zabbixProxy:
+            enabled: true
+            replicaCount: 1
+            # Must match the proxy object the playbook registers - see
+            # zabbix/config/proxies.yml. The server rejects an unknown proxy.
+            ZBX_HOSTNAME: linds
+            # Active mode: the proxy dials out to the server, so there is no
+            # ingress or NodePort to expose. It also buffers locally while the
+            # link is down and catches up afterwards, which is the second
+            # reason to want it.
+            ZBX_PROXYMODE: 0
+            ZBX_SERVER_HOST: zabbix-zabbix-server
+            ZBX_SERVER_PORT: 10051
+            ZBX_TIMEOUT: 10
+            ZBX_DEBUGLEVEL: 3
+            image:
+              # NOT the global alpine tag. LINDS-Proxmox-01 carries 22 HTTP
+              # agent items polling the Proxmox API over TLS, and once that
+              # host moves here the proxy inherits exactly the libcurl leak
+              # documented on zabbixServer above (~112 MiB/hr, OOM at the
+              # memory limit every ~14h). ol ships libcurl 8.12.1.
+              # Revert to alpine at the same time as the server, not before.
+              repository: zabbix/zabbix-proxy-sqlite3
+              tag: ol-7.4-latest
+              pullPolicy: Always
+            # The chart renders no volume for the proxy, so SQLite lives in the
+            # container's writable layer. That is the right call here: the only
+            # storage class available is democratic-csi iSCSI backed by
+            # 10.0.50.246 *at jd*, so a "persistent" proxy database would write
+            # every sample back across the link this proxy exists to avoid.
+            # The cost of ephemeral is the unsent buffer on restart.
+            resources:
+              requests: { cpu: 100m, memory: 256Mi }
+              limits: { memory: 512Mi }
+            nodeSelector:
+              datacenter: linds
+            extraEnv:
+              # Almost every item on the linds hosts is SNMP (~800 of ~900),
+              # so the SNMP pollers are the ones that matter.
+              - { name: ZBX_STARTSNMPPOLLERS, value: "4" }
+              - { name: ZBX_STARTPOLLERS, value: "5" }
+              - { name: ZBX_STARTPINGERS, value: "2" }
+              # Network discovery runs here now; the default of 1 discoverer
+              # would walk two /24s serially.
+              - { name: ZBX_STARTDISCOVERERS, value: "3" }
+              - { name: ZBX_CACHESIZE, value: "64M" }
+              - { name: ZBX_HISTORYCACHESIZE, value: "32M" }
+              # How long the proxy keeps data the server has not collected.
+              - { name: ZBX_PROXYOFFLINEBUFFER, value: "24" }
+              - { name: ZBX_ENABLEREMOTECOMMANDS, value: "0" }
+            extraPodSpecs:
+              # Same reasoning as the server and web tiers: the 4-dot service
+              # name makes the default ndots:5 walk every search domain first.
+              dnsConfig:
+                options:
+                  - { name: ndots, value: "2" }
+
           zabbixJavaGateway:
             enabled: true
             image:

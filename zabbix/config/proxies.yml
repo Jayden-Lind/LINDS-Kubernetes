@@ -1,0 +1,19 @@
+---
+# The linds-site proxy. The pod itself is the zabbixProxy component in
+# applications/zabbix.yaml; this is the matching object inside Zabbix, without
+# which the server rejects the proxy's connection as unknown.
+#
+# The name here and ZBX_HOSTNAME there must be identical, and Zabbix compares
+# them case-sensitively.
+#
+# Active mode: the proxy opens the connection to the server, so nothing has to
+# be exposed at the linds end. In this direction the server only ever accepts,
+# which is why there is an address allowlist rather than an address to dial.
+- name: Zabbix proxy (linds)
+  community.zabbix.zabbix_proxy:
+    proxy_name: linds
+    description: >-
+      Polls the linds-site hosts and runs discovery on 192.168.6.0/24 and
+      10.3.1.0/24. Pinned to datacenter=linds.
+    operating_mode: active
+    state: present
