@@ -1,19 +1,126 @@
 ---
-# One rule, ICMP-only, over the jd server VLAN. It populates the "Discovered
-# hosts" group, which is why most hosts are in it.
-#
-# Note the discovery *action* that would normally act on these events
-# ("Auto discovery. Linux servers.") is disabled, so this rule surfaces devices
-# without creating hosts for them.
-- name: Local network discovery
+# Network discovery, split by site so each scan originates next to the thing it
+# is scanning. Everything is routed and reachable from both sites, so this is
+# about latency, not connectivity - the linds subnets measure ~0.4ms from the
+# linds proxy and ~13ms from the server at jd.
+
+- name: Discovery rules
   community.zabbix.zabbix_discovery_rule:
-    name: Local network
-    iprange: 10.0.50.0/24
+    name: "{{ item.name }}"
+    iprange: "{{ item.iprange }}"
     delay: 1h
     status: enabled
-    dchecks:
-      - type: ICMP
-        uniq: false
-        # Name discovered devices by reverse DNS rather than by IP.
-        host_source: DNS
+    proxy: "{{ item.proxy | default(omit) }}"
+    dchecks: "{{ item.dchecks }}"
     state: present
+  loop:
+    # Unchanged: run from the server, which is local to this subnet.
+    - name: Local network
+      iprange: 10.0.50.0/24
+      dchecks:
+        - type: ICMP
+          uniq: false
+          host_source: DNS
+
+    # The linds subnets. Both carry an SNMP check as well as ICMP, for two
+    # reasons. It identifies what a device actually is rather than just that it
+    # answers ping, and - more importantly - Zabbix matches a discovered device
+    # to an existing host on IP *plus interface type plus discovery source*.
+    # Every host already monitored on these subnets has an SNMP interface, so
+    # an ICMP-only scan would match none of them and the auto-create action
+    # below would cheerfully build duplicate agent-interface copies of hosts
+    # that already exist.
+    - name: linds - 192.168.6.0/24
+      iprange: 192.168.6.0/24
+      proxy: linds
+      # host_source: IP, not DNS. The proxy runs inside Kubernetes, so its
+      # reverse lookups are answered by CoreDNS - 10.3.1.100 comes back as
+      # "10-3-1-100.cilium-agent.kube-system.svc.k8s.linds.com.au", which would
+      # become the technical name of any host created from it. IP gives stable,
+      # readable names, and anything worth a real name gets promoted into
+      # hosts.yml by hand anyway.
+      dchecks: &linds_dchecks
+        - type: ICMP
+          uniq: false
+          host_source: IP
+        - type: SNMPv2
+          ports: "161"
+          # sysDescr. Returned as the discovered value, so it shows up in
+          # Monitoring - Discovery next to each device.
+          key: .1.3.6.1.2.1.1.1.0
+          snmp_community: "{$SNMP_COMMUNITY}"
+          uniq: false
+          host_source: IP
+
+    - name: linds - 10.3.1.0/24
+      iprange: 10.3.1.0/24
+      proxy: linds
+      dchecks: *linds_dchecks
+  loop_control:
+    label: "{{ item.name }}"
+
+# 10.0.80.0/24 (management and UniFi devices) is deliberately not scanned yet.
+# Adding it is one more entry in the loop above with proxy: linds - it measured
+# 0.39ms from linds and 13.7ms from jd, so it belongs to the proxy when it goes
+# in.
+
+# Auto-creates a host for anything found on the linds subnets. Note this is the
+# one place where objects appear in Zabbix that are not described in this
+# repository: the action is code, the hosts it produces are runtime state.
+# hosts.yml is unaffected - it never prunes, and force: true applies only to
+# the hosts it names.
+- name: Create hosts found by linds discovery
+  community.zabbix.zabbix_action:
+    name: Auto-create linds discovered hosts
+    event_source: discovery
+    status: enabled
+    # Discovery actions have no escalation, but the module reads esc_period
+    # unconditionally and raises a bare KeyError without it.
+    esc_period: 1h
+    conditions:
+      # Only act on devices that are up, and only for the two linds rules -
+      # "Local network" at jd stays observational.
+      - type: discovery_status
+        operator: equals
+        value: up
+      - type: discovery_rule
+        operator: equals
+        value: "linds - 192.168.6.0/24"
+      - type: discovery_rule
+        operator: equals
+        value: "linds - 10.3.1.0/24"
+      # Hands off the hosts this repository manages. "Add host" against an
+      # existing host is a harmless no-op, but add_to_host_group and
+      # link_to_template are not: without this the action linked ICMP Ping to
+      # four managed hosts, gave all five an agent interface, and put the iDrac
+      # in "Discovered hosts". hosts.yml then could not reconcile them, because
+      # Zabbix refuses to delete an interface an item is bound to.
+      #
+      # One condition with a comma-separated list, not several - conditions of
+      # the same type are OR'd under `andor`, so separate "not in" conditions
+      # would evaluate true for every address.
+      #
+      # Keep this list in step with the linds hosts in hosts.yml.
+      # "<>" not "not in": for a Host IP condition Zabbix accepts only = and <>,
+      # where = means "is in the listed ranges". The generic "not in" operator
+      # is rejected outright for this condition type.
+      - type: host_IP
+        operator: "<>"
+        value: "192.168.6.1,192.168.6.205,192.168.6.210,192.168.6.240,10.3.1.50"
+    # andor is exactly the semantics wanted here: conditions of the same type
+    # are OR'd and different types are AND'd, giving
+    # (rule 192.168.6.0/24 OR rule 10.3.1.0/24) AND status up.
+    # No formulaid on the conditions - Zabbix rejects it unless evaltype is
+    # custom_expression.
+    eval_type: andor
+    operations:
+      # A host discovered by a rule that ran on a proxy is assigned to that
+      # proxy automatically, so there is nothing to set here for that.
+      - type: add_host
+      - type: add_to_host_group
+        host_groups: [Discovered hosts]
+      # ICMP Ping only. These are unidentified devices; something that answers
+      # ping gets availability monitoring and nothing more until a human
+      # decides what it is and promotes it into hosts.yml.
+      - type: link_to_template
+        templates: [ICMP Ping]

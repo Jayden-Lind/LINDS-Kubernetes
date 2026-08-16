@@ -80,6 +80,76 @@ git disagree.
    `env:` entry in `config-job.yaml`, and is read with `lookup('env', ...)`.
 4. Commit. Never `kubectl apply` — Argo CD self-heals from git HEAD.
 
+## Two sites, one proxy
+
+The active server follows Postgres and therefore lives at **jd**, so every check
+against a linds-side host used to cross the inter-site link. A Zabbix proxy runs
+at linds (`zabbixProxy` in `applications/zabbix.yaml`, pinned to
+`datacenter: linds`) and polls those hosts locally.
+
+Measured ICMP averages from each site:
+
+| target | from linds | from jd |
+|---|---|---|
+| 192.168.6.1 / .205 / .210 | 0.42 / 0.48 / 1.94 ms | 13.10 / 12.79 / 13.99 ms |
+| 10.3.1.50 | 0.40 ms | 12.92 ms |
+| 10.0.50.246 | 14.71 ms | 0.19 ms |
+
+Everything is routed and reachable from both sites, so this buys latency and
+link resilience, not connectivity. The proxy is **active mode** — it dials out
+to the server, so nothing is exposed at the linds end, and it buffers locally
+while the link is down.
+
+Three things about it are deliberate and easy to undo by accident:
+
+- **It runs `ol-7.4-latest`, not the global alpine tag.** `LINDS-Proxmox-01`
+  polls the Proxmox API over TLS, so the proxy is exposed to the same Alpine
+  libcurl leak already worked around on the server.
+- **SQLite is ephemeral.** The only storage class here is democratic-csi iSCSI
+  backed by `10.0.50.246` *at jd*, so a persistent proxy database would write
+  every sample back across the link the proxy exists to avoid.
+- **`proxies.yml` must be registered before hosts reference it**, and the name
+  there must match `ZBX_HOSTNAME` exactly — Zabbix compares case-sensitively and
+  rejects an unknown proxy.
+
+Which side each host sits on is the `monitored_by` field in `hosts.yml`. Today:
+five hosts on the proxy (`192.168.6.1`, `LINDS-Proxmox-01`, `LINDS-Switch-01`,
+`LINDS-ESXi-02-iDrac`, `LINDS-TrueNAS-01`) and three on the server
+(`JD-Proxmox-02`, `jd-proxmox-02`, `jd-opnsense-01`).
+
+## Discovery
+
+Three rules, each running next to what it scans: `Local network` (10.0.50.0/24)
+on the server, and `linds - 192.168.6.0/24` and `linds - 10.3.1.0/24` on the
+proxy. `10.0.80.0/24` (management and UniFi) is deliberately not scanned yet —
+adding it is one more entry in the loop in `discovery.yml`.
+
+**The linds rules carry an SNMP check as well as ICMP, and that is load-bearing.**
+Zabbix matches a discovered device to an existing host on IP **plus interface
+type plus discovery source** — all three. Every host already monitored on those
+subnets has an SNMP interface, so an ICMP-only scan would match none of them and
+the auto-create action would build duplicate agent-interface copies of hosts that
+already exist. There is an open Zabbix bug on this shape
+([ZBX-24965](https://support.zabbix.com/browse/ZBX-24965)). Verified in practice:
+after the first run, 28 hosts were created and no IP ended up on two hosts.
+
+`host_source` is **IP** on the linds rules, not DNS. The proxy runs inside
+Kubernetes, so its reverse lookups are answered by CoreDNS — `10.3.1.100` comes
+back as `10-3-1-100.cilium-agent.kube-system.svc.k8s.linds.com.au`, which would
+otherwise become the host's technical name.
+
+Hosts created by discovery get `ICMP Ping` and land in `Discovered hosts`. They
+are **the one thing in Zabbix not described by this repository**: the action is
+code, the hosts it produces are runtime state. Promote anything worth real
+monitoring into `hosts.yml` by hand. Nothing prunes them, and `hosts.yml`'s
+`force: true` only touches the hosts it names.
+
+One caveat that bites when changing this: Zabbix fires discovery events on
+*status change*, so enabling an action after a rule has already run does nothing
+for devices it has already seen. Changing a rule's checks gives every device a
+new `dcheckid` and re-triggers discovery, which is the practical way to make an
+action apply to the current inventory.
+
 ## Templates
 
 Only the four templates Zabbix does not ship are here: VyOS/OPNsense, Dell
