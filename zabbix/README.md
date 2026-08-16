@@ -138,17 +138,27 @@ Kubernetes, so its reverse lookups are answered by CoreDNS — `10.3.1.100` come
 back as `10-3-1-100.cilium-agent.kube-system.svc.k8s.linds.com.au`, which would
 otherwise become the host's technical name.
 
-Hosts created by discovery get `ICMP Ping` and land in `Discovered hosts`. They
-are **the one thing in Zabbix not described by this repository**: the action is
-code, the hosts it produces are runtime state. Promote anything worth real
-monitoring into `hosts.yml` by hand. Nothing prunes them, and `hosts.yml`'s
-`force: true` only touches the hosts it names.
+**Auto-creating hosts is off.** It was enabled briefly and the result was
+noise: those subnets carry phones, laptops and other things that come and go, so
+each became a host with an ICMP Ping template and then alerted "Unavailable by
+ICMP ping" as it left the network — 28 hosts created, four alerting within the
+hour. It also reached into managed hosts, linking ICMP Ping to four of them and
+adding agent interfaces that `hosts.yml` could not then remove, because Zabbix
+refuses to delete an interface an item is bound to.
 
-One caveat that bites when changing this: Zabbix fires discovery events on
-*status change*, so enabling an action after a rule has already run does nothing
-for devices it has already seen. Changing a rule's checks gives every device a
-new `dcheckid` and re-triggers discovery, which is the practical way to make an
-action apply to the current inventory.
+The rules still scan, so Monitoring → Discovery shows what is on the network;
+nothing is created from it. Hosts worth monitoring go into `hosts.yml` by hand,
+which is also what keeps this repository authoritative.
+
+The action is kept as an explicit `state: absent` task rather than deleted from
+`discovery.yml` — the playbook never prunes, so removing the block would leave
+the action running in Zabbix forever.
+
+One caveat that bites when changing any of this: Zabbix fires discovery events
+on *status change*, so enabling an action after a rule has already run does
+nothing for devices it has already seen. Changing a rule's checks gives every
+device a new `dcheckid` and re-triggers discovery, which is the practical way to
+make an action apply to the current inventory.
 
 ## Templates
 
