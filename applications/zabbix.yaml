@@ -236,6 +236,20 @@ spec:
               - { name: ZBX_SERVER_HOST, value: "zabbix-zabbix-server" }
               - { name: ZBX_SERVER_PORT, value: "10051" }
               - { name: ZBX_SERVER_NAME, value: "LINDS-Zabbix" }
+              # Without this, SAML login dies at Keycloak with "Invalid
+              # redirect uri". index_sso.php builds the SP's
+              # AssertionConsumerServiceURL from the PHP request environment,
+              # and TLS terminates at the ingress - so the pod sees plain HTTP
+              # on 8080 and sends
+              # http://zabbix.linds.com.au:8080/index_sso.php?acs, which
+              # matches no redirect URI on the Keycloak client.
+              #
+              # baseurl overrides the auto-detection outright
+              # (index_sso.php:73-75). Preferred over the use_proxy_headers
+              # option on the next line of that file, because this depends on
+              # one value we already control rather than on the ingress
+              # emitting a correct X-Forwarded-Port.
+              - { name: ZBX_SSO_SETTINGS, value: '{"baseurl":"https://zabbix.linds.com.au"}' }
               - { name: PHP_TZ, value: "Australia/Melbourne" }
               - { name: ZBX_DB_VERIFY_HOST, value: "false" }
               - { name: ENABLE_WEB_ACCESS_LOG, value: "true" }
