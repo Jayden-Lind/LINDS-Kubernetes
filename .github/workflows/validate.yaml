@@ -60,3 +60,16 @@ jobs:
       - name: Validate Argo CD Applications
         run: |
           kubeconform ${KUBECONFORM_ARGS} applications/
+
+      # Syntax and structure only. Nothing in CI can reach the cluster, so the
+      # real check on the Zabbix playbook is the PostSync Job failing a sync.
+      - name: Lint the Zabbix configuration playbook
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-ansible
+          .venv-ansible/bin/pip install --quiet ansible-core
+          .venv-ansible/bin/ansible-galaxy collection install \
+            community.zabbix:==4.2.0
+          cd zabbix/config
+          ../../.venv-ansible/bin/ansible-playbook \
+            -i inventory.yml site.yml --syntax-check

@@ -1,0 +1,483 @@
+zabbix_export:
+  version: '7.4'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: 030fec1b6aca49488ab9fbd5a440f29d
+      template: 'Template OS VyOS SNMPv2'
+      name: 'Template OS VyOS SNMPv2'
+      groups:
+        - name: Templates
+      items:
+        - uuid: bdc785c3bdef49be94889fd561255fd2
+          name: 'Cpu load (1 min average per core)'
+          type: SNMP_AGENT
+          snmp_oid: 'UCD-SNMP-MIB::laLoad.1'
+          key: CpuLALoad.1
+          history: 90d
+          value_type: FLOAT
+          tags:
+            - tag: Application
+              value: CPU
+          triggers:
+            - uuid: e6fc24bd9c1a4d13bea8b095cbcc3558
+              expression: 'avg(/Template OS VyOS SNMPv2/CpuLALoad.1,5m)>5'
+              name: 'High CPU utilization on {HOST.NAME}'
+              priority: HIGH
+        - uuid: 00769174229a4023b457781ea0026b12
+          name: 'Cpu load (5 min average per core)'
+          type: SNMP_AGENT
+          snmp_oid: 'UCD-SNMP-MIB::laLoad.2'
+          key: CpuLALoad.2
+          history: 90d
+          value_type: FLOAT
+          tags:
+            - tag: Application
+              value: CPU
+        - uuid: 1562824f205f4f72afd2609f2ec23cef
+          name: 'Cpu load (15 min average per core)'
+          type: SNMP_AGENT
+          snmp_oid: 'UCD-SNMP-MIB::laLoad.3'
+          key: CpuLALoad.3
+          history: 90d
+          value_type: FLOAT
+          tags:
+            - tag: Application
+              value: CPU
+        - uuid: e474f41a830843ad9bf51e53c8aea49f
+          name: 'Free memory'
+          type: SNMP_AGENT
+          snmp_oid: 'UCD-SNMP-MIB::memTotalFree.0'
+          key: freeRam
+          delay: 2m
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+          triggers:
+            - uuid: 50d3483274504f7e8b06a54fd8e3ea7d
+              expression: 'last(/Template OS VyOS SNMPv2/freeRam)<100M'
+              name: 'Low free RAM memory on {HOST.NAME}'
+              priority: HIGH
+        - uuid: 084142546e3f4917b8f74ceecb90c5b0
+          name: 'Total memory'
+          type: SNMP_AGENT
+          snmp_oid: 'UCD-SNMP-MIB::memTotalReal.0'
+          key: totalRam
+          delay: 1h
+          history: 90d
+          units: B
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '1024'
+          tags:
+            - tag: Application
+              value: Memory
+      discovery_rules:
+        - uuid: 3eabd3d8be1644d5b39e770133f0f49f
+          name: 'Bgp Neighbors Discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},BGP4-MIB::bgpPeerRemoteAddr]'
+          key: bgpPeerRemoteAddr
+          delay: 5m
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          description: 1.3.6.1.2.1.15.3.1.7
+          item_prototypes:
+            - uuid: 887c9f5e0e6249c7b4eb810312491a43
+              name: 'bgpPeerAdminStatus.{#SNMPINDEX}'
+              type: SNMP_AGENT
+              snmp_oid: 'BGP4-MIB::bgpPeerAdminStatus.{#SNMPINDEX}'
+              key: 'bgpPeerAdminStatus[{#SNMPINDEX}]'
+              delay: 30s
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-bgpd
+            - uuid: 0c60fc31f9504f14b4999c19273dae02
+              name: 'bgpPeerState.{#SNMPINDEX}'
+              type: SNMP_AGENT
+              snmp_oid: 'BGP4-MIB::bgpPeerState.{#SNMPINDEX}'
+              key: 'bgpPeerState[{#SNMPINDEX}]'
+              delay: 30s
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-bgpd
+          trigger_prototypes:
+            - uuid: fe0adce96d17476bafe6a61011a4b882
+              expression: 'last(/Template OS VyOS SNMPv2/bgpPeerState[{#SNMPINDEX}])<>6 and last(/Template OS VyOS SNMPv2/bgpPeerAdminStatus[{#SNMPINDEX}])=2'
+              name: 'Bgp neighbor {#SNMPINDEX} is DOWN'
+              priority: HIGH
+        - uuid: 58298ae16059435cab1bb1c1ecf8654e
+          name: Interfaces
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFNAME}, ifName, {#IFALIAS}, ifAlias]'
+          key: ifName
+          delay: 15m
+          filter:
+            conditions:
+              - macro: '{#IFNAME}'
+                value: '^lo|^erspan|^gretap|^veth|^br[0-9]{12}$|^ppp|^ipoe'
+                operator: NOT_MATCHES_REGEX
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 6c9b4d75a9974fbdb2ca5e7ec0c5b696
+              name: 'Int $1: In'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifHCInOctets.{#SNMPINDEX}'
+              key: 'ifHCInOctets[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: b6b4130679a64b658427b2dd4df5fdf9
+              name: 'Int $1: pps-In'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifHCInUcastPkts.{#SNMPINDEX}'
+              key: 'ifHCInUcastPkts[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: pps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: 7e52ddd0a26d41ed82ee2b6f77c30ffc
+              name: 'Int $1: Out'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifHCOutOctets.{#SNMPINDEX}'
+              key: 'ifHCOutOctets[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: bps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+                - type: MULTIPLIER
+                  parameters:
+                    - '8'
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: e1402a2ab4e241f096de43691feb44c7
+              name: 'Int $1: pps-Out'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifHCOutUcastPkts.{#SNMPINDEX}'
+              key: 'ifHCOutUcastPkts[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: pps
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: a213798333bc4aecba5cb6d330fe1f13
+              name: 'Int $1: rx discards'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifInDiscards.{#SNMPINDEX}'
+              key: 'ifInDiscards[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: discards
+              description: |
+                ifInErrors (.1.3.6.1.2.1.2.2.1.14) 
+                These are counted as no buffers on interface
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: dc09ba13a14d4834bcab8593ee852ffc
+              name: 'Int $1: rx errors'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifInErrors.{#SNMPINDEX}'
+              key: 'ifInErrors[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: errors
+              description: |
+                ifInErrors (.1.3.6.1.2.1.2.2.1.14) 
+                Input counter errors on interface
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: 9179aede3597431aae515c25c387aa43
+              name: 'Int $1: tx discards'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutDiscards.{#SNMPINDEX}'
+              key: 'ifOutDiscards[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: discards
+              description: |
+                ifOutDiscards (.1.3.6.1.2.1.2.2.1.19) 
+                These are counted as no buffers on interface
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: cb4db42cd41944d28fd2591bffdd373c
+              name: 'Int $1: tx errors'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutErrors.{#SNMPINDEX}'
+              key: 'ifOutErrors[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: errors
+              description: |
+                ifOutErrors (.1.3.6.1.2.1.2.2.1.20) 
+                Output counter errors on interface
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+            - uuid: 89614457fbaf43f2bd288b9240fd8999
+              name: 'Int $1: tx qlen'
+              type: SNMP_AGENT
+              snmp_oid: 'IF-MIB::ifOutQLen.{#SNMPINDEX}'
+              key: 'ifOutQLen[{#IFNAME}]'
+              delay: 3m
+              history: 90d
+              value_type: FLOAT
+              units: pkts
+              description: |
+                ifOutQLen (.1.3.6.1.2.1.2.2.1.21) 
+                This is the number of packets allowed to be on the output queue
+              preprocessing:
+                - type: CHANGE_PER_SECOND
+              tags:
+                - tag: Application
+                  value: 'Network Interfaces'
+          graph_prototypes:
+            - uuid: f5e55ed9009c4021803d16453c76fd7d
+              name: 'Util # {#IFNAME} - {#IFALIAS}'
+              graph_items:
+                - drawtype: GRADIENT_LINE
+                  color: 1A7C11
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifHCInOctets[{#IFNAME}]'
+                - sortorder: '1'
+                  drawtype: BOLD_LINE
+                  color: 0000DD
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifHCOutOctets[{#IFNAME}]'
+                - sortorder: '2'
+                  color: A54F10
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifInErrors[{#IFNAME}]'
+                - sortorder: '3'
+                  color: 6C59DC
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifOutErrors[{#IFNAME}]'
+                - sortorder: '4'
+                  color: 26C6DA
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifInDiscards[{#IFNAME}]'
+                - sortorder: '5'
+                  color: FC6EA3
+                  item:
+                    host: 'Template OS VyOS SNMPv2'
+                    key: 'ifOutDiscards[{#IFNAME}]'
+        - uuid: 4895d4361ba344a285466382a45cf5c3
+          name: 'Keepalived VRRP Instance'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},KEEPALIVED-MIB::vrrpInstanceName]'
+          key: vrrpInstance
+          delay: 15m
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          item_prototypes:
+            - uuid: 4634eafc22b74477b5e4ea28ff67a1e3
+              name: 'vrrpAdvertisementsInt $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceAdvertisementsInt.{#SNMPINDEX}'
+              key: 'vrrpInstanceAdvertisemenstInt[{#SNMPVALUE}]'
+              delay: '30'
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: e2827eaf810d42258ab6fa0ec26da388
+              name: 'vrrpEffectivePriority $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceEffectivePriority.{#SNMPINDEX}'
+              key: 'vrrpInstanceEffectivePriority[{#SNMPVALUE}]'
+              delay: 5m
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: 35f06c47b681420c94ef6e71f7451e50
+              name: 'vrrpInitialState $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceInitialState.{#SNMPINDEX}'
+              key: 'vrrpInstanceInitialState[{#SNMPVALUE}]'
+              delay: 30m
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: 44c8524f579c47928f30e8356119b68f
+              name: 'vrrpInstanceName $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceName.{#SNMPINDEX}'
+              key: 'vrrpInstanceName[{#SNMPVALUE}]'
+              delay: 30m
+              history: 90d
+              value_type: CHAR
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: fb0bdfec58464a05941071f6fbd54106
+              name: 'vrrpPrimaryInterface $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstancePrimaryInterface.{#SNMPINDEX}'
+              key: 'vrrpInstancePrimaryInterface[{#SNMPVALUE}]'
+              delay: 30m
+              history: 90d
+              value_type: CHAR
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: a59ff7ed3cc54d8995dfeefd21dd14ef
+              name: 'vrrpState $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceState.{#SNMPINDEX}'
+              key: 'vrrpInstanceState[{#SNMPVALUE}]'
+              delay: 30s
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+              trigger_prototypes:
+                - uuid: b5bbd84f127d4bdfbdfda24695c2ab92
+                  expression: 'change(/Template OS VyOS SNMPv2/vrrpInstanceState[{#SNMPVALUE}])<>0'
+                  name: 'VRRP state was changed'
+                  priority: HIGH
+            - uuid: ed931a160b064f2fa511901e57a36402
+              name: 'vrrpInstanceTrackPrimaryIf $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceTrackPrimaryIf.{#SNMPINDEX}'
+              key: 'vrrpInstanceTrackPrimaryIf[{#SNMPVALUE}]'
+              delay: 30s
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: f857500bf2434ee9be1332f7b0c71944
+              name: 'vrrpInstanceVipsStatus $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceVipsStatus.{#SNMPINDEX}'
+              key: 'vrrpInstanceVipsStatus[{#SNMPVALUE}]'
+              delay: 30s
+              history: 90d
+              description: 'Are all VIP of this VRRP instance enabled?'
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+              trigger_prototypes:
+                - uuid: 3d869bda7e20471996060edac2247d1c
+                  expression: 'change(/Template OS VyOS SNMPv2/vrrpInstanceVipsStatus[{#SNMPVALUE}])<>0'
+                  name: 'VRRP: virtual-address State change'
+                  status: DISABLED
+                  priority: AVERAGE
+            - uuid: 27363299f045402686b0b8d2c13a45f3
+              name: 'vrrpVirtualRouterId $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceVirtualRouterId.{#SNMPINDEX}'
+              key: 'vrrpInstanceVirtualRouterId[{#SNMPVALUE}]'
+              delay: 30m
+              history: 90d
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+            - uuid: 46c0c898da574307b19e1645df0f030a
+              name: 'vrrpWantedState $1'
+              type: SNMP_AGENT
+              snmp_oid: 'KEEPALIVED-MIB::vrrpInstanceWantedState.{#SNMPINDEX}'
+              key: 'vrrpInstanceWantedState[{#SNMPVALUE}]'
+              delay: 30s
+              history: 90d
+              description: 'Wanted state of this VRRP instance.'
+              tags:
+                - tag: Application
+                  value: Service-VRRP
+          trigger_prototypes:
+            - uuid: 263f2bac4ef74703884ba9b9b425b846
+              expression: 'last(/Template OS VyOS SNMPv2/vrrpInstanceInitialState[{#SNMPVALUE}])<>last(/Template OS VyOS SNMPv2/vrrpInstanceState[{#SNMPVALUE}])'
+              name: 'VRRP: virtual-address not in Initial State'
+              status: DISABLED
+              priority: HIGH
+      macros:
+        - macro: '{$SNMP_COMMUNITY}'
+          value: public
+  graphs:
+    - uuid: f21f8e839bfa4c76a430045b3e9f2f79
+      name: 'CPU load'
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          item:
+            host: 'Template OS VyOS SNMPv2'
+            key: CpuLALoad.1
+        - sortorder: '1'
+          drawtype: BOLD_LINE
+          color: F63100
+          item:
+            host: 'Template OS VyOS SNMPv2'
+            key: CpuLALoad.2
+        - sortorder: '2'
+          drawtype: BOLD_LINE
+          color: 2774A4
+          item:
+            host: 'Template OS VyOS SNMPv2'
+            key: CpuLALoad.3
+    - uuid: 84b480db5c2645d9ad578bdb87ef10de
+      name: 'Memory usage'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: B0BEC5
+          item:
+            host: 'Template OS VyOS SNMPv2'
+            key: totalRam
+        - sortorder: '1'
+          drawtype: FILLED_REGION
+          color: 1A7C11
+          item:
+            host: 'Template OS VyOS SNMPv2'
+            key: freeRam

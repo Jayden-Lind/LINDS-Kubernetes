@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zabbix-config
+  namespace: zabbix
+  annotations:
+    # Runs after the Helm release is healthy. The playbook reconciles rather
+    # than imports, so re-running on every sync is safe, and a bad
+    # configuration surfaces as a failed Argo CD sync instead of silent drift.
+    # Same reasoning as keycloak/config-cli-job.yaml.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      name: zabbix-config
+    spec:
+      restartPolicy: Never
+      # The frontend this talks to is pinned to jd, and the playbook is chatty
+      # enough that the inter-site link would show.
+      nodeSelector:
+        datacenter: jd
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: ansible
+          # Tag is the ansible-core version. community.zabbix is NOT part of
+          # ansible-core - it ships in the `ansible` community package, which
+          # this image does not include - so the collection is installed at
+          # start-up. That makes galaxy.ansible.com a dependency of every sync
+          # and of a disaster-recovery rebuild; the escape hatch, if that ever
+          # bites, is a purpose-built image the way claude-code/ does it.
+          image: docker.io/alpine/ansible:2.21.0
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              ansible-galaxy collection install --force \
+                -p "${ANSIBLE_COLLECTIONS_PATH}" \
+                community.zabbix:==4.2.0
+              exec ansible-playbook -i /config/inventory.yml /config/site.yml
+          env:
+            # The image runs as an unprivileged user with no writable home, and
+            # both ansible-galaxy and ansible-playbook want one.
+            - {name: HOME, value: /tmp}
+            - {name: ANSIBLE_COLLECTIONS_PATH, value: /tmp/collections}
+            - {name: ANSIBLE_LOCAL_TEMP, value: /tmp/.ansible}
+            - {name: ANSIBLE_REMOTE_TEMP, value: /tmp/.ansible}
+            # Cosmetic, but the module set emits a wall of them per task and it
+            # buries the actual result in the Job log.
+            - {name: ANSIBLE_DEPRECATION_WARNINGS, value: "False"}
+            # Plaintext in-cluster; TLS terminates at the ingress.
+            - {name: ZBX_API_HOST, value: zabbix-zabbix-web.zabbix.svc.cluster.local}
+            - {name: ZBX_API_PORT, value: "80"}
+            # Every value below comes from Vault through the
+            # zabbix-config-secrets ExternalSecret. None are in git.
+            - name: ZBX_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: admin_password}
+            - name: PVE_TOKEN_SECRET_JD
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: pve_token_secret_jd}
+            - name: PVE_TOKEN_SECRET_LINDS
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: pve_token_secret_linds}
+            - name: IPMI_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: ipmi_password}
+            - name: SNMPV3_AUTH_PASSPHRASE
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: snmpv3_auth_passphrase}
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: discord_webhook_url}
+            - name: ZBX_VIEWER_TOKEN
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: zbx_viewer_token}
+            - name: DISCORD_USER_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: zabbix-config-secrets, key: discord_user_password}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            # Three ConfigMaps rather than one: ConfigMap keys cannot contain a
+            # slash, so the directory structure the playbook expects has to be
+            # rebuilt from separate mounts.
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: config-templates, mountPath: /config/templates, readOnly: true}
+            - {name: config-media, mountPath: /config/media, readOnly: true}
+            - {name: config-vars, mountPath: /config/vars, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap: {name: zabbix-config}
+        - name: config-templates
+          configMap: {name: zabbix-config-templates}
+        - name: config-media
+          configMap: {name: zabbix-config-media}
+        - name: config-vars
+          configMap: {name: zabbix-config-vars}
+        - name: tmp
+          emptyDir: {}

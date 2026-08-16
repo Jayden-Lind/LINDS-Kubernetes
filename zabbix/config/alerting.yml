@@ -1,0 +1,148 @@
+---
+# Media types, the users they deliver to, and the actions that fire them.
+#
+# Order matters: an action's operation names both a media type and a user, so
+# both have to exist first.
+
+- name: Load the stock message templates
+  ansible.builtin.include_vars: vars/message_templates.yml
+
+# The webhook bodies live in config/media/*.js rather than inline. A 200-line
+# JavaScript program embedded in a YAML scalar is unreviewable, and an
+# indentation accident there silently changes the program.
+- name: Discord media type
+  community.zabbix.zabbix_mediatype:
+    name: Discord
+    type: webhook
+    status: enabled
+    webhook_script: "{{ lookup('file', 'media/discord.js') }}"
+    max_attempts: 3
+    attempt_interval: 10s
+    max_sessions: 0
+    process_tags: false
+    event_menu: false
+    message_templates: "{{ zbx_discord_message_templates }}"
+    webhook_params:
+      - {name: alert_message, value: "{ALERT.MESSAGE}"}
+      - {name: alert_subject, value: "{ALERT.SUBJECT}"}
+      # The webhook URL is bearer-equivalent: anyone holding it can post to the
+      # channel. From Vault, never from git.
+      - {name: discord_endpoint, value: "{{ lookup('env', 'DISCORD_WEBHOOK_URL') }}"}
+      - {name: event_date, value: "{EVENT.DATE}"}
+      - {name: event_id, value: "{EVENT.ID}"}
+      - {name: event_name, value: "{EVENT.NAME}"}
+      - {name: event_nseverity, value: "{EVENT.NSEVERITY}"}
+      - {name: event_opdata, value: "{EVENT.OPDATA}"}
+      - {name: event_recovery_date, value: "{EVENT.RECOVERY.DATE}"}
+      - {name: event_recovery_time, value: "{EVENT.RECOVERY.TIME}"}
+      - {name: event_severity, value: "{EVENT.SEVERITY}"}
+      - {name: event_source, value: "{EVENT.SOURCE}"}
+      - {name: event_tags, value: "{EVENT.TAGS}"}
+      - {name: event_time, value: "{EVENT.TIME}"}
+      - {name: event_update_action, value: "{EVENT.UPDATE.ACTION}"}
+      - {name: event_update_date, value: "{EVENT.UPDATE.DATE}"}
+      - {name: event_update_message, value: "{EVENT.UPDATE.MESSAGE}"}
+      - {name: event_update_status, value: "{EVENT.UPDATE.STATUS}"}
+      - {name: event_update_time, value: "{EVENT.UPDATE.TIME}"}
+      - {name: event_update_user, value: "{USER.FULLNAME}"}
+      - {name: event_value, value: "{EVENT.VALUE}"}
+      - {name: host_ip, value: "{HOST.IP}"}
+      - {name: host_name, value: "{HOST.NAME}"}
+      - {name: trigger_description, value: "{TRIGGER.DESCRIPTION}"}
+      - {name: trigger_id, value: "{TRIGGER.ID}"}
+      - {name: use_default_message, value: "true"}
+      # Was http://, which produced links that redirect on every alert.
+      - {name: zabbix_url, value: "https://zabbix.linds.com.au"}
+  no_log: true
+
+- name: ZBX Viewer media type
+  community.zabbix.zabbix_mediatype:
+    name: ZBX Viewer
+    type: webhook
+    status: enabled
+    description: |-
+      Please refer to setup guide here: https://zbx.vovanys.com/push/
+
+      Set token parameter with to your ZBXViewer application key.
+      When assigning ZBXViewer media to the Zabbix user - add user key into send to field.
+    webhook_script: "{{ lookup('file', 'media/zbx-viewer.js') }}"
+    max_attempts: 3
+    attempt_interval: 10s
+    max_sessions: 1
+    process_tags: false
+    event_menu: false
+    message_templates: "{{ zbx_zbx_viewer_message_templates }}"
+    webhook_params:
+      - {name: endpoint, value: "https://zbx.vovanys.com/push/sendPush_json.php"}
+      - {name: message, value: "{ALERT.MESSAGE}"}
+      - {name: title, value: "{ALERT.SUBJECT}"}
+      - {name: token, value: "{{ lookup('env', 'ZBX_VIEWER_TOKEN') }}"}
+  no_log: true
+
+# A notification-only account: it belongs to "No access to the frontend", so
+# its password can never be used to log in. It exists because the Discord
+# action addresses it as a recipient.
+- name: Discord notification user
+  community.zabbix.zabbix_user:
+    username: Discord
+    passwd: "{{ lookup('env', 'DISCORD_USER_PASSWORD') }}"
+    role_name: User role
+    usrgrps: [No access to the frontend]
+  no_log: true
+
+# Admin carries the media that actually deliver. Declared here so a rebuild
+# restores alerting without anyone re-pasting a webhook URL into the frontend.
+# Role and groups are stated to match what exists, not to change it.
+- name: Admin media
+  community.zabbix.zabbix_user:
+    username: Admin
+    # The module refuses to touch a user in a non-LDAP group without a
+    # password, even when only the media are changing. override_passwd
+    # defaults to false, so this is applied at creation and ignored
+    # afterwards - it never silently rotates the password out from under you.
+    passwd: "{{ lookup('env', 'ZBX_ADMIN_PASSWORD') }}"
+    role_name: Super admin role
+    usrgrps: [Zabbix administrators]
+    user_medias:
+      - mediatype: Discord
+        sendto: "{{ lookup('env', 'DISCORD_WEBHOOK_URL') }}"
+        active: true
+        period: "1-7,00:00-24:00"
+      - mediatype: ZBX Viewer
+        sendto: "{{ lookup('env', 'ZBX_VIEWER_TOKEN') }}"
+        active: true
+        period: "1-7,00:00-24:00"
+  no_log: true
+
+# Both actions fire on every trigger severity, with no escalation. That is
+# blunt but it is what is running, and narrowing it is a monitoring-policy
+# decision rather than part of this migration.
+- name: Trigger actions
+  community.zabbix.zabbix_action:
+    name: "{{ item.name }}"
+    event_source: trigger
+    status: enabled
+    esc_period: 1h
+    pause_in_maintenance: true
+    notify_if_canceled: true
+    pause_symptoms: true
+    conditions:
+      - type: trigger_severity
+        operator: ">="
+        value: "Not classified"
+    operations:
+      - type: send_message
+        media_type: "{{ item.media_type }}"
+        send_to_users: "{{ item.send_to_users }}"
+  loop:
+    # guest is addressed but has no media configured, so it receives nothing.
+    # Recorded as-is: removing a recipient is a behaviour change, not a
+    # migration.
+    - name: Discord webhook
+      media_type: Discord
+      send_to_users: [Admin, Discord, guest]
+    - name: Alert ZBX
+      media_type: ZBX Viewer
+      send_to_users: [Admin]
+  loop_control:
+    label: "{{ item.name }}"

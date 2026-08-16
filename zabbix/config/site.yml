@@ -1,0 +1,68 @@
+---
+# Reconciles this directory into the running Zabbix. Run as an Argo CD PostSync
+# hook; see ../config-job.yaml and ../README.md.
+#
+# Semantics are create-or-update, never prune: objects absent from these files
+# are left alone, so experimenting in the frontend stays cheap. The exceptions
+# are called out where they occur - anything writing an instance-wide singleton
+# (globals.yml, access.yml) sets every field it manages on every run.
+
+- name: Establish the Admin credential
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    # always: the token this leaves behind is needed by template_tweaks.yml, so
+    # a tag-limited run must not skip it.
+    - name: Bootstrap
+      ansible.builtin.import_tasks: bootstrap.yml
+      tags: [always]
+
+- name: Reconcile Zabbix configuration
+  hosts: zabbix_api
+  gather_facts: false
+  vars:
+    # Reuse the session the bootstrap play already established, rather than
+    # logging in a second time, for the handful of tasks that have to call the
+    # API directly (template_tweaks.yml).
+    zbx_auth_token: "{{ hostvars['localhost']['zbx_auth_token'] }}"
+    zbx_api_url: "{{ hostvars['localhost']['zbx_api_url'] }}"
+  tasks:
+    # Order is load-bearing: a host cannot join a group or link a template that
+    # does not exist yet, and an action's operation references both a media
+    # type and a user.
+    #
+    # Tags exist for running one section by hand while developing
+    # (`--tags hosts`). The Job always runs the whole thing.
+    - name: Host groups
+      ansible.builtin.import_tasks: hostgroups.yml
+      tags: [hostgroups]
+
+    - name: Templates
+      ansible.builtin.import_tasks: templates.yml
+      tags: [templates]
+
+    - name: Hosts
+      ansible.builtin.import_tasks: hosts.yml
+      tags: [hosts]
+
+    - name: Local template tweaks
+      ansible.builtin.import_tasks: template_tweaks.yml
+      tags: [tweaks]
+
+    - name: Alerting
+      ansible.builtin.import_tasks: alerting.yml
+      tags: [alerting]
+
+    - name: Network discovery
+      ansible.builtin.import_tasks: discovery.yml
+      tags: [discovery]
+
+    - name: Global settings
+      ansible.builtin.import_tasks: globals.yml
+      tags: [globals]
+
+    # Last, deliberately: the only step that can lock a person out.
+    - name: Access and SSO
+      ansible.builtin.import_tasks: access.yml
+      tags: [access]

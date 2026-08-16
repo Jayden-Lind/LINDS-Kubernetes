@@ -1,0 +1,79 @@
+---
+# Local decisions made against templates this repository does not own, plus a
+# handful made against a single host rather than its template. Neither survives
+# a rebuild on its own, and neither is visible anywhere else in git.
+#
+# Applied with direct API calls rather than the dedicated modules: zabbix_item
+# and zabbix_trigger are create/delete instruments, and these objects already
+# exist and belong to someone else. All we want is to flip `status`.
+#
+# Objects are resolved by key (items, prototypes, discovery rules) or by
+# description (triggers), scoped to one host or template. A rename upstream
+# makes the lookup fail loudly, which is the correct outcome - it means the
+# decision needs revisiting.
+
+- name: Local template and host tweaks
+  ansible.builtin.include_tasks: tweak_apply.yml
+  loop:
+    # --- Proxmox VE by HTTP -------------------------------------------------
+    # Uptime and Status are polled per VM and produce nothing actionable in a
+    # homelab where VMs are stopped and started deliberately.
+    - object: itemprototype
+      scope: Proxmox VE by HTTP
+      key: !unsafe "proxmox.qemu.uptime[{#QEMU.ID}]"
+    - object: itemprototype
+      scope: Proxmox VE by HTTP
+      key: !unsafe "proxmox.qemu.vmstatus[{#QEMU.ID}]"
+    # No LXC containers run on either node, so the discovery only ever
+    # produced empty results.
+    - object: discoveryrule
+      scope: Proxmox VE by HTTP
+      key: proxmox.lxc.discovery
+
+    # --- VMware -------------------------------------------------------------
+    # All four VMware discoveries are off: there is no vCenter to poll since
+    # the ESXi host was retired, and each rule otherwise fails on every
+    # interval and fills the queue.
+    - object: discoveryrule
+      scope: VMware
+      key: "vmware.vm.discovery[{$VMWARE.URL}]"
+    - object: discoveryrule
+      scope: VMware
+      key: "vmware.datastore.discovery[{$VMWARE.URL}]"
+    - object: discoveryrule
+      scope: VMware
+      key: "vmware.cluster.discovery[{$VMWARE.URL}]"
+    - object: discoveryrule
+      scope: VMware
+      key: "vmware.hv.discovery[{$VMWARE.URL}]"
+
+    # --- Stock templates with one noisy item each ---------------------------
+    - object: item
+      scope: HP iLO SNMP
+      key: "zabbix[host,snmp,available]"
+    - object: item
+      scope: PostgreSQL by Zabbix agent 2
+      key: 'pgsql.custom.query["{$PG.URI}","{$PG.USER}","{$PG.PASSWORD}","{$PG.DATABASE}",""]'
+
+    # --- Host-level, not template-level -------------------------------------
+    # Only JD-Proxmox-02 is in a Proxmox cluster of one, so cluster discovery
+    # has nothing to find. LINDS-Proxmox-01 is deliberately untouched.
+    - object: discoveryrule
+      scope: JD-Proxmox-02
+      scope_kind: host
+      key: proxmox.cluster.discovery
+    # Disabled on this node only. Whether LINDS-Proxmox-01 should match is an
+    # open question - the asymmetry is recorded rather than guessed at.
+    - object: triggerprototype
+      scope: JD-Proxmox-02
+      scope_kind: host
+      description: !unsafe "Proxmox: VM [{#NODE.NAME}/{#QEMU.NAME}]: has been restarted"
+    # The same judgement as the Proxmox VM memory macro in hosts.yml, made by
+    # hand well before this playbook existed: ZFS ARC makes a healthy TrueNAS
+    # look permanently short of memory.
+    - object: trigger
+      scope: LINDS-TrueNAS-01
+      scope_kind: host
+      description: "TrueNAS: High memory utilization"
+  loop_control:
+    label: "{{ item.scope }} / {{ item.key | default(item.description) }}"

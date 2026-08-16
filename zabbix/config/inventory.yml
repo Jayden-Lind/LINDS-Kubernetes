@@ -1,0 +1,25 @@
+---
+# The reconciler talks to one thing: the Zabbix frontend's JSON-RPC endpoint.
+#
+# Host and port are env-overridable so the same playbook can be run by hand
+# through `kubectl port-forward` while developing, without editing anything
+# that then risks being committed.
+all:
+  hosts:
+    zabbix_api:
+      ansible_connection: httpapi
+      ansible_network_os: community.zabbix.zabbix
+      ansible_host: "{{ lookup('env', 'ZBX_API_HOST') | default('zabbix-zabbix-web.zabbix.svc.cluster.local', true) }}"
+      ansible_httpapi_port: "{{ lookup('env', 'ZBX_API_PORT') | default('80', true) }}"
+      # Plaintext in-cluster: TLS terminates at the ingress and this traffic
+      # never leaves the cluster network. Same argument as KEYCLOAK_URL in
+      # keycloak/config-cli-job.yaml.
+      ansible_httpapi_use_ssl: false
+      ansible_httpapi_validate_certs: false
+      # MUST be empty. The plugin defaults to "zabbix", which builds
+      # /zabbix/api_jsonrpc.php - this frontend serves the API at the root, so
+      # leaving the default in place makes every single call 404.
+      ansible_zabbix_url_path: ""
+      ansible_user: Admin
+      ansible_httpapi_pass: "{{ lookup('env', 'ZBX_ADMIN_PASSWORD') }}"
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"

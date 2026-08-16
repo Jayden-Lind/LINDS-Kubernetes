@@ -1,0 +1,19 @@
+---
+# One rule, ICMP-only, over the jd server VLAN. It populates the "Discovered
+# hosts" group, which is why most hosts are in it.
+#
+# Note the discovery *action* that would normally act on these events
+# ("Auto discovery. Linux servers.") is disabled, so this rule surfaces devices
+# without creating hosts for them.
+- name: Local network discovery
+  community.zabbix.zabbix_discovery_rule:
+    name: Local network
+    iprange: 10.0.50.0/24
+    delay: 1h
+    status: enabled
+    dchecks:
+      - type: ICMP
+        uniq: false
+        # Name discovered devices by reverse DNS rather than by IP.
+        host_source: DNS
+    state: present

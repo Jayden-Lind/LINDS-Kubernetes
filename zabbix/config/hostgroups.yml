@@ -1,0 +1,15 @@
+---
+# Four of these are empty and are Zabbix defaults rather than anything this
+# homelab uses. They are declared anyway: a rebuild that silently drops them
+# would change what a fresh install looks like, and they cost nothing.
+- name: Host groups
+  community.zabbix.zabbix_group:
+    host_groups:
+      - Applications
+      - Databases
+      - Discovered hosts
+      - Hypervisors
+      - Linux servers
+      - Virtual machines
+      - Zabbix servers
+    state: present
