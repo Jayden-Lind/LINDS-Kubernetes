@@ -1,0 +1,99 @@
+---
+# Who can get in, and how.
+#
+# Runs last on purpose: it is the only part of this playbook that can lock a
+# person out. Admin stays a local super admin throughout - see the break-glass
+# note in ../README.md.
+
+# The five stock groups, declared so a rebuild reproduces them and so the two
+# SAML mappings below have something to point at.
+- name: User groups
+  community.zabbix.zabbix_usergroup:
+    name: "{{ item.name }}"
+    gui_access: "{{ item.gui_access }}"
+    status: "{{ item.status }}"
+    debug_mode: "{{ item.debug_mode | default('disabled') }}"
+    state: present
+  loop:
+    - {name: Zabbix administrators, gui_access: default, status: enabled}
+    - {name: Guests, gui_access: internal, status: enabled}
+    # Deprovisioned SAML users land here. It must stay disabled - Zabbix
+    # refuses to enable or delete a group nominated as disabled_usrgroup.
+    - {name: Disabled, gui_access: default, status: disabled}
+    - {name: Enabled debug mode, gui_access: default, status: enabled, debug_mode: enabled}
+    # gui_access "disable" (not "disabled") - the module's spelling.
+    - {name: No access to the frontend, gui_access: disable, status: enabled}
+  loop_control:
+    label: "{{ item.name }}"
+
+# --- SAML ---------------------------------------------------------------
+#
+# The Keycloak half of this has existed in keycloak/realm/linds.yaml for some
+# time - client, signing attributes, ACS and SLS URLs, and username/email/groups
+# protocol mappers. Nothing on the Zabbix side ever consumed it.
+#
+# The IdP signing certificate is NOT set here. Zabbix reads it from
+# /etc/zabbix/web/certs/idp.crt on the frontend filesystem and offers no API or
+# UI field for it; it is mounted from the zabbix-saml-idp ConfigMap by the Helm
+# values in applications/zabbix.yaml. If login fails with a signature error,
+# that mount is the first thing to check.
+#
+# No SP keypair is needed. The Keycloak client sets saml.client.signature
+# false, so Zabbix is not required to sign its requests, and sp.key / sp.crt
+# stay absent.
+- name: Keycloak SAML user directory
+  community.zabbix.zabbix_user_directory:
+    name: Keycloak
+    idp_type: saml
+    idp_entityid: https://keycloak.linds.com.au/realms/linds
+    sso_url: https://keycloak.linds.com.au/realms/linds/protocol/saml
+    # Must equal the Keycloak clientId exactly.
+    sp_entityid: zabbix
+    username_attribute: username
+    # Keycloak signs both the assertion and the message; Zabbix signs nothing.
+    sign_assertions: true
+    sign_messages: true
+    sign_authn_requests: false
+    sign_logout_requests: false
+    sign_logout_responses: false
+    encrypt_assertions: false
+    encrypt_nameid: false
+    scim_status: false
+    provision_status: true
+    # The flat claim emitted by the realm's group-membership mapper
+    # (full.path false), e.g. ["k8s-users", "k8s-zabbix-admins"].
+    group_name: groups
+    provision_media:
+      - name: Email
+        mediatype: Email
+        attribute: email
+    # Follows the group convention in the Keycloak design document. A member of
+    # k8s-users with none of these groups matches nothing and is not
+    # provisioned, which is how every other integration here gates access.
+    provision_groups:
+      - name: k8s-admins
+        role: Super admin role
+        user_groups: [Zabbix administrators]
+      - name: k8s-zabbix-admins
+        role: Super admin role
+        user_groups: [Zabbix administrators]
+      - name: k8s-zabbix-users
+        role: User role
+        user_groups: [Zabbix administrators]
+    state: present
+
+# Instance-wide singleton: every field named here is set on every run. Internal
+# authentication stays on deliberately - Keycloak is a single point of failure
+# for every service it fronts, and Admin is the way back in when it is down.
+- name: Authentication
+  community.zabbix.zabbix_authentication:
+    authentication_type: internal
+    saml_auth_enabled: true
+    # Zabbix reports this back as 0 regardless of what is sent; declared false
+    # so git matches reality. AD usernames are case-insensitive anyway.
+    saml_case_sensitive: false
+    saml_jit_status: true
+    ldap_auth_enabled: false
+    http_auth_enabled: false
+    jit_provision_interval: 1h
+    disabled_usrgroup: Disabled

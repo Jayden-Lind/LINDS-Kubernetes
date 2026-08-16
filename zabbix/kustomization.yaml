@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: zabbix
+
+resources:
+  - config-job.yaml
+
+configMapGenerator:
+  # Split by directory because ConfigMap keys cannot contain a slash. The Job
+  # mounts each at the matching path under /config, which reproduces the layout
+  # the playbook expects and keeps a bare `ansible-playbook` run from a git
+  # checkout identical to what the Job does.
+  - name: zabbix-config
+    files:
+      - config/site.yml
+      - config/inventory.yml
+      - config/bootstrap.yml
+      - config/hostgroups.yml
+      - config/templates.yml
+      - config/hosts.yml
+      - config/template_tweaks.yml
+      - config/tweak_apply.yml
+      - config/alerting.yml
+      - config/discovery.yml
+      - config/globals.yml
+      - config/access.yml
+  - name: zabbix-config-templates
+    files:
+      - config/templates/vyos-snmpv2.yaml
+      - config/templates/dell-idrac-snmpv2.yaml
+      - config/templates/officeconnect-19xx.yaml
+      - config/templates/truenas-snmp.yaml
+  - name: zabbix-config-media
+    files:
+      - config/media/discord.js
+      - config/media/zbx-viewer.js
+  - name: zabbix-config-vars
+    files:
+      - config/vars/message_templates.yml
+  # Keycloak's realm SAML signing certificate. Zabbix reads the IdP certificate
+  # from a file on the frontend's disk and offers no API or UI field for it, so
+  # this is mounted into the web pods by zabbixWeb.extraVolumes in
+  # applications/zabbix.yaml rather than applied through the playbook.
+  #
+  # Not a secret - it is the public half, served at
+  # https://keycloak.linds.com.au/realms/linds/protocol/saml/descriptor.
+  # It changes only if the realm's signing key is rotated.
+  - name: zabbix-saml-idp
+    files:
+      - saml/idp.crt
+
+# The Job is recreated on every sync anyway (hook-delete-policy), and a hashed
+# name would leave its volume references pointing at names the generator
+# changes on every config edit. The web Deployment's reference to
+# zabbix-saml-idp needs a stable name for the same reason.
+generatorOptions:
+  disableNameSuffixHash: true

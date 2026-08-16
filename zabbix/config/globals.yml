@@ -1,0 +1,58 @@
+---
+# Instance-wide singletons. Unlike everything else in this playbook, the two
+# modules below have no partial update - the API replaces the whole object - so
+# every field named here is set on every run and can no longer be changed in
+# the frontend. Fields deliberately left out keep whatever the frontend says.
+
+# The one global macro. Left as `public` on purpose: rotating it means changing
+# the switch, the iDrac, TrueNAS and both OPNsense boxes in lockstep, with
+# monitoring blind for anything missed. Recorded in the design document as a
+# known risk with its own piece of work, not smuggled in here. It stays in git
+# rather than Vault because a value of `public` is not a secret in any
+# meaningful sense.
+- name: Global macros
+  community.zabbix.zabbix_globalmacro:
+    macro_name: "{$SNMP_COMMUNITY}"
+    macro_value: public
+    macro_type: text
+    state: present
+
+- name: Housekeeping
+  community.zabbix.zabbix_housekeeping:
+    hk_events_mode: true
+    hk_events_trigger: 90d
+    hk_events_service: 1d
+    hk_events_internal: 1d
+    hk_events_discovery: 1d
+    hk_events_autoreg: 1d
+    hk_services_mode: true
+    hk_services: 90d
+    hk_sessions_mode: true
+    hk_sessions: 90d
+    hk_history_mode: true
+    hk_history_global: true
+    hk_history: 90d
+    hk_trends_mode: true
+    hk_trends_global: true
+    hk_trends: 90d
+    hk_audit_mode: true
+    hk_audit: 365d
+    # TimescaleDB is not in use - this is stock CloudNativePG Postgres - so
+    # compression is off and compress_older is inert.
+    compression_status: false
+    compress_older: 7d
+
+- name: GUI settings
+  community.zabbix.zabbix_settings:
+    # Was https://172.16.10.5, an address nothing serves. This is the base for
+    # links Zabbix builds into notifications and for "Frontend URL" checks.
+    frontend_url: https://zabbix.linds.com.au
+    default_lang: en_US
+    default_timezone: system
+    default_theme: dark-theme
+    search_limit: 1000
+    max_overview_table_size: 50
+    snmptrap_logging: true
+    auditlog_enabled: true
+    validate_uri_schemes: true
+    geomaps_tile_provider: OpenStreetMap.Mapnik

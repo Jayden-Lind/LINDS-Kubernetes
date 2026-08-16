@@ -9,6 +9,14 @@ spec:
     server: https://kubernetes.default.svc
     namespace: zabbix
   sources:
+    # Configuration as code: host groups, hosts, templates, alerting,
+    # discovery, access and SSO, reconciled into the running Zabbix by a
+    # PostSync hook. Kept in the same Application as the chart so the hook is
+    # guaranteed to run after the server is up. See zabbix/README.md.
+    - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+      targetRevision: master
+      path: zabbix
+
     - repoURL: https://zabbix-community.github.io/helm-zabbix/
       chart: zabbix
       targetRevision: 7.1.0
@@ -198,10 +206,26 @@ spec:
               - name: nginx-gzip
                 configMap:
                   name: zabbix-web-nginx-gzip
+              # Keycloak's realm SAML signing certificate. Zabbix reads the IdP
+              # certificate from disk - zabbix.conf.php resolves $SSO['IDP_CERT']
+              # to this exact path and there is no API or UI field for it - so
+              # SAML login fails with a signature error if this mount is absent,
+              # however correct the user directory looks in the frontend.
+              # The ConfigMap comes from zabbix/kustomization.yaml.
+              - name: saml-idp
+                configMap:
+                  name: zabbix-saml-idp
             extraVolumeMounts:
               - name: nginx-gzip
                 mountPath: /etc/nginx/http.d/00-gzip.conf
                 subPath: 00-gzip.conf
+                readOnly: true
+              # subPath, so the mount does not hide the rest of certs/ - the
+              # image also resolves vault.crt, vault.key, sp.key and sp.crt
+              # from this directory.
+              - name: saml-idp
+                mountPath: /etc/zabbix/web/certs/idp.crt
+                subPath: idp.crt
                 readOnly: true
             extraEnv:
               # The chart never sets these for the web tier - its env block is

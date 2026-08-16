@@ -1,0 +1,48 @@
+---
+# Exact `message_templates` for the two webhook media types, kept apart from
+# alerting.yml because they are bulk rather than decisions - these are Zabbix's
+# stock defaults, unmodified.
+#
+# Written as double-quoted scalars on purpose. Zabbix stores the line endings
+# as CRLF; a block scalar here would emit LF, the module would see a difference
+# on every run, and every sync would report a change that is not one.
+
+zbx_discord_message_templates:
+  - eventsource: triggers
+    recovery: operations
+    subject: "[{EVENT.STATUS}] {EVENT.NAME}"
+    body: "Problem started at {EVENT.TIME} on {EVENT.DATE}\r\nProblem name: {EVENT.NAME}\r\nHost: {HOST.NAME}\r\nSeverity: {EVENT.SEVERITY}\r\nOperational data: {EVENT.OPDATA}\r\nOriginal problem ID: {EVENT.ID}\r\n{TRIGGER.URL}"
+  - eventsource: triggers
+    recovery: recovery_operations
+    subject: "[{EVENT.STATUS}] {EVENT.NAME}"
+    body: "Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\r\nProblem name: {EVENT.NAME}\r\nHost: {HOST.NAME}\r\nSeverity: {EVENT.SEVERITY}\r\nOriginal problem ID: {EVENT.ID}\r\n{TRIGGER.URL}"
+  - eventsource: triggers
+    recovery: update_operations
+    subject: "[{EVENT.STATUS}] {EVENT.NAME}"
+    body: "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\r\n{EVENT.UPDATE.MESSAGE}\r\n\r\nCurrent problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}."
+  - eventsource: discovery
+    recovery: operations
+    subject: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+    body: "Discovery rule: {DISCOVERY.RULE.NAME}\r\n\r\nDevice IP: {DISCOVERY.DEVICE.IPADDRESS}\r\nDevice DNS: {DISCOVERY.DEVICE.DNS}\r\nDevice status: {DISCOVERY.DEVICE.STATUS}\r\nDevice uptime: {DISCOVERY.DEVICE.UPTIME}\r\n\r\nDevice service name: {DISCOVERY.SERVICE.NAME}\r\nDevice service port: {DISCOVERY.SERVICE.PORT}\r\nDevice service status: {DISCOVERY.SERVICE.STATUS}\r\nDevice service uptime: {DISCOVERY.SERVICE.UPTIME}"
+  - eventsource: autoregistration
+    recovery: operations
+    subject: "Autoregistration: {HOST.HOST}"
+    body: "Host name: {HOST.HOST}\r\nHost IP: {HOST.IP}\r\nAgent port: {HOST.PORT}"
+  - eventsource: services
+    recovery: operations
+    subject: "Service \"{SERVICE.NAME}\" problem: {EVENT.NAME}"
+    body: "Service problem started at {EVENT.TIME} on {EVENT.DATE}\r\nService problem name: {EVENT.NAME}\r\nService: {SERVICE.NAME}\r\nSeverity: {EVENT.SEVERITY}\r\nOriginal problem ID: {EVENT.ID}\r\nService description: {SERVICE.DESCRIPTION}\r\n\r\n{SERVICE.ROOTCAUSE}"
+  - eventsource: services
+    recovery: recovery_operations
+    subject: "Service \"{SERVICE.NAME}\" resolved in {EVENT.DURATION}: {EVENT.NAME}"
+    body: "Service \"{SERVICE.NAME}\" has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\r\nProblem name: {EVENT.NAME}\r\nProblem duration: {EVENT.DURATION}\r\nSeverity: {EVENT.SEVERITY}\r\nOriginal problem ID: {EVENT.ID}\r\nService description: {SERVICE.DESCRIPTION}"
+  - eventsource: services
+    recovery: update_operations
+    subject: "Changed \"{SERVICE.NAME}\" service status to {EVENT.UPDATE.SEVERITY} in {EVENT.AGE}"
+    body: "Changed \"{SERVICE.NAME}\" service status to {EVENT.UPDATE.SEVERITY} at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.\r\nCurrent problem age is {EVENT.AGE}.\r\nService description: {SERVICE.DESCRIPTION}\r\n\r\n{SERVICE.ROOTCAUSE}"
+
+zbx_zbx_viewer_message_templates:
+  - eventsource: triggers
+    recovery: operations
+    subject: "Problem: {EVENT.NAME}"
+    body: "Problem started at {EVENT.TIME} on {EVENT.DATE}\r\nProblem name: {EVENT.NAME}\r\nHost: {HOST.NAME}\r\nSeverity: {EVENT.SEVERITY}\r\nOperational data: {EVENT.OPDATA}\r\nOriginal problem ID: {EVENT.ID}\r\n{TRIGGER.URL}"

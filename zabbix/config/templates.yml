@@ -1,0 +1,22 @@
+---
+# Only templates Zabbix does not ship are held here. The other 310 are
+# recreated by Zabbix's own schema initialisation on a rebuild, so committing
+# them would add six figures of upstream YAML, regenerate an unreviewable diff
+# on every minor upgrade, and pin this instance to whatever template versions
+# happened to be current on the day of the export. See ../README.md.
+#
+# The files are verbatim `configuration.export` output, so the round trip is
+# symmetric: edit a template in the frontend, re-export, commit the diff.
+- name: Non-stock templates
+  community.zabbix.zabbix_template:
+    template_yaml: "{{ lookup('file', 'templates/' + item) }}"
+    state: present
+  loop:
+    # Both OPNsense boxes. The name is a historical accident - it was a VyOS
+    # template first, and the technical name is what host links refer to.
+    - vyos-snmpv2.yaml
+    - dell-idrac-snmpv2.yaml
+    - officeconnect-19xx.yaml
+    - truenas-snmp.yaml
+  loop_control:
+    label: "{{ item }}"

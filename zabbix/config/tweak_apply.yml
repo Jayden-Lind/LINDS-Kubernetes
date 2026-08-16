@@ -1,0 +1,103 @@
+---
+# Disables one Zabbix object, resolved by key or description within one host or
+# template. Included per entry from template_tweaks.yml.
+#
+# `item` is the loop variable from the caller.
+#
+# The scope is resolved to an ID first rather than passing `host:` to the
+# object lookup. That parameter does not reliably constrain the result - asking
+# for vmware.vm.discovery on "VMware" also returns the copy on "VMware FQDN" -
+# and silently disabling the wrong object is exactly the failure this file
+# should not have.
+
+- name: "Resolve {{ item.scope }}"
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+      Authorization: "Bearer {{ zbx_auth_token }}"
+    body:
+      jsonrpc: "2.0"
+      method: "{{ 'host.get' if item.scope_kind | default('template') == 'host' else 'template.get' }}"
+      params:
+        filter:
+          host: "{{ item.scope }}"
+        output: [host]
+      id: 1
+  delegate_to: localhost
+  register: tweak_scope
+  changed_when: false
+  failed_when: tweak_scope.json.error is defined
+
+- name: "{{ item.scope }} resolves to exactly one host or template"
+  ansible.builtin.assert:
+    that: tweak_scope.json.result | length == 1
+    fail_msg: >-
+      Expected exactly one {{ item.scope_kind | default('template') }} named
+      '{{ item.scope }}', found {{ tweak_scope.json.result | length }}.
+
+- name: "Find {{ item.object }}: {{ item.key | default(item.description) }}"
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+      Authorization: "Bearer {{ zbx_auth_token }}"
+    body:
+      jsonrpc: "2.0"
+      method: "{{ item.object }}.get"
+      params:
+        # Templates live in the same table as hosts, so hostids accepts a
+        # template ID and scopes the search to that one object.
+        hostids: ["{{ tweak_scope.json.result[0].templateid | default(tweak_scope.json.result[0].hostid) }}"]
+        # `templated` is deliberately not set. true restricts the result to
+        # template-owned objects, which finds nothing for the host-scoped
+        # entries; unset returns both, and hostids has already narrowed the
+        # search to one object anyway.
+        output: [status]
+        filter: >-
+          {{ {'key_': item.key} if item.key is defined
+             else {'description': item.description} }}
+      id: 1
+  delegate_to: localhost
+  register: tweak_lookup
+  changed_when: false
+  failed_when: tweak_lookup.json.error is defined
+
+- name: "Resolved exactly one {{ item.object }}"
+  ansible.builtin.assert:
+    that: tweak_lookup.json.result | length == 1
+    fail_msg: >-
+      Expected exactly one {{ item.object }} matching
+      '{{ item.key | default(item.description) }}' on '{{ item.scope }}',
+      found {{ tweak_lookup.json.result | length }}. The object was probably
+      renamed or removed upstream - confirm the decision still applies and
+      update template_tweaks.yml.
+
+- name: "Disable {{ item.object }}: {{ item.key | default(item.description) }}"
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+      Authorization: "Bearer {{ zbx_auth_token }}"
+    body:
+      jsonrpc: "2.0"
+      method: "{{ item.object }}.update"
+      params: >-
+        {{ {(tweak_id_field): tweak_object[tweak_id_field], 'status': 1} }}
+      id: 1
+  delegate_to: localhost
+  register: tweak_update
+  vars:
+    tweak_object: "{{ tweak_lookup.json.result[0] }}"
+    tweak_id_field: "{{ 'triggerid' if item.object.startswith('trigger') else 'itemid' }}"
+  # Only call update when the object is not already disabled, so a steady-state
+  # run reports no changes and a real change stands out in the Job log.
+  when: tweak_lookup.json.result[0].status | int != 1
+  changed_when: tweak_update.json.result is defined
+  failed_when: tweak_update.json.error is defined

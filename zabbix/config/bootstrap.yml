@@ -1,0 +1,119 @@
+---
+# Establishes a working Admin session, and leaves the rest of the playbook a
+# token in `zbx_auth_token`.
+#
+# The awkward part is a rebuild. A freshly initialised Zabbix database ships
+# with Admin/zabbix, so a plain "log in with the Vault password" would fail at
+# exactly the moment nobody wants to be reading a runbook. This falls back to
+# the shipped default and then sets the Vault password, which is what makes the
+# disaster-recovery path hands-off rather than hands-off-except-one-step.
+#
+# Every task here is no_log: true. Ansible prints module arguments on failure,
+# and `uri` would otherwise put the super-admin password into a Job log that
+# Argo CD renders in its UI.
+
+# set_fact rather than a play var: the reconcile play reads both of these back
+# out of hostvars['localhost'], and play vars do not appear there.
+- name: Resolve the API endpoint
+  ansible.builtin.set_fact:
+    zbx_api_url: >-
+      http://{{ lookup('env', 'ZBX_API_HOST') | default('zabbix-zabbix-web.zabbix.svc.cluster.local', true) }}:{{
+      lookup('env', 'ZBX_API_PORT') | default('80', true) }}/api_jsonrpc.php
+
+- name: Refuse to run without a password
+  ansible.builtin.assert:
+    that:
+      - zbx_admin_password is defined
+      - zbx_admin_password | length > 0
+    fail_msg: >-
+      ZBX_ADMIN_PASSWORD is empty. The zabbix-config-secrets ExternalSecret has
+      not synced, or admin_password is missing from
+      linds-keyvault/zabbix-config.
+  vars:
+    zbx_admin_password: "{{ lookup('env', 'ZBX_ADMIN_PASSWORD') }}"
+
+- name: Log in with the password from Vault
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.login
+      params:
+        username: Admin
+        password: "{{ lookup('env', 'ZBX_ADMIN_PASSWORD') }}"
+      id: 1
+  register: zbx_login_vault
+  no_log: true
+  # The API answers 200 with an "error" member rather than an HTTP error code,
+  # so a failed login is a successful request. Branch on the body below.
+  failed_when: false
+
+- name: Log in with the shipped default
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+    body:
+      jsonrpc: "2.0"
+      method: user.login
+      params:
+        username: Admin
+        password: zabbix
+      id: 1
+  register: zbx_login_default
+  no_log: true
+  failed_when: false
+  when: zbx_login_vault.json.result is not defined
+
+- name: Fail when neither password is accepted
+  ansible.builtin.fail:
+    msg: >-
+      Cannot authenticate to Zabbix as Admin. Neither the password in
+      linds-keyvault/zabbix-config nor the shipped default was accepted, which
+      means the password was changed to something Vault does not know about.
+      Fix Vault to match, or reset the password in the frontend.
+  when:
+    - zbx_login_vault.json.result is not defined
+    - zbx_login_default.json.result is not defined
+
+- name: Adopt the Vault password on a freshly initialised database
+  ansible.builtin.uri:
+    url: "{{ zbx_api_url }}"
+    method: POST
+    body_format: json
+    headers:
+      Content-Type: application/json-rpc
+      Authorization: "Bearer {{ zbx_login_default.json.result }}"
+    body:
+      jsonrpc: "2.0"
+      method: user.update
+      params:
+        userid: "1"
+        # Zabbix requires the old password when a user changes its own,
+        # even over the API.
+        current_passwd: zabbix
+        passwd: "{{ lookup('env', 'ZBX_ADMIN_PASSWORD') }}"
+      id: 1
+    # Skipped when the Vault password already equals the default, which is the
+    # state this instance is in until someone rotates it.
+  register: zbx_passwd_set
+  no_log: true
+  failed_when: zbx_passwd_set.json.error is defined
+  when:
+    - zbx_login_vault.json.result is not defined
+    - zbx_login_default.json.result is defined
+    - lookup('env', 'ZBX_ADMIN_PASSWORD') != 'zabbix'
+
+- name: Keep the session for the tasks that call the API directly
+  ansible.builtin.set_fact:
+    zbx_auth_token: >-
+      {{ zbx_login_vault.json.result
+         if zbx_login_vault.json.result is defined
+         else zbx_login_default.json.result }}
+  no_log: true
