@@ -1,0 +1,6 @@
+# Zabbix stores webhook scripts with CRLF line endings and returns them that
+# way over the API. core.autocrlf=input would normalise these to LF on commit,
+# the checkout Argo CD builds the ConfigMap from would then differ from what is
+# in Zabbix, and zabbix_mediatype would report both media types changed on
+# every single sync. -text preserves the bytes exactly.
+config/media/*.js -text
