@@ -309,14 +309,24 @@ the ratio is near 100% whenever the guest is doing its job. 126 events across
 both nodes, including 44 for `talos-cp-01` alone; none corresponded to a real
 problem.
 
-`hosts.yml` sets `{$PVE.VM.MEMORY.PUSE.MAX.WARN}` to `101` on `JD-Proxmox-02`
-and `LINDS-Proxmox-01`. The condition becomes unreachable, since the ratio
-cannot exceed 100.
+`hosts.yml` sets `{$PVE.VM.MEMORY.PUSE.MAX.WARN}` to `10000` on
+`JD-Proxmox-02` and `LINDS-Proxmox-01`.
 
-Chosen over disabling the trigger prototype because the prototype belongs to an
-upstream template. A future template update can silently re-enable it, and the
-change would be invisible in the repository. A host macro is owned by us, is one
-line, and reads as intent rather than as suppression.
+**Not `101`.** The obvious "one percent above impossible" is wrong: Proxmox
+reports `mem` including overhead *above* the configured `maxmem`, so the ratio
+the trigger computes genuinely exceeds 100 in normal operation. `LINDS-DC-01`
+measured 103.82%. Setting 101 silenced almost nothing and was caught only
+because the alerts kept firing afterwards. The replacement value is arbitrary
+because it has to be; what matters is that no ballooning overhead approaches
+it.
+
+**A macro, not a disabled trigger prototype.** Disabling the prototype was
+tried and does not work: Zabbix does not propagate a prototype's status to
+already-discovered triggers, so all 24 existing ones stayed enabled and kept
+alerting while the prototype sat disabled. The macro is resolved at evaluation
+time, so it applies to every discovered trigger immediately and to every VM
+discovered later. Confirmed: all open VM high-memory problems resolved within
+90 seconds of the macro being applied.
 
 **`Node` and `LXC` variants stay at `98`.** Node-level memory pressure on a
 hypervisor is a genuine signal, and the LXC figure is not balloon-derived.
@@ -425,7 +435,7 @@ Results of the first real apply against 7.4.13:
 | Full playbook, steady state | 79 tasks, `changed=0`, `failed=0` |
 | Job in-cluster, real image and ConfigMaps | succeeded in 1m46s |
 | Hosts, groups, templates, actions, media, discovery | unchanged from pre-migration state |
-| `{$PVE.VM.MEMORY.PUSE.MAX.WARN}` | `101` on both Proxmox hosts |
+| `{$PVE.VM.MEMORY.PUSE.MAX.WARN}` | `10000` on both Proxmox hosts; all open VM memory problems cleared in 90s |
 | Secrets in the Job log | none |
 | Local `Admin` login | still works with SAML enabled |
 | SAML user directory and JIT group mappings | present, `disabled_usrgrpid` set |
