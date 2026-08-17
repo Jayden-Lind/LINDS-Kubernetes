@@ -402,3 +402,81 @@ spec:
           annotations:
             summary: "Prometheus rule evaluation slow"
             description: "Prometheus rule group {{ $labels.rule_group }} evaluation is taking {{ $value | humanizeDuration }} at P90."
+
+    # catcrawl is a weekly CronJob (0 2 * * 3). It reports its own outcome to the
+    # Pushgateway; the alerts that answer "did it run at all" come from
+    # kube-state-metrics instead, because a job that panics, is OOM-killed or
+    # never starts pushes nothing and cannot report on itself.
+    - name: catcrawl
+      rules:
+        - alert: CatcrawlJobFailed
+          # kube_job_failed is a condition metric: it emits one series per
+          # condition state (true/false/unknown). Matching condition="true"
+          # explicitly states the intent — a bare "> 0" happens to work only
+          # because the false/unknown series carry the value 0.
+          expr: kube_job_failed{namespace="default", job_name=~"catcrawl-scheduler-.*", condition="true"} == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl job {{ $labels.job_name }} failed"
+            description: "The catcrawl CronJob failed. Check `kubectl logs -n default job/{{ $labels.job_name }}` — likely causes are the database being unreachable, the Woolworths API rejecting auth, or a failed migration."
+
+        - alert: CatcrawlNotScheduled
+          # The CronJob runs weekly; 8 days means a schedule was missed entirely.
+          expr: time() - kube_cronjob_status_last_schedule_time{namespace="default", cronjob="catcrawl-scheduler"} > 691200
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl has not been scheduled for over 8 days"
+            description: "The catcrawl CronJob last scheduled {{ $value | humanizeDuration }} ago. It may be suspended, or the image may not be pullable."
+
+        - alert: CatcrawlNoRecentSuccess
+          # Distinct from the above: the job may be running every week and
+          # failing every time, which leaves last_schedule_time healthy.
+          expr: time() - catcrawl_last_success_timestamp_seconds{job="catcrawl"} > 691200
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl has not completed successfully for over 8 days (store {{ $labels.store }})"
+            description: "Last successful crawl was {{ $value | humanizeDuration }} ago. The job may be running and failing each time."
+
+        - alert: CatcrawlPartialFailure
+          # The crawl continues past a failed category and exits zero, so
+          # Kubernetes reports success while data is quietly missing.
+          expr: catcrawl_category_errors{job="catcrawl"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl completed with {{ $value }} failed categories (store {{ $labels.store }})"
+            description: "The crawl exited successfully but {{ $value }} categories failed, so those products were not refreshed. Check the job logs for the per-category errors."
+
+        - alert: CatcrawlProductsDropped
+          # Self-calibrating against the crawl's own history, so it needs no
+          # hand-tuned product count. Cannot fire on first deploy: with a single
+          # sample the series is compared against itself.
+          expr: catcrawl_products_seen{job="catcrawl"} < 0.5 * max_over_time(catcrawl_products_seen{job="catcrawl"}[60d])
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl captured far fewer products than usual (store {{ $labels.store }})"
+            description: "Last crawl saw {{ $value }} products, less than half its 60-day peak. The upstream API may have changed, or a category may be returning nothing."
+
+        - alert: CatcrawlMetricsMissing
+          # The Pushgateway is stateless, so a restart drops these series. Without
+          # this rule the crawl alerts would go quiet rather than fire, which is
+          # the more dangerous failure: silence that looks like health.
+          expr: absent(catcrawl_run_timestamp_seconds{job="catcrawl"})
+          # Long enough to cover a deploy: these series do not exist until the
+          # first crawl pushes them, so this fires once after initial rollout and
+          # resolves itself as soon as a crawl runs.
+          for: 6h
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl metrics are absent from the Pushgateway"
+            description: "No catcrawl metrics are present. The Pushgateway may have restarted and lost its state, in which case the crawl alerts are blind until the next weekly run repopulates them."

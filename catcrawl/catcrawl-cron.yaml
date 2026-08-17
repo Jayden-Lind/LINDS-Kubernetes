@@ -49,6 +49,11 @@ spec:
                   secretKeyRef:
                     name: catcrawl-env-secret
                     key: API_URL
+              # Where the crawl reports its outcome. Optional in the app: if this
+              # is unset or the Pushgateway is unreachable, the crawl logs a
+              # warning and carries on rather than failing.
+              - name: PUSHGATEWAY_URL
+                value: "http://pushgateway.monitoring.svc.cluster.local:9091"
           imagePullSecrets:
           - name: ghcr-pull-secret
           restartPolicy: Never
