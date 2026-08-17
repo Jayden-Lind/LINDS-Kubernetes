@@ -15,7 +15,10 @@ spec:
     spec:
       containers:
       - name: catcrawl-coles-api
-        image: ghcr.io/jayden-lind/cat-crawl-coles-api:latest
+        # The same image as the crawl: it carries all four binaries, and the
+        # command below selects the API. There is no longer a separate
+        # cat-crawl-coles-api image.
+        image: ghcr.io/jayden-lind/cat-crawl-coles:latest
         imagePullPolicy: Always
         env:
           - name: DB_HOST
@@ -38,9 +41,30 @@ spec:
               secretKeyRef:
                 name: catcrawl-coles-env-secret
                 key: DB_PORT
+        command: ["/usr/local/bin/api"]
         ports:
-          - containerPort: 3000
+          - name: http
+            containerPort: 3000
             protocol: TCP
+          # Metrics are served on their own port so scraping never traverses
+          # the public ingress.
+          - name: metrics
+            containerPort: 9100
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            # /healthz touches no storage, so a database outage does not get the
+            # pod restarted while it is still able to serve.
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 10
       imagePullSecrets:
       - name: ghcr-pull-secret
 ---
@@ -49,6 +73,11 @@ kind: Service
 metadata:
   name: catcrawl-col-api
   namespace: default
+  # The ServiceMonitor below selects on these Service labels, not on the pod
+  # labels, and uses `app` as the job label so the alerts can say
+  # job="catcrawl-coles-api" rather than depending on the Service's name.
+  labels:
+    app: catcrawl-coles-api
 spec:
   externalTrafficPolicy: Cluster
   internalTrafficPolicy: Cluster
@@ -59,7 +88,30 @@ spec:
       name: catcrawl-coles-api
       targetPort: 3000
       protocol: TCP
+    - port: 9100
+      name: metrics
+      targetPort: metrics
+      protocol: TCP
   type: LoadBalancer
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: catcrawl-coles-api
+  namespace: default
+  labels:
+    app: catcrawl-coles-api
+    # The kube-prometheus-stack release label is how Prometheus selects which
+    # ServiceMonitors to act on; without it this object is simply ignored.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobLabel: app
+  selector:
+    matchLabels:
+      app: catcrawl-coles-api
+  endpoints:
+    - port: metrics
+      interval: 60s
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

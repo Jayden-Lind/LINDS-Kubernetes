@@ -46,9 +46,9 @@ spec:
             - name: catcrawl-coles
               image: ghcr.io/jayden-lind/cat-crawl-coles:latest
               imagePullPolicy: Always
-              args:
-                - "-source=website"
-                - "-chrome-profile=/data/chrome-profile"
+              # No args: the crawler is configured entirely from the
+              # environment. It previously took -source and -chrome-profile
+              # flags, which the image no longer accepts.
               env:
                 - name: DB_HOST
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
@@ -60,10 +60,18 @@ spec:
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
                 - name: CAT_STORE_ID
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: CAT_STORE_ID } }
-                - name: API_KEY
-                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: API_KEY } }
-                - name: API_URL
-                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: API_URL } }
+                # Persisted across runs on the PVC below, so Imperva sees a
+                # returning visitor rather than a brand-new one every week.
+                - name: CHROME_PROFILE
+                  value: /data/chrome-profile
+                # The crawl exits, so Prometheus cannot scrape it; it pushes its
+                # outcome here instead. Unset would silently disable reporting,
+                # which the ColesCrawlMetricsMissing alert then catches.
+                - name: PUSHGATEWAY_URL
+                  value: http://pushgateway.monitoring.svc:9091
+              # API_KEY and API_URL are gone: the mobile API they authenticated
+              # against has been blocked by Imperva since April and that code
+              # path no longer exists. The keys remain in the secret for now.
               resources:
                 requests:
                   cpu: "500m"
