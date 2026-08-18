@@ -1,0 +1,49 @@
+# Self-hosted Actions runners for the catcrawl-viewer repository.
+#
+# The runner scale sets in this cluster are registered per repository, not per
+# organisation, so a new repository gets no runners until one is declared here.
+# Without this, a workflow queues a job that nothing ever claims and the build
+# hangs indefinitely rather than failing.
+#
+# It reuses pre-defined-secret, the same user-level token the other two scale
+# sets authenticate with, so no new credential is involved.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gha-runner-scale-set-catcrawl-viewer
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-runners
+  source:
+    chart: gha-runner-scale-set
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    targetRevision: 0.14.2
+    helm:
+      releaseName: arc-runner-set-viewer
+      valuesObject:
+        controllerServiceAccount:
+          namespace: arc-systems
+          name: arc-gha-rs-controller
+
+        githubConfigUrl: "https://github.com/Jayden-Lind/catcrawl-viewer"
+
+        githubConfigSecret: pre-defined-secret
+
+        # The workflow builds and pushes a container image, so the runner needs
+        # a Docker daemon.
+        containerMode:
+          type: "dind"
+  syncPolicy:
+    automated:
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+  ignoreDifferences:
+    - group: actions.github.com
+      kind: AutoscalingListener
+      jsonPointers:
+        - /
