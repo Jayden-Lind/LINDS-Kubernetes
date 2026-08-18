@@ -72,12 +72,31 @@ spec:
               # API_KEY and API_URL are gone: the mobile API they authenticated
               # against has been blocked by Imperva since April and that code
               # path no longer exists. The keys remain in the secret for now.
+              # Chromium rendering is bursty and parallel, and at a 2-core limit
+              # it was being throttled in 36% of all CFS periods (39,281 of
+              # 107,781 on the run of 2026-08-18). Peak usage read only 1.56
+              # cores averaged over five minutes, which is why this did not look
+              # like a CPU problem: throttling happens per 100ms period, so a
+              # workload can sit well under its limit on average and still hit
+              # the ceiling constantly.
+              #
+              # Four of twenty-two categories failed that run with
+              # "context deadline exceeded" against a 60s per-page fetch budget.
+              # A page that spends a third of its time descheduled has a good
+              # chance of exhausting that.
+              #
+              # Three cores leaves headroom on the 4-core workers rather than
+              # letting one weekly batch job monopolise a node. Removing the
+              # limit altogether is the other defensible option — CPU is
+              # compressible, so requests still guarantee neighbours their share
+              # — but an unbounded limit on a job that runs Chromium is a bigger
+              # change than the evidence calls for.
               resources:
                 requests:
-                  cpu: "500m"
+                  cpu: "1"
                   memory: "512Mi"
                 limits:
-                  cpu: "2"
+                  cpu: "3"
                   memory: "2Gi"
               volumeMounts:
                 - name: chrome-profile
