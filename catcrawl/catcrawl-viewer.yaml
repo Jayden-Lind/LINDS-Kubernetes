@@ -1,0 +1,230 @@
+# catcrawl-viewer serves catcrawl.linds.com.au: search across both grocery
+# catalogues, price history, and the Coles/Woolworths comparison.
+#
+# It replaces the Coles price-history API that used to own this hostname.
+# That deployment, its service, its ServiceMonitor and its ingress were all
+# defined in catcrawl-col-cron-api.yaml, which has been deleted — ArgoCD prunes,
+# so removing the file removes the objects.
+#
+# The viewer reads both crawlers' databases and writes to its own. It never
+# writes to a crawler's.
+---
+# The migration runs before every sync, against the same image the deployment
+# will run. BeforeHookCreation deletes the previous Job first, so a fixed name
+# does not collide on the second sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: catcrawl-viewer-migrate
+  namespace: default
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: migrate
+          image: ghcr.io/jayden-lind/catcrawl-viewer:latest
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/migrate", "up"]
+          envFrom:
+            - configMapRef:
+                name: catcrawl-viewer-databases
+          env:
+            - name: DB_HOST
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
+            - name: DB_PORT
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
+---
+# Which database is which. These are names, not credentials, so they belong in
+# a ConfigMap rather than in Vault.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catcrawl-viewer-databases
+  namespace: default
+data:
+  COLES_DB_NAME: catcrawl-coles
+  WOW_DB_NAME: catcrawl
+  VIEWER_DB_NAME: catcrawl-viewer
+  # The index holds both catalogues in memory. The crawls are weekly, so this
+  # exists to pick up a manually triggered crawl without a restart, not to keep
+  # up with anything.
+  MATCH_INDEX_REFRESH: 1h
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catcrawl-viewer
+  namespace: default
+spec:
+  replicas: 1
+  strategy:
+    # Each replica holds ~250MB of index, and doubles that briefly while
+    # rebuilding. Recreate keeps one copy at a time rather than running two
+    # during a rollout.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: catcrawl-viewer
+  template:
+    metadata:
+      labels:
+        app: catcrawl-viewer
+    spec:
+      containers:
+        - name: catcrawl-viewer
+          image: ghcr.io/jayden-lind/catcrawl-viewer:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: catcrawl-viewer-databases
+          env:
+            # All three databases live on the same cluster under the same
+            # credentials, so the Coles crawler's secret serves for all of them
+            # and only the database names differ. A separate Vault entry would
+            # hold identical values.
+            - name: DB_HOST
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
+            - name: DB_PORT
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+            # Metrics are served on their own port so scraping never traverses
+            # the ingress.
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            # The index is built before the listener opens: about two seconds
+            # for 148,000 products, plus connecting to three databases. This
+            # allows a minute before giving up.
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              # /healthz touches no storage, so a database outage does not get
+              # the pod restarted while it is still able to serve.
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "384Mi"
+            limits:
+              # Measured at ~250MB resident with both catalogues loaded, and it
+              # roughly doubles during a rebuild because the replacement index
+              # is built in full before the old one is released. 1Gi leaves room
+              # for both catalogues to grow.
+              cpu: "2"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catcrawl-viewer
+  namespace: default
+  # The ServiceMonitor selects on these Service labels and uses `app` as the
+  # job label, so the alerts can say job="catcrawl-viewer" rather than
+  # depending on the Service's name.
+  labels:
+    app: catcrawl-viewer
+spec:
+  selector:
+    app: catcrawl-viewer
+  ports:
+    - port: 8080
+      name: http
+      targetPort: http
+      protocol: TCP
+    - port: 9100
+      name: metrics
+      targetPort: metrics
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: catcrawl-viewer
+  namespace: default
+  labels:
+    app: catcrawl-viewer
+    # The kube-prometheus-stack release label is how Prometheus selects which
+    # ServiceMonitors to act on; without it this object is simply ignored.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobLabel: app
+  selector:
+    matchLabels:
+      app: catcrawl-viewer
+  endpoints:
+    - port: metrics
+      interval: 60s
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: catcrawl-viewer
+  namespace: default
+  annotations:
+    # This is what the previous ingress was missing. It referenced a TLS secret
+    # that had never been created, because nothing was asking cert-manager to
+    # issue one — so HTTPS to this host failed at the handshake with
+    # "unrecognized name" for as long as the host has existed.
+    cert-manager.io/cluster-issuer: linds-ca
+spec:
+  # The ingress controller is NGINX Inc's (nginx.org/ingress-controller), not
+  # the community ingress-nginx. It ignores nginx.ingress.kubernetes.io/*
+  # annotations entirely, which is why the old ingress's rewrite-target and
+  # ssl-redirect were doing nothing. They are not carried over: HTTPS redirect
+  # is the default, and the rewrite would have flattened every request path
+  # to "/" had it ever taken effect.
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - catcrawl.linds.com.au
+      secretName: catcrawl-linds-com-au-tls
+  rules:
+    - host: catcrawl.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: catcrawl-viewer
+                port:
+                  number: 8080

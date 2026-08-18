@@ -586,38 +586,76 @@ spec:
             summary: "catcrawl-coles metrics are absent from the Pushgateway"
             description: "No Coles crawl metrics are present. The Pushgateway may have restarted and lost its state, in which case the crawl alerts are blind until the next weekly run repopulates them."
 
-    # The Coles price-history API is long-lived, so unlike the crawl it is
-    # scraped directly rather than pushing.
-    - name: catcrawl-coles-api
+    # catcrawl-viewer serves catcrawl.linds.com.au: search, price history and
+    # the Coles/Woolworths comparison. It replaced the Coles price-history API,
+    # whose alert group was removed with it.
+    #
+    # Unlike the crawls it is long-lived, so it is scraped directly rather than
+    # pushing to the Pushgateway.
+    - name: catcrawl-viewer
       rules:
-        - alert: ColesApiDown
-          expr: up{job="catcrawl-coles-api"} == 0
+        - alert: CatcrawlViewerDown
+          expr: up{job="catcrawl-viewer"} == 0
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: "catcrawl-coles API is down"
-            description: "The price-history API at catcrawl.linds.com.au is not responding to scrapes. The browser extension will be showing no data."
+            summary: "catcrawl-viewer is down"
+            description: "The price viewer at catcrawl.linds.com.au is not responding to scrapes. Check `kubectl logs -n default deploy/catcrawl-viewer`; it holds three database connections and refuses to start if any of them is unreachable."
 
-        - alert: ColesApiHighErrorRate
+        - alert: CatcrawlViewerHighErrorRate
           expr: >
-            sum(rate(catcrawl_coles_api_requests_total{status="5xx"}[5m]))
-            / clamp_min(sum(rate(catcrawl_coles_api_requests_total[5m])), 0.001) > 0.05
+            sum(rate(catcrawl_viewer_http_requests_total{status="5xx"}[5m]))
+            / clamp_min(sum(rate(catcrawl_viewer_http_requests_total[5m])), 0.001) > 0.05
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: "catcrawl-coles API is failing {{ $value | humanizePercentage }} of requests"
-            description: "More than 5% of API requests are returning 5xx. Check catcrawl_coles_api_db_errors_total — the usual cause is the database being unreachable."
+            summary: "catcrawl-viewer is failing {{ $value | humanizePercentage }} of requests"
+            description: "More than 5% of requests are returning 5xx. Check catcrawl_viewer_database_errors_total, which is labelled by which database was being read — the viewer reads both crawlers' databases and writes to its own."
 
-        - alert: ColesApiDataStale
-          # The crawl is weekly, so 9 days means a run was missed or wrote
-          # nothing. This is what the extension's users actually experience, as
-          # opposed to whether the job reported success.
-          expr: catcrawl_coles_api_data_staleness_seconds > 777600
+        - alert: CatcrawlViewerDatabaseErrors
+          expr: sum(rate(catcrawl_viewer_database_errors_total[10m])) by (retailer) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl-viewer cannot read the {{ $labels.retailer }} database"
+            description: "Database errors are being returned continuously for {{ $labels.retailer }}. A `viewer` label means its own match database; `coles` and `wow` are the crawlers' databases, which it only reads."
+
+        - alert: CatcrawlViewerIndexStale
+          # The index is rebuilt hourly and holds both catalogues in memory. A
+          # failed rebuild keeps the previous index rather than emptying it, so
+          # the service stays useful and this is the only signal that rebuilds
+          # have stopped working. Three intervals allows two failures.
+          expr: catcrawl_viewer_index_age_seconds > 10800
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl-viewer search index has not rebuilt for {{ $value | humanizeDuration }}"
+            description: "Rebuilds are failing and the viewer is serving an increasingly stale catalogue. It keeps the old index deliberately — stale results beat none — so nothing else will show this. Check the logs for `rebuilding match index failed`."
+
+        - alert: CatcrawlViewerIndexEmpty
+          # Distinct from the index being stale: this is an index that built
+          # successfully and found almost nothing, which means a crawler's
+          # products table has been emptied or a schema change broke the read.
+          expr: catcrawl_viewer_index_products < 50000
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-viewer has only {{ $value }} products indexed"
+            description: "Both catalogues together are normally around 148,000 products. A collapse means a products table is empty or an adapter has stopped mapping rows. Search and matching are effectively down."
+
+        - alert: CatcrawlViewerDataStale
+          # What a visitor actually experiences, as opposed to whether a crawl
+          # job reported success. The crawls are weekly, so 9 days means a run
+          # was missed or wrote nothing.
+          expr: catcrawl_viewer_observation_age_seconds > 777600
           for: 1h
           labels:
             severity: warning
           annotations:
-            summary: "catcrawl-coles API is serving data {{ $value | humanizeDuration }} old"
-            description: "No product has been seen by a crawl in over 9 days, so the API is serving stale prices. Cross-check ColesCrawlNoRecentSuccess: if that is quiet, the crawl is running but writing nothing."
+            summary: "catcrawl-viewer is serving {{ $labels.retailer }} prices {{ $value | humanizeDuration }} old"
+            description: "No {{ $labels.retailer }} product has been seen by a crawl in over 9 days. Cross-check that retailer's own NoRecentSuccess alert: if it is quiet, the crawl is running but writing nothing."
