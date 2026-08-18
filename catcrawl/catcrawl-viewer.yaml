@@ -33,10 +33,17 @@ spec:
           image: ghcr.io/jayden-lind/catcrawl-viewer:latest
           imagePullPolicy: Always
           command: ["/usr/local/bin/migrate", "up"]
-          envFrom:
-            - configMapRef:
-                name: catcrawl-viewer-databases
           env:
+            # The database name is set here rather than read from the
+            # ConfigMap the Deployment uses. A PreSync hook runs before the
+            # sync that creates that ConfigMap, so referencing it from here
+            # fails with "configmap not found" on a first install — the
+            # ConfigMap does not exist yet, by design.
+            #
+            # Only the viewer's own database is touched by a migration; the
+            # crawlers' two are read-only and their names are irrelevant here.
+            - name: VIEWER_DB_NAME
+              value: catcrawl-viewer
             - name: DB_HOST
               valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
             - name: DB_PORT
