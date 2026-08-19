@@ -10,10 +10,32 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      activeDeadlineSeconds: 14400 # 4h hard cap per run
+      # Ceiling for the Job as a whole: two 5h attempts plus slack. The
+      # meaningful per-attempt cap is on the Pod template below.
+      activeDeadlineSeconds: 39600
       backoffLimit: 1
+      # Delete the Job object 48h after it finishes, successful or not.
+      # kube_job_failed is derived from the Job object, so without this a
+      # failed run leaves a tombstone that keeps KubeJobFailed and
+      # ColesCrawlJobFailed firing until three more runs fail and evict it
+      # from failedJobsHistoryLimit. 48h is long enough to notice a
+      # weekday failure and short enough that the alert clears itself
+      # before the next weekly run. This also expires successful Jobs, so
+      # the history shrinks to whatever ran in the last two days; pod logs
+      # are shipped to Loki, which is where they should be read from now.
+      ttlSecondsAfterFinished: 172800
       template:
         spec:
+          # Per-attempt budget. activeDeadlineSeconds on the Job covers the
+          # whole Job including retries, so with backoffLimit: 1 a slow first
+          # attempt leaves the retry almost no time -- on 2026-08-17 attempt
+          # one burned ~3h of the 4h Job budget and attempt two was killed 59
+          # minutes in, mid-fetch, having crawled 8 of 22 categories. It still
+          # pushed its partial counts on the way out, which is what tripped
+          # ColesCrawlProductsDropped. Setting the deadline on the Pod instead
+          # gives every attempt the same budget, because each retry is a new
+          # Pod. 5h against a worst observed run of 3h37m.
+          activeDeadlineSeconds: 18000
           restartPolicy: Never
           imagePullSecrets:
             - name: ghcr-pull-secret

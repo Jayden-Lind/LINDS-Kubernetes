@@ -7,8 +7,28 @@ spec:
   schedule: "0 2 * * 3" 
   jobTemplate:
     spec:
+      # See the matching comment in catcrawl-col-cron.yaml: a failed Job
+      # object is what keeps KubeJobFailed firing, so it has to expire.
+      ttlSecondsAfterFinished: 172800
+      # This job previously had no deadline and no backoffLimit, so a hung
+      # crawl would run indefinitely and concurrencyPolicy would block the
+      # following week's run behind it. Same shape as the Coles job now:
+      # a Job-wide ceiling, a per-attempt cap on the Pod, and one retry
+      # rather than the default six.
+      activeDeadlineSeconds: 39600
+      backoffLimit: 1
       template:
         spec:
+          # Per-attempt budget. activeDeadlineSeconds on the Job covers the
+          # whole Job including retries, so with backoffLimit: 1 a slow first
+          # attempt leaves the retry almost no time -- on 2026-08-17 attempt
+          # one burned ~3h of the 4h Job budget and attempt two was killed 59
+          # minutes in, mid-fetch, having crawled 8 of 22 categories. It still
+          # pushed its partial counts on the way out, which is what tripped
+          # ColesCrawlProductsDropped. Setting the deadline on the Pod instead
+          # gives every attempt the same budget, because each retry is a new
+          # Pod. 5h against a worst observed run of 3h37m.
+          activeDeadlineSeconds: 18000
           containers:
           - name: catcrawl
             image: ghcr.io/jayden-lind/cat-crawl:latest
