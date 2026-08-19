@@ -123,12 +123,27 @@ spec:
               volumeMounts:
                 - name: chrome-profile
                   mountPath: /data/chrome-profile
+                - name: chrome-cache
+                  mountPath: /tmp/chrome-cache
                 - name: dshm
                   mountPath: /dev/shm
           volumes:
             - name: chrome-profile
               persistentVolumeClaim:
                 claimName: catcrawl-coles-chrome-profile
+            # Chromium's HTTP cache, deliberately NOT on the profile volume.
+            #
+            # The cache is worthless between weekly runs — every page is
+            # refetched anyway — but Chromium never prunes it, so on the NFS
+            # profile it simply accumulated: by 2026-08-19 it held 231,058
+            # files in 2.0GB on a volume requesting 1Gi, and page loads had
+            # started stalling past the crawler's 60s fetch timeout on cache
+            # metadata alone. An emptyDir is discarded with the pod, and
+            # CHROME_CACHE_MB caps it besides. Session cookies, which do need
+            # to survive for the Imperva sensor, stay on chrome-profile.
+            - name: chrome-cache
+              emptyDir:
+                sizeLimit: 512Mi
             # Chromium uses /dev/shm for shared memory between processes.
             # The kubelet's default 64MB tmpfs runs out mid-page; backing
             # /dev/shm with a memory-medium emptyDir avoids that.
