@@ -458,7 +458,18 @@ spec:
           # Self-calibrating against the crawl's own history, so it needs no
           # hand-tuned product count. Cannot fire on first deploy: with a single
           # sample the series is compared against itself.
-          expr: catcrawl_products_seen{job="catcrawl"} < 0.5 * max_over_time(catcrawl_products_seen{job="catcrawl"}[60d])
+          # The Pushgateway never expires a value: it re-serves the last push
+          # to every scrape until the next crawl overwrites it. Because the
+          # crawl is weekly, one bad run would otherwise hold this alert up
+          # for seven days — and a run killed by activeDeadlineSeconds pushes
+          # a partial product count on its way out, which is exactly the
+          # shape that trips the threshold. The freshness gate limits the
+          # alert to the day after a crawl actually finished, so it fires
+          # loudly once and then falls quiet instead of repeating all week.
+          expr: >-
+            catcrawl_products_seen{job="catcrawl"}
+            < 0.5 * max_over_time(catcrawl_products_seen{job="catcrawl"}[60d])
+            and (time() - catcrawl_run_timestamp_seconds{job="catcrawl"} < 86400)
           for: 30m
           labels:
             severity: warning
@@ -534,7 +545,18 @@ spec:
           # Self-calibrating against the crawl's own history, so it needs no
           # hand-tuned product count. Cannot fire on first deploy: with a single
           # sample the series is compared against itself.
-          expr: catcrawl_coles_products_seen{job="catcrawl_coles"} < 0.5 * max_over_time(catcrawl_coles_products_seen{job="catcrawl_coles"}[60d])
+          # The Pushgateway never expires a value: it re-serves the last push
+          # to every scrape until the next crawl overwrites it. Because the
+          # crawl is weekly, one bad run would otherwise hold this alert up
+          # for seven days — and a run killed by activeDeadlineSeconds pushes
+          # a partial product count on its way out, which is exactly the
+          # shape that trips the threshold. The freshness gate limits the
+          # alert to the day after a crawl actually finished, so it fires
+          # loudly once and then falls quiet instead of repeating all week.
+          expr: >-
+            catcrawl_coles_products_seen{job="catcrawl_coles"}
+            < 0.5 * max_over_time(catcrawl_coles_products_seen{job="catcrawl_coles"}[60d])
+            and (time() - catcrawl_coles_run_timestamp_seconds{job="catcrawl_coles"} < 86400)
           for: 30m
           labels:
             severity: warning

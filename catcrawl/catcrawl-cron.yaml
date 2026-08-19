@@ -7,6 +7,9 @@ spec:
   schedule: "0 2 * * 3" 
   jobTemplate:
     spec:
+      # See the matching comment in catcrawl-col-cron.yaml: a failed Job
+      # object is what keeps KubeJobFailed firing, so it has to expire.
+      ttlSecondsAfterFinished: 172800
       template:
         spec:
           containers:

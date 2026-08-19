@@ -12,6 +12,16 @@ spec:
     spec:
       activeDeadlineSeconds: 14400 # 4h hard cap per run
       backoffLimit: 1
+      # Delete the Job object 48h after it finishes, successful or not.
+      # kube_job_failed is derived from the Job object, so without this a
+      # failed run leaves a tombstone that keeps KubeJobFailed and
+      # ColesCrawlJobFailed firing until three more runs fail and evict it
+      # from failedJobsHistoryLimit. 48h is long enough to notice a
+      # weekday failure and short enough that the alert clears itself
+      # before the next weekly run. This also expires successful Jobs, so
+      # the history shrinks to whatever ran in the last two days; pod logs
+      # are shipped to Loki, which is where they should be read from now.
+      ttlSecondsAfterFinished: 172800
       template:
         spec:
           restartPolicy: Never
