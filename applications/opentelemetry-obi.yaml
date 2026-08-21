@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
     chart: opentelemetry-ebpf-instrumentation
-    targetRevision: 0.11.0
+    targetRevision: 0.12.0
     helm:
       releaseName: obi
       valuesObject:
