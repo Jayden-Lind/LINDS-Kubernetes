@@ -96,6 +96,10 @@ spec:
           chunksCache:
             # default is 500MB, with limited memory keep this smaller
             writebackSizeLimit: 10MB
+            # Chart default is 8GB of memcached (a ~9.8Gi request) — the very
+            # reason this pod could only ever schedule on a remote linds
+            # worker. 1GB is plenty at this ingest volume.
+            allocatedMemory: 1024
             nodeSelector:
               datacenter: jd
           resultsCache:
