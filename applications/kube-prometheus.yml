@@ -14,8 +14,49 @@ spec:
     targetRevision: 88.1.5
     helm:
       values: |
+        # Rule groups built solely from the apiserver/etcd latency histogram
+        # buckets we drop below (SLO burn rates etc.) - disable so they don't
+        # evaluate against metrics that no longer exist.
+        defaultRules:
+          rules:
+            kubeApiserverAvailability: false
+            kubeApiserverBurnrate: false
+            kubeApiserverHistogram: false
+            kubeApiserverSlos: false
+            windows: false
         grafana:
+          # The ~26 mixin dashboards the chart ships by default are replaced by
+          # the curated dotdc set under dashboards.kubernetes below.
+          defaultDashboardsEnabled: false
+          # Grafana self-metrics were 6.3k series nobody looked at.
+          serviceMonitor:
+            enabled: false
           dashboards:
+            kubernetes:
+              k8s-views-global:
+                gnetId: 15757
+                revision: 43
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              k8s-views-namespaces:
+                gnetId: 15758
+                revision: 46
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              k8s-views-nodes:
+                gnetId: 15759
+                revision: 40
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
+              k8s-views-pods:
+                gnetId: 15760
+                revision: 39
+                datasource:
+                  - name: DS_PROMETHEUS
+                    value: prometheus
             default:
               cilium-metrics:
                 gnetId: 21431
@@ -76,6 +117,14 @@ spec:
             dashboardproviders.yaml:
               apiVersion: 1
               providers:
+              - name: kubernetes
+                orgId: 1
+                folder: Kubernetes
+                type: file
+                disableDeletion: false
+                editable: true
+                options:
+                  path: /var/lib/grafana/dashboards/kubernetes
               - name: cilium
                 orgId: 1
                 folder: Cilium
@@ -186,11 +235,13 @@ spec:
           ingress:
             enabled: false
           prometheusSpec:
-            # Whichever hits first triggers deletion: 30 days OR 25GB
-            retention: 30d
-            retentionSize: "25GB"
-            scrapeInterval: 30s
-            evaluationInterval: 30s
+            # Whichever hits first triggers deletion: 14 days OR 15GB
+            retention: 14d
+            retentionSize: "15GB"
+            # 60s halves sample volume vs 30s; the chart propagates this to the
+            # Grafana datasource timeInterval so $__rate_interval stays correct.
+            scrapeInterval: 60s
+            evaluationInterval: 60s
             # TSDB lives on JD-side iSCSI now; keep the pod next to it.
             nodeSelector:
               datacenter: jd
@@ -236,6 +287,26 @@ spec:
                   resources:
                     requests:
                       storage: 5Gi
+        # Latency/size histogram buckets were ~25k of 156k head series and fed
+        # only the (now disabled) apiserver SLO rules and mixin dashboards.
+        # etcd_* client buckets arrive via the apiserver's own /metrics.
+        kubeApiServer:
+          serviceMonitor:
+            metricRelabelings:
+              - sourceLabels: [__name__]
+                regex: (apiserver_request_duration_seconds_bucket|apiserver_request_sli_duration_seconds_bucket|apiserver_request_body_size_bytes_bucket|apiserver_response_sizes_bucket|apiserver_watch_list_duration_seconds_bucket|apiserver_watch_cache_read_wait_seconds_bucket|apiserver_watch_events_sizes_bucket|apiserver_storage_list_duration_seconds_bucket|etcd_request_duration_seconds_bucket)
+                action: drop
+        kubelet:
+          serviceMonitor:
+            # Kubelet operation-latency buckets; nothing dashboards on them.
+            metricRelabelings:
+              - sourceLabels: [__name__]
+                regex: (kubelet_runtime_operations_duration_seconds_bucket|kubelet_http_requests_duration_seconds_bucket|kubelet_pod_worker_duration_seconds_bucket|kubelet_pod_start_duration_seconds_bucket|kubelet_pleg_relist_duration_seconds_bucket|storage_operation_duration_seconds_bucket|csi_operations_seconds_bucket)
+                action: drop
+            probesMetricRelabelings:
+              - sourceLabels: [__name__]
+                regex: prober_probe_duration_seconds_bucket
+                action: drop
         kubeControllerManager:
           enabled: false
         kubeScheduler:

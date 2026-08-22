@@ -118,8 +118,10 @@ spec:
               enabled: false
             rules:
               enabled: false
+            # Loki's bundled ~10 operator-grade dashboards are overkill here;
+            # its metrics stay scraped for alerting.
             dashboards:
-              enabled: true
+              enabled: false
 
           # Zero out replica counts of other deployment modes
           backend:
