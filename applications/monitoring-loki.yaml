@@ -225,12 +225,13 @@ spec:
                     labels   = { job = "syslog", transport = "udp", port = "1514" }
                   }
 
-                  // General TCP/1515 (auto-detect RFC3164/RFC5424)
+                  // General TCP/1515 (strict RFC5424, message body only).
+                  // Sole sender is jd-vyos-01 (suricata EVE JSON + system logs);
+                  // keeping only the MSG part lets LogQL `| json` parse EVE events.
                   listener {
                     address  = "0.0.0.0:1515"
                     protocol = "tcp"
                     syslog_format = "rfc5424"
-                    use_rfc5424_message = true
                     label_structured_data = true
                     labels   = { job = "syslog", transport = "tcp", port = "1515" }
                   }
