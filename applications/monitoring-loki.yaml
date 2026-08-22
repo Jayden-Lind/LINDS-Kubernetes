@@ -90,9 +90,17 @@ spec:
                     name: loki-access-creds
                     key: secretAccessKey
 
+          # Keep both memcached caches on the JD site next to loki-0 — the
+          # chunks cache once landed on a linds worker and every chunk lookup
+          # crossed the ~13ms/52Mbit IPsec link (slow dashboards).
           chunksCache:
             # default is 500MB, with limited memory keep this smaller
             writebackSizeLimit: 10MB
+            nodeSelector:
+              datacenter: jd
+          resultsCache:
+            nodeSelector:
+              datacenter: jd
 
           # Enable minio for storage
           minio:
@@ -164,6 +172,10 @@ spec:
           controller:
             type: deployment
             replicas: 1
+            # Same-site as Loki: syslog ingest (incl. the vyos suricata feed)
+            # shouldn't detour via the linds site.
+            nodeSelector:
+              datacenter: jd
 
           service:
             enabled: true
