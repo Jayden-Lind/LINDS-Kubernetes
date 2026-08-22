@@ -271,6 +271,36 @@ spec:
                     source_labels = ["__syslog_message_msg_id"]
                     target_label  = "msgid"
                   }
+
+                  // --- Split into distinct Grafana services (rules are ordered;
+                  // later matches override earlier ones):
+                  //   suricata EVE events -> "suricata"
+                  //   jd-vyos-01 system logs -> "vyos"
+                  //   VM/appliance senders keep job="syslog" from the listener.
+                  rule {
+                    source_labels = ["__syslog_message_hostname"]
+                    regex         = "jd-vyos-01"
+                    target_label  = "job"
+                    replacement   = "vyos"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_hostname"]
+                    regex         = "jd-vyos-01"
+                    target_label  = "service_name"
+                    replacement   = "vyos"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_app_name"]
+                    regex         = "suricata"
+                    target_label  = "job"
+                    replacement   = "suricata"
+                  }
+                  rule {
+                    source_labels = ["__syslog_message_app_name"]
+                    regex         = "suricata"
+                    target_label  = "service_name"
+                    replacement   = "suricata"
+                  }
                   forward_to = [loki.write.default.receiver]
                 }
 
