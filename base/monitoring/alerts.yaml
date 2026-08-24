@@ -487,16 +487,21 @@ spec:
           # The Pushgateway is stateless, so a restart drops these series. Without
           # this rule the crawl alerts would go quiet rather than fire, which is
           # the more dangerous failure: silence that looks like health.
-          expr: absent(catcrawl_run_timestamp_seconds{job="catcrawl"})
+          # Gated to Wednesdays (UTC, matching the 0 2 * * 3 schedule): missing
+          # metrics only matter on the day the crawl is due, so a mid-week
+          # Pushgateway restart stays quiet until then.
+          expr: absent(catcrawl_run_timestamp_seconds{job="catcrawl"}) and on() (day_of_week() == 3)
           # Long enough to cover a deploy: these series do not exist until the
           # first crawl pushes them, so this fires once after initial rollout and
-          # resolves itself as soon as a crawl runs.
+          # resolves itself as soon as a crawl runs. The crawl starts at 02:00
+          # UTC, so with the Wednesday gate this fires from 06:00 UTC at the
+          # earliest — well after the run should have repopulated the metrics.
           for: 6h
           labels:
             severity: warning
           annotations:
             summary: "catcrawl metrics are absent from the Pushgateway"
-            description: "No catcrawl metrics are present. The Pushgateway may have restarted and lost its state, in which case the crawl alerts are blind until the next weekly run repopulates them."
+            description: "No catcrawl metrics are present on crawl day (Wednesday). The Pushgateway may have restarted and lost its state, and today's run has not repopulated it — the crawl alerts are blind until it does."
 
     # catcrawl-coles is a weekly CronJob (0 2 * * 3) that scrapes coles.com.au
     # through a headless Chrome, because the mobile API it used to call is now
@@ -615,16 +620,21 @@ spec:
           # The Pushgateway is stateless, so a restart drops these series.
           # Without this rule the crawl alerts would go quiet rather than fire,
           # which is the more dangerous failure: silence that looks like health.
-          expr: absent(catcrawl_coles_run_timestamp_seconds{job="catcrawl_coles"})
+          # Gated to Wednesdays (UTC, matching the 0 2 * * 3 schedule): missing
+          # metrics only matter on the day the crawl is due, so a mid-week
+          # Pushgateway restart stays quiet until then.
+          expr: absent(catcrawl_coles_run_timestamp_seconds{job="catcrawl_coles"}) and on() (day_of_week() == 3)
           # Long enough to cover a deploy: these series do not exist until the
           # first crawl pushes them, so this fires once after initial rollout and
-          # resolves itself as soon as a crawl runs.
+          # resolves itself as soon as a crawl runs. The crawl starts at 02:00
+          # UTC, so with the Wednesday gate this fires from 06:00 UTC at the
+          # earliest — well after the run should have repopulated the metrics.
           for: 6h
           labels:
             severity: warning
           annotations:
             summary: "catcrawl-coles metrics are absent from the Pushgateway"
-            description: "No Coles crawl metrics are present. The Pushgateway may have restarted and lost its state, in which case the crawl alerts are blind until the next weekly run repopulates them."
+            description: "No Coles crawl metrics are present on crawl day (Wednesday). The Pushgateway may have restarted and lost its state, and today's run has not repopulated it — the crawl alerts are blind until it does."
 
     # catcrawl-viewer serves catcrawl.linds.com.au: search, price history and
     # the Coles/Woolworths comparison. It replaced the Coles price-history API,
