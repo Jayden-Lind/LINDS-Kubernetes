@@ -11,7 +11,7 @@ spec:
   sources:
     - chart: nginx-ingress
       repoURL: ghcr.io/nginx/charts
-      targetRevision: 2.6.4
+      targetRevision: 2.7.0
       helm:
         releaseName: nginx-ingress-mtls
         # CRDs are owned by the primary nginx-ingress Application; installing
