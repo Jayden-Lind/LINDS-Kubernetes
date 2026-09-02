@@ -11,7 +11,7 @@ spec:
   sources:
     - repoURL: https://raw.githubusercontent.com/plexinc/pms-docker/gh-pages
       chart: plex-media-server
-      targetRevision: 1.7.0
+      targetRevision: 1.7.1
       helm:
         values: |
           nameOverride: plex-jd
