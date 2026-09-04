@@ -8,9 +8,13 @@
 # rules and TLS block (reusing the app's existing cert-manager secret) but
 # ingressClassName: nginx-mtls. The mirror tracks source changes and is
 # garbage-collected when the source Ingress is deleted.
+#
+# CEL GeneratingPolicy (policies.kyverno.io); the kyverno.io/v1
+# ClusterPolicy form is deprecated and warned on every apply.
 ---
 # Kyverno's background controller ships with no rights on Ingresses; this
-# aggregates the verbs the generate rule needs into its ClusterRole.
+# aggregates the verbs the generate and mutate-existing policies need into
+# its ClusterRole.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -23,72 +27,66 @@ rules:
     resources: ["ingresses"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
 metadata:
   name: mirror-mtls-ingress
 spec:
-  # Kyverno's admission webhook defaults these onto the live object; declare
-  # them so ArgoCD doesn't report the policy as permanently OutOfSync.
-  admission: true
-  background: true
-  emitWarning: false
-  validationFailureAction: Audit
-  rules:
-    - name: clone-ingress-to-nginx-mtls
-      # Webhook-defaulted like the fields above; declared to avoid drift.
-      skipBackgroundRequests: true
-      match:
-        any:
-          # Opt-in via label...
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-              selector:
-                matchLabels:
-                  linds.com.au/mtls-mirror: "true"
-          # ...or annotation.
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-              annotations:
-                linds.com.au/mtls-mirror: "true"
-      exclude:
-        any:
-          # Never match generated mirrors themselves: source annotations are
-          # copied wholesale onto the mirror, so an annotation opt-in would
-          # otherwise recurse (<name>-mtls-mtls-...). Mirrors always carry
-          # the mtls-mirror-of label.
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-              selector:
-                matchExpressions:
-                  - key: linds.com.au/mtls-mirror-of
-                    operator: Exists
-      generate:
-        generateExisting: true # also mirror Ingresses that predate the policy
-        synchronize: true # keep mirrors updated / GC'd with their source
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        name: "{{ request.object.metadata.name }}-mtls"
-        namespace: "{{ request.object.metadata.namespace }}"
-        data:
-          metadata:
-            labels:
-              # external-dns runs with --label-filter=!linds.com.au/mtls-mirror-of
-              # (applications/external-dns.yaml) so mirrors never repoint the
-              # primary DNS records at the mTLS VIP. Deliberately NOT the
-              # opt-in label, or the policy would match its own output.
-              linds.com.au/mtls-mirror-of: "{{ request.object.metadata.name }}"
-              app.kubernetes.io/managed-by: kyverno
-            # Annotations are copied wholesale so per-app nginx.org/* tuning
-            # (websockets, proxy-buffering) carries over. That includes
-            # cert-manager.io/cluster-issuer, which is benign here: the
-            # Certificate for the shared TLS secret is owned by the source
-            # Ingress, so ingress-shim logs "already exists" and skips it.
-            annotations: "{{ request.object.metadata.annotations || `{}` }}"
-          spec:
-            ingressClassName: nginx-mtls
-            tls: "{{ request.object.spec.tls || `[]` }}"
-            rules: "{{ request.object.spec.rules }}"
+  evaluation:
+    # Keep mirrors updated / GC'd with their source.
+    synchronize:
+      enabled: true
+    # Also mirror Ingresses that predate the policy.
+    generateExisting:
+      enabled: true
+    # Defaulted by the API server; declared so ArgoCD doesn't report drift.
+    skipBackgroundRequests: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingresses"]
+  matchConditions:
+    - name: opted-in
+      expression: >-
+        object.metadata.?labels[?'linds.com.au/mtls-mirror'].orValue('') == 'true' ||
+        object.metadata.?annotations[?'linds.com.au/mtls-mirror'].orValue('') == 'true'
+    # Never match generated mirrors themselves: source annotations are
+    # copied wholesale onto the mirror, so an annotation opt-in would
+    # otherwise recurse (<name>-mtls-mtls-...). Mirrors always carry the
+    # mtls-mirror-of label.
+    - name: not-a-mirror
+      expression: "!object.metadata.?labels[?'linds.com.au/mtls-mirror-of'].hasValue()"
+  variables:
+    - name: name
+      expression: object.metadata.name
+    - name: namespace
+      expression: object.metadata.namespace
+    - name: downstream
+      # Annotations are copied wholesale so per-app nginx.org/* tuning
+      # (websockets, proxy-buffering) carries over. That includes
+      # cert-manager.io/cluster-issuer, which is benign here: the
+      # Certificate for the shared TLS secret is owned by the source
+      # Ingress, so ingress-shim logs "not owned" and skips it.
+      expression: >-
+        [{
+          "apiVersion": dyn("networking.k8s.io/v1"),
+          "kind": dyn("Ingress"),
+          "metadata": dyn({
+            "name": string(variables.name) + "-mtls",
+            "namespace": string(variables.namespace),
+            "labels": {
+              "linds.com.au/mtls-mirror-of": string(variables.name),
+              "app.kubernetes.io/managed-by": "kyverno"
+            },
+            "annotations": object.metadata.?annotations.orValue({})
+          }),
+          "spec": dyn({
+            "ingressClassName": "nginx-mtls",
+            "tls": object.spec.?tls.orValue([]),
+            "rules": object.spec.rules
+          })
+        }]
+  generate:
+    - expression: generator.Apply(variables.namespace, variables.downstream)

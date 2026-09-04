@@ -12,77 +12,69 @@
 # CertificateRequest no longer matches the spec. The catch: ingress-shim's
 # certNeedsUpdate() never compares spec.usages, so a Certificate that
 # already exists is left alone. cert-manager.io/duration IS compared, and
-# the existing Certificates have no explicit duration, so pinning it to
-# cert-manager's own 90-day default forces one update that carries the new
-# usages along with it. Verified on v1.21.1.
+# pinning it to cert-manager's own 90-day default forces one update that
+# carries the new usages along with it. Verified on v1.21.1.
 #
-# Rule 1 mutates Ingresses at admission; rule 2 patches the ones that
-# already exist when this policy lands (mutateExistingOnPolicyUpdate).
-# Both only add the annotation when absent (+() anchor) so a hand-set
-# value on an Ingress wins.
+# Each annotation is added only when absent, so a hand-set value on an
+# Ingress wins. mutateExisting patches Ingresses that already exist when
+# the policy lands; admission handles new ones before ingress-shim sees
+# them. The conditions are declared twice on purpose: matchConditions
+# gate admission, but the mutate-existing scan on policy create only
+# honours targetMatchConditions (verified on v1.19.0 - with matchConditions
+# alone the scan patched every Ingress in the cluster).
+#
+# CEL MutatingPolicy (policies.kyverno.io); the kyverno.io/v1 ClusterPolicy
+# form is deprecated and warned on every apply.
 ---
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
 metadata:
   name: ingress-cert-server-auth
 spec:
-  # Webhook-defaulted fields declared so ArgoCD doesn't report drift
-  # (same as mirror-mtls-ingress.yaml).
-  admission: true
-  background: true
-  emitWarning: false
-  validationFailureAction: Audit
-  rules:
-    - name: add-server-auth-usage
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-              annotations:
-                cert-manager.io/cluster-issuer: "?*"
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-              annotations:
-                cert-manager.io/issuer: "?*"
-      mutate:
-        patchStrategicMerge:
-          metadata:
-            annotations:
-              +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
-              +(cert-manager.io/duration): "2160h"
-              +(cert-manager.io/duration): "2160h"
-    - name: add-server-auth-usage-existing
-      skipBackgroundRequests: true
-      # Trigger only; target selection is entirely by the preconditions
-      # below. Matching the same Ingresses as rule 1 keeps the rule
-      # syntactically a "mutate existing" rule without matching anything
-      # unrelated.
-      match:
-        any:
-          - resources:
-              kinds:
-                - networking.k8s.io/v1/Ingress
-      mutate:
-        # On policy create/update the trigger is the policy itself, so the
-        # targets cannot be derived from request.object; select every
-        # Ingress and filter per target instead.
-        mutateExistingOnPolicyUpdate: true
-        targets:
-          - apiVersion: networking.k8s.io/v1
-            kind: Ingress
-            preconditions:
-              any:
-                - key: '{{ target.metadata.annotations."cert-manager.io/cluster-issuer" || `""` }}'
-                  operator: NotEquals
-                  value: ""
-                - key: '{{ target.metadata.annotations."cert-manager.io/issuer" || `""` }}'
-                  operator: NotEquals
-                  value: ""
-        patchStrategicMerge:
-          metadata:
-            annotations:
-              +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
-              +(cert-manager.io/duration): "2160h"
+  evaluation:
+    admission:
+      enabled: true
+    mutateExisting:
+      enabled: true
+    # Defaulted by the API server; declared so ArgoCD doesn't report drift.
+    skipBackgroundRequests: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingresses"]
+  matchConditions:
+    - name: has-cert-manager-issuer
+      expression: >-
+        object.metadata.?annotations[?'cert-manager.io/cluster-issuer'].hasValue() ||
+        object.metadata.?annotations[?'cert-manager.io/issuer'].hasValue()
+    - name: something-to-add
+      expression: >-
+        !object.metadata.?annotations[?'cert-manager.io/usages'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue()
+  targetMatchConditions:
+    - name: has-cert-manager-issuer
+      expression: >-
+        object.metadata.?annotations[?'cert-manager.io/cluster-issuer'].hasValue() ||
+        object.metadata.?annotations[?'cert-manager.io/issuer'].hasValue()
+    - name: something-to-add
+      expression: >-
+        !object.metadata.?annotations[?'cert-manager.io/usages'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue()
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          (!object.metadata.?annotations[?'cert-manager.io/usages'].hasValue() ?
+            [JSONPatch{
+              op: "add",
+              path: "/metadata/annotations/" + jsonpatch.escapeKey("cert-manager.io/usages"),
+              value: "digital signature, key encipherment, server auth"
+            }] : []) +
+          (!object.metadata.?annotations[?'cert-manager.io/duration'].hasValue() ?
+            [JSONPatch{
+              op: "add",
+              path: "/metadata/annotations/" + jsonpatch.escapeKey("cert-manager.io/duration"),
+              value: "2160h"
+            }] : [])
