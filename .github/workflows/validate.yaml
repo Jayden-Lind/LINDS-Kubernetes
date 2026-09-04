@@ -9,6 +9,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
+      # Single pin for the collection: used by the cache key and the install.
+      ZABBIX_COLLECTION_VERSION: 4.2.0
       # Schema sources are tried in order. Locally generated schemas (see the
       # step below) win over the CRDs-catalog, which tracks upstream main and
       # so can disagree with the versions this repo actually pins.
@@ -61,6 +63,17 @@ jobs:
         run: |
           kubeconform ${KUBECONFORM_ARGS} applications/
 
+      # Galaxy is the flakiest dependency in this workflow: it sometimes cuts
+      # a response short mid-body, which ansible-galaxy reports as an
+      # IncompleteRead crash rather than retrying. Cache the installed
+      # collection so most runs never talk to Galaxy at all.
+      - name: Cache Ansible collections
+        id: collections-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.ansible/collections
+          key: ansible-collections-community.zabbix-${{ env.ZABBIX_COLLECTION_VERSION }}
+
       # Syntax and structure only. Nothing in CI can reach the cluster, so the
       # real check on the Zabbix playbook is the PostSync Job failing a sync.
       - name: Lint the Zabbix configuration playbook
@@ -68,8 +81,22 @@ jobs:
           set -euo pipefail
           python3 -m venv .venv-ansible
           .venv-ansible/bin/pip install --quiet ansible-core
-          .venv-ansible/bin/ansible-galaxy collection install \
-            community.zabbix:==4.2.0
+          if [ "${{ steps.collections-cache.outputs.cache-hit }}" != "true" ]; then
+            # Cache miss: fetch from Galaxy, retrying the truncated-response
+            # failures described above with a growing back-off.
+            for attempt in 1 2 3 4 5; do
+              if .venv-ansible/bin/ansible-galaxy collection install \
+                  "community.zabbix:==${ZABBIX_COLLECTION_VERSION}"; then
+                break
+              fi
+              if [ "${attempt}" -eq 5 ]; then
+                echo "::error::ansible-galaxy failed ${attempt} times; giving up"
+                exit 1
+              fi
+              echo "ansible-galaxy failed (attempt ${attempt}); retrying in $((attempt * 15))s"
+              sleep $((attempt * 15))
+            done
+          fi
           cd zabbix/config
           ../../.venv-ansible/bin/ansible-playbook \
             -i inventory.yml site.yml --syntax-check
