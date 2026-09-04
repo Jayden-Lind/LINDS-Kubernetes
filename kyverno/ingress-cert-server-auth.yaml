@@ -7,9 +7,14 @@
 # our linds-ca leaves even with the root installed and fully trusted. ACME
 # issuers add the EKU themselves; the CA issuer only emits what is asked for.
 #
-# ingress-shim reads cert-manager.io/usages off the Ingress, updates the
-# owned Certificate's spec.usages, and cert-manager reissues because the
-# last CertificateRequest no longer matches the spec.
+# ingress-shim reads cert-manager.io/usages off the Ingress when it builds
+# the Certificate, and cert-manager reissues because the last
+# CertificateRequest no longer matches the spec. The catch: ingress-shim's
+# certNeedsUpdate() never compares spec.usages, so a Certificate that
+# already exists is left alone. cert-manager.io/duration IS compared, and
+# the existing Certificates have no explicit duration, so pinning it to
+# cert-manager's own 90-day default forces one update that carries the new
+# usages along with it. Verified on v1.21.1.
 #
 # Rule 1 mutates Ingresses at admission; rule 2 patches the ones that
 # already exist when this policy lands (mutateExistingOnPolicyUpdate).
@@ -47,6 +52,8 @@ spec:
           metadata:
             annotations:
               +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
+              +(cert-manager.io/duration): "2160h"
+              +(cert-manager.io/duration): "2160h"
     - name: add-server-auth-usage-existing
       skipBackgroundRequests: true
       # Trigger only; target selection is entirely by the preconditions
@@ -78,3 +85,4 @@ spec:
           metadata:
             annotations:
               +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
+              +(cert-manager.io/duration): "2160h"
