@@ -1,0 +1,80 @@
+# Adds the "server auth" Extended Key Usage to every ingress-shim Certificate.
+#
+# cert-manager's default usages are "digital signature, key encipherment",
+# which yields a leaf with no ExtendedKeyUsage at all. Apple's TLS trust
+# rules (support.apple.com/en-us/103769) require id-kp-serverAuth on any
+# server certificate issued after 2019-07-01, so iOS/macOS clients reject
+# our linds-ca leaves even with the root installed and fully trusted. ACME
+# issuers add the EKU themselves; the CA issuer only emits what is asked for.
+#
+# ingress-shim reads cert-manager.io/usages off the Ingress, updates the
+# owned Certificate's spec.usages, and cert-manager reissues because the
+# last CertificateRequest no longer matches the spec.
+#
+# Rule 1 mutates Ingresses at admission; rule 2 patches the ones that
+# already exist when this policy lands (mutateExistingOnPolicyUpdate).
+# Both only add the annotation when absent (+() anchor) so a hand-set
+# value on an Ingress wins.
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ingress-cert-server-auth
+spec:
+  # Webhook-defaulted fields declared so ArgoCD doesn't report drift
+  # (same as mirror-mtls-ingress.yaml).
+  admission: true
+  background: true
+  emitWarning: false
+  validationFailureAction: Audit
+  rules:
+    - name: add-server-auth-usage
+      skipBackgroundRequests: true
+      match:
+        any:
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+              annotations:
+                cert-manager.io/cluster-issuer: "?*"
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+              annotations:
+                cert-manager.io/issuer: "?*"
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            annotations:
+              +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
+    - name: add-server-auth-usage-existing
+      skipBackgroundRequests: true
+      # Trigger only; target selection is entirely by the preconditions
+      # below. Matching the same Ingresses as rule 1 keeps the rule
+      # syntactically a "mutate existing" rule without matching anything
+      # unrelated.
+      match:
+        any:
+          - resources:
+              kinds:
+                - networking.k8s.io/v1/Ingress
+      mutate:
+        # On policy create/update the trigger is the policy itself, so the
+        # targets cannot be derived from request.object; select every
+        # Ingress and filter per target instead.
+        mutateExistingOnPolicyUpdate: true
+        targets:
+          - apiVersion: networking.k8s.io/v1
+            kind: Ingress
+            preconditions:
+              any:
+                - key: '{{ target.metadata.annotations."cert-manager.io/cluster-issuer" || `""` }}'
+                  operator: NotEquals
+                  value: ""
+                - key: '{{ target.metadata.annotations."cert-manager.io/issuer" || `""` }}'
+                  operator: NotEquals
+                  value: ""
+        patchStrategicMerge:
+          metadata:
+            annotations:
+              +(cert-manager.io/usages): "digital signature, key encipherment, server auth"
