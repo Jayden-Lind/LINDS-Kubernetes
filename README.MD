@@ -7,9 +7,9 @@ This repository hosts the configuration for my personal Kubernetes homelab. The 
 ## Cluster Overview
 
 * **OS:** Talos Linux (running on Proxmox VE)
-* **Networking:** [Calico](https://www.tigera.io/project-calico/) with **eBPF dataplane**, **BGP peering** directly to my VyOS routers
-* **Service Load Balancing:** Provided natively by Calico BGP (no MetalLB)
-* **Proxy:** Kube-proxy is **disabled**; Calico eBPF handles service load balancing and cluster networking
+* **Networking:** [Cilium](https://cilium.io/) with the **eBPF dataplane**, native routing, and the **BGP control plane** peering with the VyOS router at each site; Hubble for flow visibility
+* **Service Load Balancing:** Cilium LB-IPAM (`172.16.1.0/24`) advertised over BGP, no MetalLB
+* **Proxy:** Kube-proxy is **disabled**; Cilium's kube-proxy replacement handles service load balancing and cluster networking
 * **Storage:** Backed by TrueNAS (NFS/iSCSI)
 * **GitOps:** [Argo CD](https://argo-cd.readthedocs.io/) provisions and manages all applications
 
@@ -19,7 +19,7 @@ After building the cluster with [Terraform](https://github.com/Jayden-Lind/LINDS
 
 ```bash
 # 1. Vault bootstrap token for External Secrets (gitignored - not in this repo)
-kubectl apply -f base/linds-secret.yml
+kubectl apply -f linds-secret.yml
 
 # 2. Install Argo CD (pinned version + config baked in via kustomize)
 kubectl apply --server-side -k bootstrap/
@@ -33,12 +33,12 @@ The [root Application](applications/root.yaml) syncs everything in [`application
 ## Provisioning
 
 * **Argo CD** manages all workloads, applications, monitoring, logging, and supporting services.
-* **Exception:** Calico CNI is installed via Talos configuration, while BGP peering and IP pools are configured declaratively via GitOps.
+* **Exception:** Cilium (Helm release, BGP peering and the LB IP pool) is managed from [LINDS-Terraform](https://github.com/Jayden-Lind/LINDS-Terraform/tree/main/proxmox) next to the Talos machine configs, because the CNI has to exist before Argo CD can run.
 
 ## Key Features
 
 * **eBPF dataplane:** Improves performance and observability, removes the need for kube-proxy.
-* **BGP integration:** Calico peers with my VyOS routers, advertising cluster services and pod CIDRs for seamless external access.
+* **BGP integration:** Cilium peers with my VyOS routers, advertising pod CIDRs, ClusterIPs and LoadBalancer IPs for seamless external access.
 * **Declarative GitOps:** All apps are managed through Git with Argo CD, enabling full reproducibility and rollback.
 * **mTLS-only ingress:** A dedicated ingress class for publishing services to the internet behind client-certificate auth — see [nginx-ingress-mtls/](nginx-ingress-mtls/README.md).
 * **AD-backed SSO:** Keycloak federates users and groups read-only from the `linds.com.au` Active Directory over LDAPS, and fronts the services that speak OIDC/SAML natively — see [keycloak/](keycloak/README.md).

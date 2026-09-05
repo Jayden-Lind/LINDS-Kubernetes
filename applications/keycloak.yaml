@@ -23,3 +23,10 @@ spec:
       # this the CR fails dry-run validation because its CRD is not yet
       # established in the cluster.
       - SkipDryRunOnMissingResource=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

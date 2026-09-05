@@ -1,0 +1,36 @@
+---
+# Partial-manifest patches on Talos's CoreDNS (coredns/): spread the replicas
+# across both sites and prefer the local one. See the comments in that file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coredns
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: "coredns"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Partial manifests: SSA merges them into the Talos-owned objects, the
+      # server-side diff only compares the fields this app owns, and client
+      # validation is off because a Deployment without spec.selector or
+      # containers is invalid on its own.
+      - ServerSideApply=true
+      - ServerSideDiff=true
+      - Validate=false
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

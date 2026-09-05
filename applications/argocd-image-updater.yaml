@@ -31,7 +31,9 @@ spec:
               enabled: false
           extraArgs:
             - --loglevel=info
-            - --interval=60m
+            # Every 6h: the hourly tag scans were tripping Docker Hub's
+            # anonymous rate limit (toomanyrequests, ~45/day) at 60m.
+            - --interval=6h
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
       targetRevision: HEAD
       path: "image-updates"
@@ -42,3 +44,10 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

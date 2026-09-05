@@ -76,4 +76,15 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
+      # SSA + server-side diff together: the chart's StatefulSet has
+      # volumeClaimTemplates, whose API-defaulted apiVersion/kind/status
+      # fields read as permanent drift under SSA with the classic diff.
+      - ServerSideApply=true
+      - ServerSideDiff=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

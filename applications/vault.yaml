@@ -69,6 +69,12 @@ spec:
           enabled: true
           serviceType: "ClusterIP"
 
+        # Nothing carries vault.hashicorp.com/agent-inject annotations, so the
+        # injector was only a MutatingWebhookConfiguration sitting in the path
+        # of every pod creation. Secrets reach pods via external-secrets.
+        injector:
+          enabled: false
+
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: vault
@@ -80,3 +86,10 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

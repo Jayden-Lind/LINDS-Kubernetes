@@ -29,12 +29,9 @@ spec:
       targetRevision: HEAD
       path: kyverno/
   ignoreDifferences:
-    # Kyverno's ClusterRoles use RBAC aggregation: kube-controller-manager
-    # fills in .rules at runtime, which otherwise shows as permanent drift.
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-      jqPathExpressions:
-        - .rules
+    # Kyverno's aggregated ClusterRoles get their .rules filled in by
+    # kube-controller-manager; that drift is ignored cluster-wide via
+    # resource.compareoptions.ignoreAggregatedRoles in bootstrap/.
     # Chart 3.8.2 renders the new policies.kyverno.io CRDs with literal
     # empty labels/annotations maps ({}), which ArgoCD diffs against the
     # live objects' absent fields — permanent OutOfSync. crds.additionalLabels
@@ -46,7 +43,15 @@ spec:
         - .metadata.annotations
   syncPolicy:
     automated:
+      prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

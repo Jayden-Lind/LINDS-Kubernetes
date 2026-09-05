@@ -351,14 +351,13 @@ spec:
                 options:
                   - { name: ndots, value: "2" }
 
+          # No host has a JMX interface (nothing in zabbix/config references
+          # one), so the gateway only ever served the chart's TCP probes - and
+          # logged "error processing request: null" for every single probe
+          # connection. Disabling it also renders ZBX_JAVAGATEWAY_ENABLE=false
+          # on the server, so the Java pollers stop starting.
           zabbixJavaGateway:
-            enabled: true
-            image:
-              pullPolicy: Always
-            ZBX_START_POLLERS: 5
-            ZBX_STARTJAVAPOLLERS: 5
-            ZBX_TIMEOUT: 3
-            ZBX_DEBUGLEVEL: info
+            enabled: false
 
           zabbixWebService:
             enabled: false
@@ -430,3 +429,10 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

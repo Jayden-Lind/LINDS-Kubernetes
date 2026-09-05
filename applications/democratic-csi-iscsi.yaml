@@ -37,6 +37,12 @@ spec:
           config:
             driver: zfs-generic-iscsi
         controller:
+          # Same reason as csi-driver-nfs: without the snapshot CRDs the
+          # external-snapshotter sidecar only logs failed list/watch calls.
+          # Re-enable together with the external-snapshotter CRDs/controller
+          # if VolumeSnapshots on zfs-iscsi are ever wanted.
+          externalSnapshotter:
+            enabled: false
           driver:
             logLevel: info
         node:
@@ -67,3 +73,10 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

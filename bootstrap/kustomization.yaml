@@ -18,7 +18,11 @@ patches:
         name: argocd-cmd-params-cm
       data:
         server.insecure: "true"
-  # Relax the reconciliation loop - homelab doesn't need 3min polling.
+  # Poll GitHub every 5 minutes (jitter 1m): a merged Renovate PR deploys
+  # within minutes instead of up to an hour. Argo CD cannot receive GitHub
+  # webhooks here because the UI only exists on the LAN ingress class.
+  # ignoreAggregatedRoles stops aggregated ClusterRoles (Kyverno's) showing as
+  # permanent drift when kube-controller-manager fills in their rules.
   # Also carries the Keycloak OIDC config: `url` is required or the OIDC
   # redirect is built against the pod address instead of the ingress host.
   #
@@ -34,8 +38,10 @@ patches:
       metadata:
         name: argocd-cm
       data:
-        timeout.reconciliation: 3600s
-        timeout.reconciliation.jitter: 300s
+        timeout.reconciliation: 300s
+        timeout.reconciliation.jitter: 60s
+        resource.compareoptions: |
+          ignoreAggregatedRoles: true
         url: https://argocd.linds.com.au
         oidc.config: |
           name: Keycloak

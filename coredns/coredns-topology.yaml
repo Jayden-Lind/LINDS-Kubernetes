@@ -1,0 +1,44 @@
+# Site-aware CoreDNS.
+#
+# Talos owns the CoreDNS Deployment and the kube-dns Service (server-side
+# apply, field manager "talos") and re-applies both on every Kubernetes
+# upgrade. These two PARTIAL manifests ride alongside: with ServerSideApply
+# Argo CD only owns the fields written here, Talos keeps everything else, and
+# selfHeal puts these fields back if an upgrade resets them.
+#
+# Why: both replicas used to land on the jd site, so every DNS lookup from a
+# linds pod was a ~70 ms round trip across the inter-site link. Three replicas
+# spread over `datacenter` give linds its own resolver (ScheduleAnyway, so a
+# dead site never blocks scheduling), and PreferClose keeps each site's lookups
+# on its local replica while still falling back to the other site when a zone
+# has no ready endpoint. Cilium honours PreferClose once
+# loadBalancer.serviceTopology is on and the nodes carry
+# topology.kubernetes.io/zone (both set in LINDS-Terraform).
+#
+# This lives outside base/ on purpose: the CI kubeconform pass would reject a
+# Deployment without selector/containers, and the Application applies it with
+# Validate=false for the same reason.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: kube-system
+spec:
+  replicas: 3
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: datacenter
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              k8s-app: kube-dns
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-dns
+  namespace: kube-system
+spec:
+  trafficDistribution: PreferClose

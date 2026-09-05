@@ -212,12 +212,71 @@ spec:
 
             configMap:
               content: |
-                // --- Kubernetes pod logs (minimal) ---
+                // --- Kubernetes pod logs ---
                 discovery.kubernetes "pods" {
                   role = "pod"
                 }
+
+                // Without this relabel every pod log stream carried only
+                // job="loki.source.kubernetes.pods" and an instance label, so
+                // Grafana saw one giant "service" and nothing could be
+                // filtered by namespace or pod. The __meta_* labels are
+                // dropped after relabelling, so these rules are what decides
+                // the stream labels Loki keeps.
+                discovery.relabel "pods" {
+                  targets = discovery.kubernetes.pods.targets
+
+                  rule {
+                    source_labels = ["__meta_kubernetes_namespace"]
+                    target_label  = "namespace"
+                  }
+                  rule {
+                    source_labels = ["__meta_kubernetes_pod_name"]
+                    target_label  = "pod"
+                  }
+                  rule {
+                    source_labels = ["__meta_kubernetes_pod_container_name"]
+                    target_label  = "container"
+                  }
+                  rule {
+                    source_labels = ["__meta_kubernetes_pod_node_name"]
+                    target_label  = "node"
+                  }
+                  // app: app.kubernetes.io/name, else the legacy app label,
+                  // else the container name. The ";(.+)" rules only fire when
+                  // the first source label is still empty.
+                  rule {
+                    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+                    target_label  = "app"
+                  }
+                  rule {
+                    source_labels = ["app", "__meta_kubernetes_pod_label_app"]
+                    separator     = ";"
+                    regex         = ";(.+)"
+                    replacement   = "$1"
+                    target_label  = "app"
+                  }
+                  rule {
+                    source_labels = ["app", "__meta_kubernetes_pod_container_name"]
+                    separator     = ";"
+                    regex         = ";(.+)"
+                    replacement   = "$1"
+                    target_label  = "app"
+                  }
+                  // What Grafana Logs Drilldown groups by.
+                  rule {
+                    source_labels = ["app"]
+                    target_label  = "service_name"
+                  }
+                  rule {
+                    source_labels = ["namespace", "app"]
+                    separator     = "/"
+                    target_label  = "job"
+                  }
+                }
+
                 loki.source.kubernetes "pods" {
-                  targets    = discovery.kubernetes.pods.targets
+                  targets    = discovery.relabel.pods.output
                   forward_to = [loki.write.default.receiver]
                 }
 
@@ -249,6 +308,10 @@ spec:
                   listener {
                     address  = "0.0.0.0:1515"
                     protocol = "tcp"
+                    // Suricata EVE events with payloads run well past the
+                    // 8 KiB default and were being dropped ("message length
+                    // exceeds maximum length", ~300/day).
+                    max_message_length = 65536
                     syslog_format = "rfc5424"
                     label_structured_data = true
                     labels   = { job = "syslog", transport = "tcp", port = "1515" }
@@ -332,4 +395,16 @@ spec:
     automated:
       prune: true
       selfHeal: true
-
+    syncOptions:
+      # SSA + server-side diff together: the chart's StatefulSet has
+      # volumeClaimTemplates, whose API-defaulted apiVersion/kind/status
+      # fields read as permanent drift under SSA with the classic diff.
+      - ServerSideApply=true
+      - ServerSideDiff=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

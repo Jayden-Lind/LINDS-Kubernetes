@@ -24,13 +24,6 @@ spec:
           manifestTargets:
             kustomize:
               name: zabbix/zabbix-web-nginx-pgsql
-        - alias: zabbix-java-gateway
-          imageName: zabbix/zabbix-java-gateway:alpine-7.4-latest
-          commonUpdateSettings:
-            updateStrategy: digest
-          manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-java-gateway
         - alias: zabbix-web-service
           imageName: zabbix/zabbix-web-service:alpine-7.4-latest
           commonUpdateSettings:

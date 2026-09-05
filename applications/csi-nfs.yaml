@@ -12,6 +12,12 @@ spec:
     helm:
       releaseName: csi-driver-nfs
       valuesObject:
+        controller:
+          # No VolumeSnapshot CRDs are installed here, so the csi-snapshotter
+          # sidecar could only log "failed to list VolumeSnapshotClass" every
+          # few seconds (~3000 lines/day). Snapshots of NFS subdirectories
+          # aren't useful anyway; the ZFS layer underneath does that job.
+          enableSnapshotter: false
         storageClass:
           create: true
           name: nfs-csi
@@ -45,4 +51,10 @@ spec:
     syncOptions:
       - CreateNamespace=false
       - ApplyOutOfSyncOnly=true
-
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

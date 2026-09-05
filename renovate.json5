@@ -11,6 +11,18 @@
     managerFilePatterns: ["/^applications/[^/]+\\.ya?ml$/"],
   },
 
+  // Plain manifests with pinned image tags that argocd-image-updater does not
+  // track (it only handles the digest-strategy images in image-updates/).
+  // Scoped to the few files that carry a versioned tag; keycloak/ is left to
+  // the regex manager below so the two don't both open PRs for config-cli.
+  kubernetes: {
+    managerFilePatterns: [
+      "/^base/monitoring/pushgateway\\.yaml$/",
+      "/^catcrawl/[^/]+\\.ya?ml$/",
+      "/^zabbix/config-job\\.yaml$/",
+    ],
+  },
+
   // The argocd manager only reads targetRevision in applications/*.yaml, so
   // neither Keycloak version is visible by default: one lives in a remote
   // kustomize URL, the other in a Job's image tag. These bring them in scope.
@@ -29,6 +41,41 @@
       managerFilePatterns: ["/^keycloak/config-cli-job\\.yaml$/"],
       matchStrings: ["image: (?<depName>quay\\.io/adorsys/keycloak-config-cli):(?<currentValue>\\S+)"],
       datasourceTemplate: "docker",
+    },
+    {
+      // Argo CD itself: pinned as a raw install.yaml URL in bootstrap/, which
+      // the kustomize manager does not understand. Merging the PR upgrades
+      // Argo CD through its own self-managed Application.
+      customType: "regex",
+      managerFilePatterns: ["/^bootstrap/kustomization\\.yaml$/"],
+      matchStrings: ["argoproj/argo-cd/(?<currentValue>v[0-9.]+)/manifests/install\\.yaml"],
+      depNameTemplate: "argoproj/argo-cd",
+      datasourceTemplate: "github-releases",
+    },
+    {
+      // CNPG barman-cloud plugin, same shape: a release-asset URL in a
+      // kustomization. Check the CNPG operator/plugin compatibility table
+      // before merging a plugin minor.
+      customType: "regex",
+      managerFilePatterns: ["/^postgresql/kustomization\\.yaml$/"],
+      matchStrings: ["plugin-barman-cloud/releases/download/(?<currentValue>v[0-9.]+)/manifest\\.yaml"],
+      depNameTemplate: "cloudnative-pg/plugin-barman-cloud",
+      datasourceTemplate: "github-releases",
+    },
+    {
+      // The community.zabbix collection is pinned in two places that must
+      // agree: the config Job installs it, CI caches and syntax-checks it.
+      customType: "regex",
+      managerFilePatterns: [
+        "/^zabbix/config-job\\.yaml$/",
+        "/^\\.github/workflows/validate\\.yaml$/",
+      ],
+      matchStrings: [
+        "community\\.zabbix:==(?<currentValue>[0-9.]+)",
+        "ZABBIX_COLLECTION_VERSION: (?<currentValue>[0-9.]+)",
+      ],
+      depNameTemplate: "community.zabbix",
+      datasourceTemplate: "galaxy-collection",
     },
   ],
 
@@ -67,6 +114,12 @@
         "quay.io/adorsys/keycloak-config-cli",
       ],
       groupName: "keycloak",
+    },
+    {
+      // Both pins of the Ansible collection move in one PR (see the regex
+      // manager above).
+      matchPackageNames: ["community.zabbix"],
+      groupName: "community.zabbix",
     },
     // loki and alloy (both in monitoring-loki.yaml) are deliberately NOT
     // grouped - they are versioned independently upstream, so grouping
