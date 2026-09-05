@@ -6,7 +6,7 @@ namespace: argocd
 resources:
   - namespace.yaml
   # Pinned Argo CD version - bump this to upgrade Argo CD via GitOps
-  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.5/manifests/install.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.2/manifests/install.yaml
 
 patches:
   # TLS terminates at the nginx ingress (base/nginx/argocd.yml), so the
