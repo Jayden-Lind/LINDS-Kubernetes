@@ -89,3 +89,46 @@ patches:
         policy.csv: |
           g, k8s-argocd-admins, role:admin
           g, k8s-admins, role:admin
+
+  # Dex is Argo CD's bundled identity broker for SAML/LDAP/GitHub-style
+  # logins. Login here is direct OIDC against Keycloak (oidc.config above),
+  # so the dex server has nothing to do - its own log says "dex is not
+  # configured". Remove it rather than run an idle pod with a self-signed
+  # cert and an open gRPC port. Re-add by deleting these patches if a
+  # dex.config connector is ever needed.
+  - patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-dex-server
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: argocd-dex-server
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: argocd-dex-server
+  - patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: argocd-dex-server
+  - patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: argocd-dex-server
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: argocd-dex-server-network-policy
