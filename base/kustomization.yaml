@@ -7,6 +7,8 @@ resources:
   - monitoring/external-secret.yaml
   - monitoring/pushgateway.yaml
   - monitoring/suricata-dashboard.yaml
+  - monitoring/logs-kubernetes-dashboard.yaml
+  - monitoring/logs-syslog-dashboard.yaml
 
   - nginx/pdf.yml
   - nginx/argocd.yml
