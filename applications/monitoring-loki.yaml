@@ -33,10 +33,32 @@ spec:
             tracing:
               enabled: false
             querier:
-              max_concurrent: 2
+              # Concurrent sub-queries per querier. Was 2, which serialised
+              # every wide-range dashboard; the SingleBinary pod has a 3-CPU
+              # limit and sits at ~10% of it.
+              max_concurrent: 6
             # 30-day log retention; enforced by the compactor below
             limits_config:
               retention_period: 720h
+              # --- ingest ---
+              # Syslog messages arrive up to 1 MiB (suricata EVE alerts embed
+              # packet payloads); the default max line is 256 KiB and lines
+              # over it are rejected, not truncated.
+              max_line_size: 2MB
+              max_line_size_truncate: false
+              # Alert storms on the vyos feed pushed ~3M lines/day through one
+              # stream; the defaults (4 MB/s tenant, 3 MB/s stream) 429'd them.
+              ingestion_rate_mb: 16
+              ingestion_burst_size_mb: 32
+              per_stream_rate_limit: 8MB
+              per_stream_rate_limit_burst: 32MB
+              max_global_streams_per_user: 20000
+              # --- query ---
+              # What "Grafana can fetch more data" actually depends on: series
+              # per metric query (default 500) and lines per log query
+              # (default 5000, mirrored by the datasource maxLines).
+              max_query_series: 2000
+              max_entries_limit_per_query: 20000
             compactor:
               working_directory: /var/loki/compactor
               retention_enabled: true
@@ -196,6 +218,12 @@ spec:
               release: monitoring-kube-prometheus-stack
 
           alloy:
+            # Steady state is ~130Mi; the chart default (10m/50Mi) under-books it.
+            resources:
+              requests:
+                cpu: 50m
+                memory: 192Mi
+
             extraPorts:
               - name: "syslog-udp"
                 port: 1514
@@ -222,7 +250,10 @@ spec:
                 // Grafana saw one giant "service" and nothing could be
                 // filtered by namespace or pod. The __meta_* labels are
                 // dropped after relabelling, so these rules are what decides
-                // the stream labels Loki keeps.
+                // the stream labels Loki keeps. Log levels are not extracted
+                // here: Loki's discover_log_levels derives detected_level
+                // server-side for every line (that is what the Logs
+                // dashboards and Drilldown filter on).
                 discovery.relabel "pods" {
                   targets = discovery.kubernetes.pods.targets
 
@@ -280,47 +311,62 @@ spec:
                   forward_to = [loki.write.default.receiver]
                 }
 
-                // --- Syslog source with multiple listeners (per Alloy docs) ---
+                // --- Syslog: three listeners -> relabel -> process -> Loki ---
+                // Message size: a UDP datagram physically tops out at 64 KiB,
+                // so both UDP listeners take the maximum. The TCP listener
+                // carries suricata EVE alerts (packet payloads embedded) and
+                // takes up to 1 MiB. Loki's max_line_size above is 2 MB so
+                // nothing accepted here is rejected downstream.
                 loki.source.syslog "syslog" {
-                  // Legacy devices on UDP/514 (strict RFC3164)
+                  // Legacy devices on UDP/514: strict RFC3164 (LINDS-Switch-01).
+                  // An RFC5424 message sent here fails with "expecting a
+                  // sequence number [col 4]" and is dropped - modern senders
+                  // (proxmox, truenas, torrent, plex) belong on 1514.
                   listener {
                     address  = "0.0.0.0:514"
                     protocol = "udp"
+                    syslog_format = "rfc3164"
                     rfc3164_default_to_current_year = true
-                    syslog_format   = "rfc3164"
                     label_structured_data = true
+                    max_message_length = 65536
                     labels   = { job = "syslog", transport = "udp", port = "514" }
                   }
 
-                  // General UDP/1514 (auto-detect RFC3164/RFC5424)
+                  // General UDP/1514: strict RFC5424, whole formatted message
+                  // kept as the log line (hostname/app/pid stay visible).
                   listener {
                     address  = "0.0.0.0:1514"
                     protocol = "udp"
                     syslog_format = "rfc5424"
                     use_rfc5424_message = true
                     label_structured_data = true
+                    max_message_length = 65536
                     labels   = { job = "syslog", transport = "udp", port = "1514" }
                   }
 
-                  // General TCP/1515 (strict RFC5424, message body only).
+                  // TCP/1515: strict RFC5424, octet-counted, message body only.
                   // Sole sender is jd-vyos-01 (suricata EVE JSON + system logs);
-                  // keeping only the MSG part lets LogQL `| json` parse EVE events.
+                  // keeping only the MSG part is what lets `| json` parse EVE.
                   listener {
                     address  = "0.0.0.0:1515"
                     protocol = "tcp"
-                    // Suricata EVE events with payloads run well past the
-                    // 8 KiB default and were being dropped ("message length
-                    // exceeds maximum length", ~300/day).
-                    max_message_length = 65536
                     syslog_format = "rfc5424"
+                    max_message_length = 1048576
+                    // EVE bursts queue in rsyslog before they reach us; the
+                    // message's own timestamp keeps them in wire order.
+                    use_incoming_timestamp = true
                     label_structured_data = true
                     labels   = { job = "syslog", transport = "tcp", port = "1515" }
                   }
                   relabel_rules = loki.relabel.syslog.rules
-                  forward_to = [loki.write.default.receiver]
+                  forward_to    = [loki.process.syslog.receiver]
                 }
 
+                // Rules only: the listeners apply these through relabel_rules.
+                // Nothing is ever sent to this component's receiver.
                 loki.relabel "syslog" {
+                  forward_to = []
+
                   rule {
                     action        = "replace"
                     source_labels = ["__syslog_connection_hostname"]
@@ -335,14 +381,19 @@ spec:
                     source_labels = ["__syslog_message_severity"]
                     target_label  = "severity"
                   }
-
-                  rule { 
+                  rule {
                     source_labels = ["__syslog_message_hostname"]
                     target_label  = "hostname"
                   }
                   rule {
                     source_labels = ["__syslog_message_app_name"]
                     target_label  = "appname"
+                  }
+                  // These three exist as labels only long enough for
+                  // loki.process.syslog to move them into structured metadata.
+                  rule {
+                    source_labels = ["__syslog_message_facility"]
+                    target_label  = "facility"
                   }
                   rule {
                     source_labels = ["__syslog_message_proc_id"]
@@ -382,7 +433,79 @@ spec:
                     target_label  = "service_name"
                     replacement   = "suricata"
                   }
+                }
+
+                loki.process "syslog" {
                   forward_to = [loki.write.default.receiver]
+
+                  // procid as a stream label was a cardinality bomb: 6.9k
+                  // distinct values, 84% of every stream in Loki, and the
+                  // Drilldown label browser was unusable. As structured
+                  // metadata it stays queryable (`| procid="1234"`) without
+                  // splitting streams. (The stage moves matching labels.)
+                  stage.structured_metadata {
+                    values = {
+                      procid   = "",
+                      msgid    = "",
+                      facility = "",
+                    }
+                  }
+
+                  // Suricata EVE: event_type becomes a label (about a dozen
+                  // values), and the fields the dashboards aggregate on become
+                  // structured metadata, so panels filter with
+                  // `| alert_severity="1"` instead of `| json` over every line.
+                  // Absent fields (e.g. alert.* on a dns event) are skipped.
+                  stage.match {
+                    selector = "{job=\"suricata\"}"
+
+                    stage.json {
+                      expressions = {
+                        event_type         = "event_type",
+                        alert_signature    = "alert.signature",
+                        alert_signature_id = "alert.signature_id",
+                        alert_category     = "alert.category",
+                        alert_severity     = "alert.severity",
+                        alert_action       = "alert.action",
+                        src_ip             = "src_ip",
+                        dest_ip            = "dest_ip",
+                        dest_port          = "dest_port",
+                        proto              = "proto",
+                        app_proto          = "app_proto",
+                        dns_type           = "dns.type",
+                        dns_rrname         = "dns.rrname",
+                        tls_sni            = "tls.sni",
+                        http_hostname      = "http.hostname",
+                        http_method        = "http.method",
+                        http_status        = "http.status",
+                      }
+                    }
+                    stage.labels {
+                      values = {
+                        event_type = "",
+                      }
+                    }
+                    stage.structured_metadata {
+                      values = {
+                        alert_signature    = "",
+                        alert_signature_id = "",
+                        alert_category     = "",
+                        alert_severity     = "",
+                        alert_action       = "",
+                        src_ip             = "",
+                        dest_ip            = "",
+                        dest_port          = "",
+                        proto              = "",
+                        app_proto          = "",
+                        dns_type           = "",
+                        dns_rrname         = "",
+                        tls_sni            = "",
+                        http_hostname      = "",
+                        http_method        = "",
+                        http_status        = "",
+                      }
+                    }
+                  }
                 }
 
                 // --- Write to Loki ---

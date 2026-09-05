@@ -166,6 +166,12 @@ spec:
             server:
               # Required, or OAuth redirects are built against the pod address.
               root_url: https://grafana.linds.com.au
+              enable_gzip: true
+            dataproxy:
+              # Datasource proxy timeout (default 30s). Prometheus has no
+              # per-datasource timeout of its own, so wide-range panels on the
+              # Kubernetes dashboards were timing out here, not in Prometheus.
+              timeout: 300
             auth:
               # Break-glass: the local admin from grafana-credentials must stay
               # usable. Do NOT set disable_login_form - Keycloak is a new
@@ -198,10 +204,26 @@ spec:
               tls_client_ca: /etc/grafana/certs/ca.crt
           nodeSelector:
             datacenter: jd
+          # Requests only, no limits: nothing throttles or OOM-kills Grafana.
+          # Peak seen: 620Mi RSS / 0.03 CPU steady - the old 100m request made
+          # the pods dashboard read "600% of requests" during startup while
+          # nothing was actually constrained.
           resources:
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: 200m
+              memory: 768Mi
+          sidecar:
+            resources:
+              requests:
+                cpu: 20m
+                memory: 128Mi
+            dashboards:
+              # ConfigMaps annotated grafana_folder=<name> land in that Grafana
+              # folder (base/monitoring/*-dashboard.yaml -> "Logs") instead of
+              # all piling into General.
+              folderAnnotation: grafana_folder
+              provider:
+                foldersFromFilesStructure: true
           persistence:
             enabled: true
             size: 10Gi
@@ -215,8 +237,12 @@ spec:
               access: proxy
               url: http://loki.monitoring.svc.cluster.local:3100
               jsonData:
-                timeout: 60
-                maxLines: 5000
+                # Matches Loki's query_timeout (300s); the default 30s proxy
+                # timeout was cutting off 30-day range queries.
+                timeout: 300
+                # Loki's max_entries_limit_per_query is 20000; the browser is
+                # the practical ceiling for a single logs panel.
+                maxLines: 10000
           ingress:
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
