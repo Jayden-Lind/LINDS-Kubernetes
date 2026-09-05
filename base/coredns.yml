@@ -17,6 +17,17 @@ data:
         ttl 30
       }
       prometheus :9153
+      # INTERIM (2026-09-05): the A record for jd-fs-01 vanished from AD DNS
+      # (the DC itself answers NXDOMAIN), which broke every new SMB mount -
+      # Plex and Immich pods could not start after a rollout. The address is
+      # taken from the CIFS mounts that were still up (addr=10.0.50.201) and
+      # the host's ARP table for the VM's MAC. Remove this block once the
+      # record is back in AD; a pinned IP here would otherwise mask a future
+      # re-addressing of the file server.
+      hosts {
+        10.0.50.201 jd-fs-01.linds.com.au
+        fallthrough
+      }
       # Forward straight to the real upstreams. The previous /etc/resolv.conf
       # path went through Talos hostDNS (169.254.116.108), which drops queries
       # under Cilium socketLB - constant i/o timeouts and 5s stalls in pods.
