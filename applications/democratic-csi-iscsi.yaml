@@ -23,12 +23,12 @@ spec:
             parameters:
               fsType: ext4
             mountOptions: []
-            secrets:
-              provisioner-secret:
-              controller-publish-secret:
-              node-stage-secret:
-              node-publish-secret:
-              controller-expand-secret:
+            # No `secrets:` block: the chart renders a csi.storage.k8s.io/*-secret
+            # parameter for every key listed there, even a null one, and
+            # StorageClass parameters are immutable - the live class only has
+            # fsType, so declaring the keys made every sync fail with
+            # "field is immutable". The driver config secret is wired via
+            # driver.existingConfigSecret below, not through the StorageClass.
         driver:
           # config (with SSH private key) lives in a manually-created secret:
           # kubectl create secret generic democratic-csi-iscsi-config -n democratic-csi \
