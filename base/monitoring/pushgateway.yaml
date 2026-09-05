@@ -39,7 +39,7 @@ spec:
         - name: pushgateway
           # Pinned rather than :latest so a new upstream release cannot change
           # behaviour, or force an unscheduled image pull, without a commit here.
-          image: prom/pushgateway:v1.11.1
+          image: prom/pushgateway:v1.11.3
           args:
             - --web.listen-address=:9091
           # Note: the Pushgateway never expires metrics. A pushed value persists
