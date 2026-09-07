@@ -1,0 +1,102 @@
+# catcrawl-aldi captures the Aldi Australia catalogue weekly.
+#
+# Compare this with catcrawl-col-cron.yaml, which does the same job for Coles.
+# Almost everything that file needs, this one does not: no PersistentVolumeClaim
+# for a Chromium profile, no initContainer to clear its lock files, no
+# memory-backed /dev/shm, no emptyDir for a browser cache, and a fraction of the
+# CPU and memory. Aldi answers a plain HTTP request, so this is an HTTP client
+# and a JSON decoder.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: catcrawl-aldi-scheduler
+  namespace: default
+spec:
+  # Wednesdays at 04:00, two hours after the Coles crawl starts. They write to
+  # different databases and could overlap safely, but staggering them keeps one
+  # weekly spike on the Postgres cluster rather than two at once.
+  schedule: "0 4 * * 3"
+  concurrencyPolicy: Forbid        # never overlap two crawls
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A full run is minutes, not hours — the whole catalogue is a few thousand
+      # products. This budget is generous by an order of magnitude so that a
+      # slow site does not fail the run, and is still far below the Coles job's
+      # 11 hours.
+      activeDeadlineSeconds: 3600
+      backoffLimit: 1
+      # Delete the Job 48h after it finishes, successful or not.
+      # kube_job_failed is derived from the Job object, so without this a failed
+      # run leaves a tombstone that keeps the alert firing until three more runs
+      # evict it from failedJobsHistoryLimit.
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          # Per-attempt budget. activeDeadlineSeconds on the Job covers the
+          # whole Job including retries, so a slow first attempt would otherwise
+          # leave the retry almost no time.
+          activeDeadlineSeconds: 1500
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: catcrawl-aldi
+              image: ghcr.io/jayden-lind/cat-crawl-aldi:latest
+              imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              # The four database keys come from catcrawl-coles-env-secret,
+              # which is what catcrawl-viewer already does. All three databases
+              # live on the one cluster behind the one `catcrawl` role, so
+              # these are the shared credentials rather than the Coles ones —
+              # the secret's name is a misnomer it acquired by being first.
+              #
+              # Named keys rather than envFrom, deliberately: that secret also
+              # carries CAT_STORE_ID and the Coles API key, and this crawler
+              # has no business holding either.
+              env:
+                - name: DB_HOST
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
+                - name: DB_PORT
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+                - name: DB_USER
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_USER } }
+                - name: DB_PASSWORD
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
+                # Not a secret, and not in the shared secret so that pointing a
+                # run at a scratch database is an edit here rather than a secret
+                # change.
+                - name: DB_NAME
+                  value: catcrawl-aldi
+                # There is deliberately no CAT_STORE_ID. Aldi prices
+                # nationally — see the crawler's README — so unlike the other
+                # two there is nothing to nominate.
+                #
+                # The crawl exits, so Prometheus cannot scrape it; it pushes its
+                # outcome here instead.
+                - name: PUSHGATEWAY_URL
+                  value: http://pushgateway.monitoring.svc:9091
+                # Debug on purpose: this runs once a week and its failures
+                # cannot be reproduced on demand, so the run that goes wrong is
+                # the only chance to see why. Logs go to Loki.
+                - name: LOG_LEVEL
+                  value: debug
+              # An HTTP client and a JSON decoder. The largest thing it holds is
+              # one 650 KB page and the decoded payload from it; the Coles job
+              # requests 2 GiB because it runs Chromium.
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "1"
+                  memory: "512Mi"

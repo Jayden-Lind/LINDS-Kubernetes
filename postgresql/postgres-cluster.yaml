@@ -206,6 +206,20 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
+  name: linds-postgres-catcrawl-aldi
+  namespace: postgresql-linds
+spec:
+  cluster:
+    name: linds-postgres
+  name: catcrawl-aldi
+  owner: catcrawl
+  extensions:
+    - name: pg_stat_statements
+      ensure: present
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
   name: linds-postgres-immich
   namespace: postgresql-linds
 spec:
