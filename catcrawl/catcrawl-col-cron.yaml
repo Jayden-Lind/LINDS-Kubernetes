@@ -82,6 +82,21 @@ spec:
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
                 - name: CAT_STORE_ID
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: CAT_STORE_ID } }
+                # One store per capital city and one regional town per state and
+                # territory, chosen through each chain's own locator and checked
+                # to be full-line supermarkets -- small formats (Woolworths
+                # Metro, Coles Local and Central) carry a narrower range at
+                # different prices, which would read as a regional difference.
+                #
+                # Only the categories below are captured at these stores. The
+                # whole catalogue sixteen times over is sixteen times the
+                # traffic for data that, department by department, mostly does
+                # not vary; produce is the department where it does. See
+                # docs/produce-pricing.md in the catcrawl repo.
+                - name: CAT_EXTRA_STORES
+                  value: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
+                - name: CAT_EXTRA_CATEGORIES
+                  value: "fruit-vegetables"
                 # Persisted across runs on the PVC below, so Imperva sees a
                 # returning visitor rather than a brand-new one every week.
                 - name: CHROME_PROFILE

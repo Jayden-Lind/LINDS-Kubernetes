@@ -59,6 +59,21 @@ spec:
                   secretKeyRef:
                     name: catcrawl-env-secret
                     key: CAT_STORE_ID
+              # One store per capital city and one regional town per state and
+              # territory, chosen through each chain's own locator and checked
+              # to be full-line supermarkets -- small formats (Woolworths
+              # Metro, Coles Local and Central) carry a narrower range at
+              # different prices, which would read as a regional difference.
+              #
+              # Only the categories below are captured at these stores. The
+              # whole catalogue sixteen times over is sixteen times the
+              # traffic for data that, department by department, mostly does
+              # not vary; produce is the department where it does. See
+              # docs/produce-pricing.md in the catcrawl repo.
+              - name: CAT_EXTRA_STORES
+                value: "1248=Sydney CBD,5662=Broken Hill,3304=Melbourne CBD,5674=Mildura,2596=Brisbane CBD,2537=Cairns,2539=Mount Isa,4365=Perth CBD,4304=Broome,5317=Adelaide CBD,5601=Port Augusta,7012=Hobart,7220=Launceston,5652=Darwin,5604=Alice Springs,1073=Canberra"
+              - name: CAT_EXTRA_CATEGORIES
+                value: "Fruit & Veg"
               - name: API_KEY
                 valueFrom:
                   secretKeyRef:
