@@ -19,7 +19,7 @@ spec:
           namespace: arc-systems
           name: arc-gha-rs-controller
 
-        githubConfigUrl: "https://github.com/Jayden-Lind/catcrawl-aldies"
+        githubConfigUrl: "https://github.com/Jayden-Lind/catcrawl-aldi"
 
         githubConfigSecret: pre-defined-secret
 
