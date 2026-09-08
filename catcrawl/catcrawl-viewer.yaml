@@ -30,7 +30,7 @@ spec:
         - name: ghcr-pull-secret
       containers:
         - name: migrate
-          image: ghcr.io/jayden-lind/catcrawl-viewer:be859023a1d1b252245eff3f1e1eab787cf99a51
+          image: ghcr.io/jayden-lind/catcrawl-viewer:106ec102bf039c2e9bd443de3ca3b6c3b7078fe0
           imagePullPolicy: Always
           command: ["/usr/local/bin/migrate", "up"]
           env:
@@ -105,7 +105,7 @@ spec:
     spec:
       containers:
         - name: catcrawl-viewer
-          image: ghcr.io/jayden-lind/catcrawl-viewer:be859023a1d1b252245eff3f1e1eab787cf99a51
+          image: ghcr.io/jayden-lind/catcrawl-viewer:106ec102bf039c2e9bd443de3ca3b6c3b7078fe0
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
