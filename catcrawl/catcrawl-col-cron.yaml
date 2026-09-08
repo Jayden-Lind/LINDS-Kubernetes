@@ -80,8 +80,24 @@ spec:
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
                 - name: DB_PORT
                   valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+                # The home store, whose whole catalogue is captured.
+                #
+                # 7674 is the Coles Online Hub (Ocado) at Truganina, and it is
+                # here rather than in Vault because a store number is not a
+                # credential -- it belongs next to the store list below, in git,
+                # where a change to it is reviewable.
+                #
+                # It is 7674 and not the 584 the secret holds because 7674 is
+                # where the prices actually came from. Nothing was ever sent to
+                # Coles saying which store to price, so every crawl got the
+                # store an anonymous session defaults to, and 584 was only ever
+                # a label on it. Migration 20260908000001 relabels the history
+                # to match, so the series stays continuous rather than appearing
+                # to jump 8% the day the store was finally selected explicitly.
+                #
+                # The CAT_STORE_ID key in Vault is now unused by this job.
                 - name: CAT_STORE_ID
-                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: CAT_STORE_ID } }
+                  value: "7674"
                 # One store per capital city and one regional town per state and
                 # territory, chosen through each chain's own locator and checked
                 # to be full-line supermarkets -- small formats (Woolworths
