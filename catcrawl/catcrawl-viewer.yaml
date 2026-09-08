@@ -64,6 +64,16 @@ data:
   COLES_DB_NAME: catcrawl-coles
   WOW_DB_NAME: catcrawl
   VIEWER_DB_NAME: catcrawl-viewer
+
+  # Which store's prices the viewer shows. The crawler tables are keyed by
+  # (store_id, product_id) and hold more than one store, so every read names
+  # one; the viewer refuses to start without these rather than showing real
+  # prices from the wrong place.
+  #
+  # These two are the stores captured before the multi-store change, so the
+  # viewer keeps showing exactly what it showed before.
+  COLES_STORE_ID: "584"
+  WOW_STORE_ID: "3161"
   # The index holds both catalogues in memory. The crawls are weekly, so this
   # exists to pick up a manually triggered crawl without a restart, not to keep
   # up with anything.
