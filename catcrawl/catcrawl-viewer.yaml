@@ -72,7 +72,11 @@ data:
   #
   # These two are the stores captured before the multi-store change, so the
   # viewer keeps showing exactly what it showed before.
-  COLES_STORE_ID: "584"
+  #
+  # Coles is 7674, not the 584 its rows used to say: 584 was a label, 7674 is
+  # where the prices came from, and migration 20260908000001 relabels the
+  # history accordingly.
+  COLES_STORE_ID: "7674"
   WOW_STORE_ID: "3161"
   # The index holds both catalogues in memory. The crawls are weekly, so this
   # exists to pick up a manually triggered crawl without a restart, not to keep
