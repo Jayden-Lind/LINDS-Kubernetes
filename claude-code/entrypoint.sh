@@ -36,19 +36,23 @@ materialise() {
 # kubectl needs nothing here: the pod's ServiceAccount token is picked up as
 # in-cluster config automatically.
 materialise TALOSCONFIG_B64     "${HOME_DIR}/.talos/config"
-materialise SSH_PRIVATE_KEY_B64 "${HOME_DIR}/.ssh/id_ed25519"
+# Named for its role rather than its algorithm: the lab key is currently RSA,
+# and a filename like id_ed25519 would be a lie that ssh silently ignores.
+materialise SSH_PRIVATE_KEY_B64 "${HOME_DIR}/.ssh/id_lab"
 materialise SSH_KNOWN_HOSTS_B64 "${HOME_DIR}/.ssh/known_hosts" 0644
 
 # The lab's hosts are reached over the IPsec-linked private VLANs and their host
 # keys aren't in any public trust store; relax strict checking only for those.
-if [[ ! -f "${HOME_DIR}/.ssh/config" ]]; then
-  cat > "${HOME_DIR}/.ssh/config" <<'EOF'
+# Rewritten every boot so a key rename can't be shadowed by a stale copy on the
+# volume.
+cat > "${HOME_DIR}/.ssh/config" <<'EOF'
 Host 10.* 192.168.* jd-* linds-* *.linds.com.au
+    IdentityFile ~/.ssh/id_lab
+    IdentitiesOnly yes
     StrictHostKeyChecking accept-new
     UserKnownHostsFile ~/.ssh/known_hosts
 EOF
-  chmod 600 "${HOME_DIR}/.ssh/config"
-fi
+chmod 600 "${HOME_DIR}/.ssh/config"
 
 # Remote Control refuses both of these, so flag them loudly rather than letting
 # the phone/desktop handoff fail with an obscure error later.

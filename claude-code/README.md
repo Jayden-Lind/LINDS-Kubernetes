@@ -132,9 +132,9 @@ this repo.** Every key is optional; the entrypoint logs and skips what is unset.
 
 | Vault key | Purpose |
 |---|---|
-| `GITHUB_TOKEN` | Clone/push the working repos; wired into a git credential helper. |
+| `GITHUB_TOKEN` | Optional — both repos are public, so cloning works without it. Needed only to push. Wired into a git credential helper. |
 | `TALOSCONFIG_B64` | base64 of `proxmox/talosconfig` → `~/.talos/config`. |
-| `SSH_PRIVATE_KEY_B64` | base64 of the key that reaches the Proxmox hosts, VyOS routers and storage host → `~/.ssh/id_ed25519`. |
+| `SSH_PRIVATE_KEY_B64` | base64 of the key that reaches the Proxmox hosts, VyOS routers and storage host → `~/.ssh/id_lab`. |
 | `SSH_KNOWN_HOSTS_B64` | Optional; base64 of a `known_hosts` file. |
 | `TF_TFVARS_B64` | base64 of `proxmox/terraform.tfvars` (gitignored) → dropped into the clone. |
 | `TF_BACKEND_CONF_B64` | base64 of `proxmox/backend.conf`, the MinIO S3 state credentials. |
@@ -142,13 +142,20 @@ this repo.** Every key is optional; the entrypoint logs and skips what is unset.
 No kubeconfig is needed: `kubectl` picks up the pod's ServiceAccount as
 in-cluster config automatically.
 
+`vault` and `VAULT_ADDR` come from `home/common.nix` in the `shell-env` repo.
+Values are passed on stdin rather than as arguments so the private key never
+appears in the process table:
+
 ```bash
-vault kv put linds-keyvault/claude-code-secret \
-  GITHUB_TOKEN="ghp_..." \
-  TALOSCONFIG_B64="$(base64 -w0 ~/git/LINDS-Terraform/proxmox/talosconfig)" \
-  SSH_PRIVATE_KEY_B64="$(base64 -w0 ~/.ssh/id_ed25519)" \
-  TF_TFVARS_B64="$(base64 -w0 ~/git/LINDS-Terraform/proxmox/terraform.tfvars)" \
-  TF_BACKEND_CONF_B64="$(base64 -w0 ~/git/LINDS-Terraform/proxmox/backend.conf)"
+vault login   # once
+jq -n \
+  --arg talos   "$(base64 -w0 ~/git/LINDS-Terraform/proxmox/talosconfig)" \
+  --arg sshkey  "$(base64 -w0 ~/.ssh/id_rsa)" \
+  --arg tfvars  "$(base64 -w0 ~/git/LINDS-Terraform/proxmox/terraform.tfvars)" \
+  --arg backend "$(base64 -w0 ~/git/LINDS-Terraform/proxmox/backend.conf)" \
+  '{TALOSCONFIG_B64:$talos, SSH_PRIVATE_KEY_B64:$sshkey,
+    TF_TFVARS_B64:$tfvars, TF_BACKEND_CONF_B64:$backend}' \
+  | vault kv put linds-keyvault/claude-code-secret -
 ```
 
 `refreshPolicy: OnChange` means the Secret updates within the hour, but the pod
