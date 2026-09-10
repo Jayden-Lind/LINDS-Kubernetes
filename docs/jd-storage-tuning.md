@@ -27,9 +27,12 @@ zfs inherit au.com.linds:sanoid <dataset>     # back to the default policy
 `/usr/local/sbin/sanoid-snapshot-gate` (`roles/proxmox/files/`) is the
 template's `pre_snapshot_script`, with `no_inconsistent_snapshot = yes`: it
 exits non-zero for a dataset carrying the property and sanoid skips that
-snapshot. Each daily run logs `WARN: pre_snapshot_script failed, 256` per
-opted-out dataset — that is the skip, not a fault. The gate fails open (no
-target or a zfs error means the snapshot is taken), and it never touches
+snapshot. An opted-out dataset never gets a snapshot, so every sanoid run
+(every 15 minutes) finds its daily due and logs
+`WARN: pre_snapshot_script failed, 256` for it — that is the skip, not a
+fault. `sanoid --readonly` never runs `pre_snapshot_script`, so a readonly
+pass still claims it would snapshot opted-out datasets. The gate fails open
+(no target or a zfs error means the snapshot is taken), and it never touches
 existing snapshots: destroy those by hand.
 
 Do not replace this with a `[child]` section carrying its own template.
