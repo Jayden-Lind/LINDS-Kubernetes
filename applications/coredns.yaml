@@ -6,6 +6,12 @@ kind: Application
 metadata:
   name: coredns
   namespace: argocd
+  annotations:
+    # Server-side diff, so only the fields this app owns are compared (see
+    # syncOptions). This annotation is what switches it on per app - the
+    # `ServerSideDiff=true` sync option this file used to carry is silently
+    # ignored by Argo CD.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -21,11 +27,10 @@ spec:
       selfHeal: true
     syncOptions:
       # Partial manifests: SSA merges them into the Talos-owned objects, the
-      # server-side diff only compares the fields this app owns, and client
-      # validation is off because a Deployment without spec.selector or
-      # containers is invalid on its own.
+      # server-side diff (compare-options annotation above) only compares the
+      # fields this app owns, and client validation is off because a
+      # Deployment without spec.selector or containers is invalid on its own.
       - ServerSideApply=true
-      - ServerSideDiff=true
       - Validate=false
       - ApplyOutOfSyncOnly=true
     retry:

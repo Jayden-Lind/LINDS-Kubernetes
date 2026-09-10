@@ -3,6 +3,12 @@ kind: Application
 metadata:
   name: monitoring-loki
   namespace: argocd
+  annotations:
+    # Server-side diff: the chart's StatefulSet has volumeClaimTemplates,
+    # whose API-defaulted apiVersion/kind/status fields read as permanent
+    # drift under the classic diff. This annotation is what switches it on
+    # per app - a `ServerSideDiff=true` sync option is silently ignored.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   destination:
@@ -519,11 +525,8 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      # SSA + server-side diff together: the chart's StatefulSet has
-      # volumeClaimTemplates, whose API-defaulted apiVersion/kind/status
-      # fields read as permanent drift under SSA with the classic diff.
+      # Server-side diff is the compare-options annotation on metadata.
       - ServerSideApply=true
-      - ServerSideDiff=true
       - ApplyOutOfSyncOnly=true
     retry:
       limit: 5
