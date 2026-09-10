@@ -3,6 +3,14 @@ kind: Application
 metadata:
   name: valheim
   namespace: argocd
+  annotations:
+    # Server-side diff: the API server fills apiVersion/kind/volumeMode/status
+    # into the chart's StatefulSet volumeClaimTemplates, which the classic
+    # diff reports as permanent drift. This annotation is what turns it on
+    # per app - a `ServerSideDiff=true` entry under syncOptions is silently
+    # ignored (verified 2026-09-10: OutOfSync with the sync option, Synced
+    # with the annotation).
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   destination:
@@ -17,9 +25,12 @@ spec:
           # The image has one Valheim server build baked in (no SteamCMD at
           # runtime, so ~2GB of game files never land on the NAS). Clients
           # refuse an older server build, so new builds are rolled out by
-          # argocd-image-updater (image-updates/valheim-image-update.yaml).
+          # argocd-image-updater (image-updates/valheim-image-update.yaml),
+          # which rewrites this tag via parameters whenever `latest` moves.
+          # Pinned to the digest `latest` had on 2026-09-10 (server l-1.0.7)
+          # so the updater's first pass is a no-op, not a surprise restart.
           image:
-            tag: latest
+            tag: latest@sha256:4bc36bfb916ad088929f3834b565adac2d0604a2db898c1d9addba09b9dda954
           # JD only - the saves volume is JD-side iSCSI - and never the
           # control-plane node: the server is CPU-bursty and etcd lives there.
           nodeSelector:
@@ -35,10 +46,10 @@ spec:
           # game server shows up as rubber-banding, not as a number.
           resources:
             requests:
-              cpu: 2
-              memory: 4Gi
+              cpu: 4
+              memory: 6Gi
             limits:
-              memory: 8Gi
+              memory: 12Gi
           valheimDedicatedServer:
             # Generated once in-cluster (valheim/password.yaml).
             existingSecret: valheim-password
@@ -51,8 +62,11 @@ spec:
               public: "1"
               # PlayFab backend: PC, PS5, Switch 2 and Xbox players join by
               # the join code in the server log (changes on every restart),
-              # the server list, or the public IP:2456 through the VyOS
-              # port-forward. Crossplay cannot be joined via a LAN IP.
+              # the server list, or Join IP with the public IP:2456, which
+              # PlayFab resolves - all through its relay, so no port-forward
+              # is needed. Crossplay never binds the game port, so
+              # kyverno/valheim-crossplay-probe.yaml moves the chart's
+              # probes to the Steam query port (2457). LAN IPs can't join.
               crossPlay: true
               saveInterval: "1800"
               backups: "4"
@@ -64,8 +78,10 @@ spec:
                 externalTrafficPolicy: Local
                 metadata:
                   annotations:
-                    # Pinned: VyOS forwards UDP 2456-2457 here (LINDS-Ansible
-                    # inventory/group_vars/jd_vyos.yml, DNAT rule 22).
+                    # Pinned, so a router port-forward has a stable target.
+                    # Only the Steam backend (crossPlay: false) needs one:
+                    # UDP 2456-2457 - staged as DNAT rule 22 in LINDS-Ansible
+                    # inventory/group_vars/jd_vyos.yml.
                     lbipam.cilium.io/ips: "172.16.1.10"
                     external-dns.alpha.kubernetes.io/hostname: valheim.linds.com.au
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
@@ -77,11 +93,7 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      # SSA + server-side diff: the chart's StatefulSet has
-      # volumeClaimTemplates, whose API-defaulted fields read as permanent
-      # drift with the classic diff.
       - ServerSideApply=true
-      - ServerSideDiff=true
       - ApplyOutOfSyncOnly=true
     retry:
       limit: 5

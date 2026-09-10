@@ -1,0 +1,58 @@
+# Points the Valheim server's startup and liveness probes at the Steam query
+# port (2457) instead of the game port (2456).
+#
+# max-pfeiffer's valheim chart (applications/valheim.yaml) hardcodes both
+# probes to `nc -nuzv 127.0.0.1 <port>`; only their timings are values. With
+# -crossplay the server runs on PlayFab and never binds the game port - it
+# binds port+1 (Steam query, 0.0.0.0:2457) and ephemeral PlayFab sockets, so
+# the startup probe can never pass and kubelet restarts the pod every
+# ~17 minutes (verified on the 1.0.7 server, 2026-09-10).
+#
+# The Pod is patched at admission, not the StatefulSet, so the chart's
+# rendered StatefulSet stays exactly what Argo CD diffs against. Probes on a
+# running Pod are immutable, hence CREATE only. The patch only fires when a
+# probe still has the chart's exact shape, and failurePolicy Ignore means a
+# changed chart falls back to its own probe rather than blocking the Pod.
+#
+# Delete this policy if the chart gains a probe port setting, or if
+# crossplay is turned off (the Steam backend does bind the game port).
+---
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: valheim-crossplay-probe
+spec:
+  failurePolicy: Ignore
+  evaluation:
+    admission:
+      enabled: true
+    mutateExisting:
+      enabled: false
+    # Defaulted by the API server; declared so ArgoCD doesn't report drift.
+    skipBackgroundRequests: true
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: valheim
+    objectSelector:
+      matchLabels:
+        app.kubernetes.io/name: valheim
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  matchConditions:
+    - name: chart-probe-on-game-port
+      expression: >-
+        object.spec.containers[0].name == 'valheim' &&
+        (object.spec.containers[0].?startupProbe.?exec.?command.orValue([]) == ['nc', '-nuzv', '127.0.0.1', '2456'] ||
+         object.spec.containers[0].?livenessProbe.?exec.?command.orValue([]) == ['nc', '-nuzv', '127.0.0.1', '2456'])
+  mutations:
+    - patchType: JSONPatch
+      jsonPatch:
+        expression: >-
+          (object.spec.containers[0].?startupProbe.?exec.?command.orValue([]) == ['nc', '-nuzv', '127.0.0.1', '2456'] ?
+            [JSONPatch{op: "replace", path: "/spec/containers/0/startupProbe/exec/command/3", value: "2457"}] : []) +
+          (object.spec.containers[0].?livenessProbe.?exec.?command.orValue([]) == ['nc', '-nuzv', '127.0.0.1', '2456'] ?
+            [JSONPatch{op: "replace", path: "/spec/containers/0/livenessProbe/exec/command/3", value: "2457"}] : [])
