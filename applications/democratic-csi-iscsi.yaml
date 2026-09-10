@@ -22,7 +22,15 @@ spec:
             allowVolumeExpansion: true
             parameters:
               fsType: ext4
-            mountOptions: []
+            # discard: ext4 passes frees down as SCSI UNMAP (the driver config
+            # sets LIO emulate_tpu=1), so blocks a pod deletes go back to the
+            # pool instead of staying allocated in the zvol for good - the
+            # Prometheus zvol held 23G for 8G of data before its one-off trim.
+            # Only PVs provisioned from now on inherit this; an existing PV
+            # needs spec.mountOptions patched (applies on its next mount) or a
+            # manual fstrim - see docs/jd-storage-tuning.md.
+            mountOptions:
+              - discard
             # No `secrets:` block: the chart renders a csi.storage.k8s.io/*-secret
             # parameter for every key listed there, even a null one, and
             # StorageClass parameters are immutable - the live class only has
