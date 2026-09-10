@@ -64,9 +64,10 @@ spec:
               # the join code in the server log (changes on every restart),
               # the server list, or Join IP with the public IP:2456, which
               # PlayFab resolves - all through its relay, so no port-forward
-              # is needed. Crossplay never binds the game port, so
-              # kyverno/valheim-crossplay-probe.yaml moves the chart's
-              # probes to the Steam query port (2457). LAN IPs can't join.
+              # is needed. Crossplay never binds the game port, which the
+              # chart's hardcoded probes check, so
+              # kyverno/valheim-remove-probes.yaml strips them off the Pod.
+              # LAN IPs can't join.
               crossPlay: true
               saveInterval: "1800"
               backups: "4"
