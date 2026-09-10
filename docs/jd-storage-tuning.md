@@ -1,29 +1,36 @@
 # JD storage tuning (jd-proxmox-02)
 
 Space and write-efficiency settings on the `VM` pool (`ssd-mixed` in Proxmox),
-which backs every `nfs-csi` and `zfs-iscsi` volume in the cluster. Only the
-StorageClass lives in this repo; the rest is on the host — **re-create it if
-jd-proxmox-02 is ever rebuilt.** Applied 2026-09-10.
+which backs every `nfs-csi` and `zfs-iscsi` volume in the cluster. The
+StorageClass lives in this repo; sanoid (config, gate script, opt-out list)
+is managed by LINDS-Ansible's `proxmox` role; the thin-provisioning settings
+exist only on the host. Applied 2026-09-10.
 
 ## Snapshots: sanoid, with a per-dataset opt-out
 
 sanoid takes a daily snapshot of everything under `VM/truenas-nas` (the NFS
-share, MinIO, every zfs-iscsi zvol) and keeps 14 (`/etc/sanoid/sanoid.conf`).
+share, MinIO, every zfs-iscsi zvol) and keeps 14. The source of truth is
+LINDS-Ansible: `roles/proxmox/templates/sanoid.conf.j2`, the
+`proxmox_sanoid_templates` defaults and the `proxmox_sanoid_policies` /
+`proxmox_sanoid_optout` inventory vars in `inventory/proxmox.yml`. Edit
+those, not `/etc/sanoid/sanoid.conf` — the role overwrites it.
+
 A dataset whose churn makes snapshots both expensive and worthless opts out
-with a ZFS user property:
+through `proxmox_sanoid_optout`, which sets a ZFS user property (the same
+thing by hand, effective immediately):
 
 ```bash
 zfs set au.com.linds:sanoid=off <dataset>     # stop snapshotting it
 zfs inherit au.com.linds:sanoid <dataset>     # back to the default policy
 ```
 
-`/usr/local/sbin/sanoid-snapshot-gate` is the template's `pre_snapshot_script`,
-with `no_inconsistent_snapshot = yes`: it exits non-zero for a dataset carrying
-the property and sanoid skips that snapshot. Each daily run logs
-`WARN: pre_snapshot_script failed, 256` per opted-out dataset — that is the
-skip, not a fault. The gate fails open (no target or a zfs error means the
-snapshot is taken), and it never touches existing snapshots: destroy those by
-hand.
+`/usr/local/sbin/sanoid-snapshot-gate` (`roles/proxmox/files/`) is the
+template's `pre_snapshot_script`, with `no_inconsistent_snapshot = yes`: it
+exits non-zero for a dataset carrying the property and sanoid skips that
+snapshot. Each daily run logs `WARN: pre_snapshot_script failed, 256` per
+opted-out dataset — that is the skip, not a fault. The gate fails open (no
+target or a zfs error means the snapshot is taken), and it never touches
+existing snapshots: destroy those by hand.
 
 Do not replace this with a `[child]` section carrying its own template.
 sanoid 2.2.0 walks config sections in Perl hash order and `recursive = yes`
@@ -34,9 +41,11 @@ instead, which is deterministic.
 | Opted out | What | Why |
 |---|---|---|
 | `VM/truenas-nas/k8s-iscsi/v/pvc-6bc3d715-6306-4c54-a4ca-871de99d36f1` | Prometheus TSDB | Compaction rewrites TSDB blocks every few hours, so 14 dailies pinned 20.9G of deleted blocks — rollback points for data Prometheus expires on its own (14d / 15GB). |
+| `VM/truenas-nas/k8s-iscsi/v/pvc-cf4eacc1-da88-451b-92a7-71126abc6559` | Loki WAL / compactor scratch | Chunks live in MinIO; the volume held 3.7G of snapshots for ~20 MB of live data. |
 
-The property sits on the zvol, so if the Prometheus PVC is ever recreated
-(new `pvc-<uid>`), set it again on the new zvol.
+The zvols are named after their PV, so if either PVC is ever recreated, put
+the new `pvc-<uid>` in `proxmox_sanoid_optout` (the role reports names it
+cannot find rather than creating them).
 
 Grafana is deliberately not opted out: its data is a ~70 MB directory inside
 the shared NFS dataset, whose snapshots cost ~250 MB for every app together.
@@ -54,12 +63,13 @@ alone.
 The `zfs-iscsi` StorageClass mounts ext4 with `discard`, and the driver
 config sets LIO `emulate_tpu=1`, so blocks a pod deletes reach the zvol as
 SCSI UNMAP and go back to the pool. Without it a zvol only ever grows to its
-high-water mark: Prometheus's held 23.2G for 8G of data, 6.7G after one trim.
+high-water mark: Prometheus's held 23.2G for 8G of data (6.7G after one
+trim), Loki's 3.3G for 20 MB (62 MB after).
 
 Only PVs provisioned since the change inherit the mount option. An older PV
 needs `spec.mountOptions: [discard]` patched in (applies on its next mount —
-done for the Prometheus PV), or a one-off trim from the democratic-csi node
-pod on the node where the volume is mounted:
+done for the Prometheus and Loki PVs), or a one-off trim from the
+democratic-csi node pod on the node where the volume is mounted:
 
 ```bash
 kubectl exec -n democratic-csi <democratic-csi-iscsi-node-pod> -c csi-driver -- \
