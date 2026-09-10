@@ -1,0 +1,25 @@
+# The world saves volume, pre-created so the chart's StatefulSet adopts it by
+# name (saves-directory-<statefulset>-<ordinal>). The chart has no
+# storageClassName value and this cluster has no default StorageClass, so a
+# claim made from its volumeClaimTemplate would sit Pending forever.
+#
+# zfs-iscsi rather than NFS: a single-writer world save belongs on block
+# storage like the other stateful JD apps, and a zvol of its own gets its own
+# policy - sanoid dailies (14 kept, a rollback for griefing or a bad patch)
+# and TRIM via the StorageClass's discard mount option.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: saves-directory-valheim-0
+  annotations:
+    # Must exist before the StatefulSet (wave 0), or its template claim wins.
+    argocd.argoproj.io/sync-wave: "-1"
+    # This is the world. Never let a prune take it.
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  storageClassName: zfs-iscsi
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

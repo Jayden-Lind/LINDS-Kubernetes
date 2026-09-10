@@ -1,0 +1,91 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: valheim
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: valheim
+  sources:
+    - repoURL: https://max-pfeiffer.github.io/valheim-dedicated-server-docker-helm
+      chart: valheim
+      targetRevision: 1.2.0
+      helm:
+        valuesObject:
+          # The image has one Valheim server build baked in (no SteamCMD at
+          # runtime, so ~2GB of game files never land on the NAS). Clients
+          # refuse an older server build, so new builds are rolled out by
+          # argocd-image-updater (image-updates/valheim-image-update.yaml).
+          image:
+            tag: latest
+          # JD only - the saves volume is JD-side iSCSI - and never the
+          # control-plane node: the server is CPU-bursty and etcd lives there.
+          nodeSelector:
+            datacenter: jd
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: DoesNotExist
+          # Chart docs: 2 cores / 4GB recommended. No CPU limit - a throttled
+          # game server shows up as rubber-banding, not as a number.
+          resources:
+            requests:
+              cpu: 2
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+          valheimDedicatedServer:
+            # Generated once in-cluster (valheim/password.yaml).
+            existingSecret: valheim-password
+            # Only documents the size: the claim itself is pre-created in
+            # valheim/pvc.yaml because the chart cannot set a StorageClass.
+            volumeStorageSize: 5Gi
+          instances:
+            - name: LINDS
+              world: Midgard
+              public: "1"
+              # PlayFab backend: PC, PS5, Switch 2 and Xbox players join by
+              # the join code in the server log (changes on every restart),
+              # the server list, or the public IP:2456 through the VyOS
+              # port-forward. Crossplay cannot be joined via a LAN IP.
+              crossPlay: true
+              saveInterval: "1800"
+              backups: "4"
+              backupShort: "7200"
+              backupLong: "43200"
+              service:
+                type: LoadBalancer
+                # Keep the players' real source IPs in the server log.
+                externalTrafficPolicy: Local
+                metadata:
+                  annotations:
+                    # Pinned: VyOS forwards UDP 2456-2457 here (LINDS-Ansible
+                    # inventory/group_vars/jd_vyos.yml, DNAT rule 22).
+                    lbipam.cilium.io/ips: "172.16.1.10"
+                    external-dns.alpha.kubernetes.io/hostname: valheim.linds.com.au
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: valheim
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # SSA + server-side diff: the chart's StatefulSet has
+      # volumeClaimTemplates, whose API-defaulted fields read as permanent
+      # drift with the classic diff.
+      - ServerSideApply=true
+      - ServerSideDiff=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
