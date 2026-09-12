@@ -54,6 +54,39 @@ spec:
       # The server writes the world on SIGTERM. Long enough that a node drain
       # or a rollout never costs progress.
       terminationGracePeriodSeconds: 300
+      initContainers:
+        # The Secret is frozen in the old chart's shape - key `valheim-0`
+        # holding `password="..."` - because its ExternalSecret is
+        # CreatedOnce and re-rendering it would mint a new password and lock
+        # every player out (see valheim/password.yaml). SERVER_PASS_FILE wants
+        # a file that is the password and nothing else, so unwrap it here into
+        # a tmpfs the server container reads.
+        #
+        # Same image as the server purely so this pulls nothing extra.
+        # Delete this container, and mount the Secret straight at /run/secrets
+        # with a `server_pass` key, if the password is ever deliberately
+        # rotated into the clean shape.
+        - name: unwrap-password
+          image: ghcr.io/community-valheim-tools/valheim-server:1.2.0@sha256:138c6f10759e8342309cfefe0b191221a956771ada1ea87157013d62e2befa19
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -euc
+            - |
+              sed -E 's/^password="//; s/"$//' /secret-in/valheim-0 \
+                | tr -d '\n' > /secret-out/server_pass
+              chmod 0444 /secret-out/server_pass
+              test -s /secret-out/server_pass
+          volumeMounts:
+            - name: server-pass-raw
+              mountPath: /secret-in
+              readOnly: true
+            - name: server-pass
+              mountPath: /secret-out
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
       containers:
         - name: valheim
           # Renovate bumps this (renovate.json5). It is NOT the game version -
@@ -160,9 +193,16 @@ spec:
         - name: server-files
           persistentVolumeClaim:
             claimName: valheim-server-files
-        - name: server-pass
+        # Raw Secret, in the chart's legacy shape, read only by the
+        # unwrap-password initContainer.
+        - name: server-pass-raw
           secret:
             secretName: valheim-password
             items:
-              - key: server_pass
-                path: server_pass
+              - key: valheim-0
+                path: valheim-0
+        # The unwrapped password. tmpfs, so it never touches a disk.
+        - name: server-pass
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
