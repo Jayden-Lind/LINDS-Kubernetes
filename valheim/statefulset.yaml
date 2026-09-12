@@ -180,7 +180,16 @@ spec:
             limits:
               memory: 12Gi
           securityContext:
-            allowPrivilegeEscalation: false
+            # No allowPrivilegeEscalation: false here, unlike the
+            # initContainer. It sets no_new_privs, which disables setuid - and
+            # with PUID 10001 the bootstrap installs UPDATE_CRON and
+            # RESTART_CRON as an unprivileged user through busybox crontab,
+            # which is setuid for exactly that. Under no_new_privs it fails
+            # with "crontab: must be suid to work properly", crond comes up
+            # with an empty crontab, and the server silently never checks for
+            # a Valheim update again - which is the whole reason for this
+            # image. Verified 2026-09-12: /var/spool/cron/crontabs empty with
+            # the flag, populated without it.
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
