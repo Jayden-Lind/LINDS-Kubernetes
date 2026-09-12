@@ -1,7 +1,16 @@
-# The world saves volume, pre-created so the chart's StatefulSet adopts it by
-# name (saves-directory-<statefulset>-<ordinal>). The chart has no
-# storageClassName value and this cluster has no default StorageClass, so a
-# claim made from its volumeClaimTemplate would sit Pending forever.
+# The world volume, mounted at /config (world, admin/banned/permitted lists,
+# backups).
+#
+# The name is a leftover: it was created to be adopted by the old chart's
+# volumeClaimTemplate, which derived it as saves-directory-<statefulset>-
+# <ordinal>. Kept anyway, because renaming it would mean copying the world to
+# a fresh claim for nothing - valheim/statefulset.yaml just references it by
+# name.
+#
+# The layout the chart left behind is exactly what this image expects, so the
+# save is reused in place with nothing moved: worlds_local/Midgard/ (already
+# the Valheim 1.0 directory format, so no one-way conversion happens on first
+# start) plus adminlist.txt, bannedlist.txt and permittedlist.txt at the root.
 #
 # zfs-iscsi rather than NFS: a single-writer world save belongs on block
 # storage like the other stateful JD apps, and a zvol of its own gets its own

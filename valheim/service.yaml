@@ -1,0 +1,36 @@
+# Replaces the chart's pair of Services (headless `valheim` + LoadBalancer
+# `valheim-0`) with one LoadBalancer.
+#
+# 2458 is new: with CROSSPLAY=true the server opens a third UDP port for the
+# PlayFab backend, which the old chart never published. Crossplay traffic is
+# relayed by PlayFab so the LB is not on the hot path today, but the ports are
+# published so turning crossplay off is a one-line change plus the DNAT rule
+# already staged as rule 22 in LINDS-Ansible inventory/group_vars/jd_vyos.yml.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valheim
+  annotations:
+    # Pinned, so the router port-forward has a stable target.
+    lbipam.cilium.io/ips: "172.16.1.10"
+    external-dns.alpha.kubernetes.io/hostname: valheim.linds.com.au
+spec:
+  type: LoadBalancer
+  # Keep the players' real source IPs in the server log.
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: valheim
+    app.kubernetes.io/instance: valheim
+  ports:
+    - name: server
+      port: 2456
+      targetPort: server
+      protocol: UDP
+    - name: query
+      port: 2457
+      targetPort: query
+      protocol: UDP
+    - name: crossplay
+      port: 2458
+      targetPort: crossplay
+      protocol: UDP

@@ -1,0 +1,168 @@
+# The Valheim server, on community-valheim-tools/valheim-server (the image
+# formerly published as lloesche/valheim-server).
+#
+# Why this image, and why hand-written manifests instead of a chart:
+#
+# max-pfeiffer's chart - what this replaces - bakes one Valheim build into the
+# image, so the server could only ever be as current as a 3-star repo's last
+# rebuild. On 2026-09-12 it was still serving l-1.0.7 from a 2026-09-11 07:03Z
+# build while Iron Gate had shipped 1.0 -> 1.0.12 (Steam build 25253791,
+# 2026-09-11 13:08Z) in the 48 hours after the 1.0 launch. No amount of
+# argocd-image-updater tuning fixes a publisher who has not published.
+#
+# This image runs SteamCMD itself, so the game tracks Steam directly with
+# nobody in between: UPDATE_CRON checks every 15 minutes, UPDATE_IF_IDLE only
+# lets it act when the server is empty, and it restarts itself afterwards. A
+# patch therefore lands within ~15 minutes and never kicks anyone mid-session,
+# which no Argo CD sync could manage - Argo has no idea who is playing.
+#
+# The two charts that wrap this image are both dead ends: Addyvan/valheim-k8s
+# (the one this image's README points at) has not been touched since 2024-09
+# and predates the 1.0 save format, and k8s-charts/valheim-server pins
+# mbround18/valheim 3.1.0 against an upstream on 3.8.0. Hence plain manifests
+# here rather than a third thin dependency - this is a ~100 line StatefulSet.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valheim
+spec:
+  replicas: 1
+  serviceName: valheim
+  # Same labels the chart's StatefulSet used, so the Service selector and any
+  # saved dashboards keep working.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valheim
+      app.kubernetes.io/instance: valheim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valheim
+        app.kubernetes.io/instance: valheim
+    spec:
+      # JD only - the config volume is JD-side iSCSI - and never the
+      # control-plane node: the server is CPU-bursty and etcd lives there.
+      nodeSelector:
+        datacenter: jd
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      # The server writes the world on SIGTERM. Long enough that a node drain
+      # or a rollout never costs progress.
+      terminationGracePeriodSeconds: 300
+      containers:
+        - name: valheim
+          # Renovate bumps this (renovate.json5). It is NOT the game version -
+          # the game comes from SteamCMD at runtime - so this only moves when
+          # the wrapper scripts change, and it is deliberately not watched by
+          # argocd-image-updater any more.
+          image: ghcr.io/community-valheim-tools/valheim-server:1.2.0@sha256:138c6f10759e8342309cfefe0b191221a956771ada1ea87157013d62e2befa19
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SERVER_NAME
+              value: LINDS
+            # The directory inside worlds_local/. The existing save is already
+            # in the 1.0 directory format, so nothing is converted on first
+            # start - see valheim/pvc.yaml.
+            - name: WORLD_NAME
+              value: Midgard
+            - name: SERVER_PORT
+              value: "2456"
+            - name: SERVER_PUBLIC
+              value: "true"
+            # Unchanged from the chart. Crossplay puts every player on the
+            # PlayFab relay and opens a third UDP port (2458) that the old
+            # chart never exposed.
+            - name: CROSSPLAY
+              value: "true"
+            - name: SERVER_PASS_FILE
+              value: /run/secrets/server_pass
+            # Run the server as the uid/gid that already owns every file on
+            # the config volume, so no ownership is rewritten on adoption.
+            # 1.2.0 carries the per-world-directory permission handling this
+            # needs (commit a134fb4d); on older images a non-root PUID strips
+            # the execute bit off the world directory and the server then runs
+            # happily with no world loaded.
+            - name: PUID
+              value: "10001"
+            - name: PGID
+              value: "10001"
+            # Local time, so the cron schedules below mean what they look like.
+            - name: TZ
+              value: Australia/Melbourne
+            # The whole point of the migration: check Steam every 15 minutes,
+            # but only act when nobody is connected.
+            - name: UPDATE_CRON
+              value: "*/15 * * * *"
+            - name: UPDATE_IF_IDLE
+              value: "true"
+            # Unity leaks; a daily bounce keeps it honest. Idle-gated too, so
+            # it is a no-op while anyone is playing.
+            - name: RESTART_CRON
+              value: "0 5 * * *"
+            - name: RESTART_IF_IDLE
+              value: "true"
+            # Replaces the chart's -backups/-backupshort/-backuplong flags.
+            # Hourly, zipped, 7 days kept, on the config volume - on top of
+            # the zvol's sanoid dailies.
+            - name: BACKUPS
+              value: "true"
+            - name: BACKUPS_CRON
+              value: "5 * * * *"
+            - name: BACKUPS_MAX_AGE
+              value: "7"
+            - name: BACKUPS_MAX_COUNT
+              value: "0"
+          ports:
+            - name: server
+              containerPort: 2456
+              protocol: UDP
+            - name: query
+              containerPort: 2457
+              protocol: UDP
+            - name: crossplay
+              containerPort: 2458
+              protocol: UDP
+          # No probes, deliberately. supervisord inside the container already
+          # restarts the server process if it dies, and the chart's probes are
+          # what used to kill this pod every 17 minutes. A kubelet probe here
+          # could only add failure modes - notably during the multi-minute
+          # SteamCMD download on a cold volume.
+          resources:
+            requests:
+              cpu: 4
+              memory: 6Gi
+            limits:
+              memory: 12Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            # World, admin/banned/permitted lists and backups.
+            - name: config
+              mountPath: /config
+            # The SteamCMD-downloaded server (~2GB). Separate volume so a
+            # reschedule does not re-download it.
+            - name: server-files
+              mountPath: /opt/valheim
+            - name: server-pass
+              mountPath: /run/secrets
+              readOnly: true
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: saves-directory-valheim-0
+        - name: server-files
+          persistentVolumeClaim:
+            claimName: valheim-server-files
+        - name: server-pass
+          secret:
+            secretName: valheim-password
+            items:
+              - key: server_pass
+                path: server_pass

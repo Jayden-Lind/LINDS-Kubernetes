@@ -3,100 +3,29 @@ kind: Application
 metadata:
   name: valheim
   namespace: argocd
-  annotations:
-    # Server-side diff: the API server fills apiVersion/kind/volumeMode/status
-    # into the chart's StatefulSet volumeClaimTemplates, which the classic
-    # diff reports as permanent drift. This annotation is what turns it on
-    # per app - a `ServerSideDiff=true` entry under syncOptions is silently
-    # ignored (verified 2026-09-10: OutOfSync with the sync option, Synced
-    # with the annotation).
-    argocd.argoproj.io/compare-options: ServerSideDiff=true
+  # No compare-options here any more: ServerSideDiff was only needed because
+  # the old chart's StatefulSet carried volumeClaimTemplates that the API
+  # server filled in with apiVersion/kind/volumeMode/status, which the classic
+  # diff reported as permanent drift. valheim/ has no volumeClaimTemplates.
 spec:
   project: default
   destination:
     server: https://kubernetes.default.svc
     namespace: valheim
-  sources:
-    - repoURL: https://max-pfeiffer.github.io/valheim-dedicated-server-docker-helm
-      chart: valheim
-      targetRevision: 1.2.0
-      helm:
-        valuesObject:
-          # The image has one Valheim server build baked in (no SteamCMD at
-          # runtime, so ~2GB of game files never land on the NAS). Clients
-          # refuse an older server build, so new builds are rolled out by
-          # argocd-image-updater (image-updates/valheim-image-update.yaml).
-          #
-          # This tag is only the bootstrap floor. The updater writes the digest
-          # it resolves into the LIVE Application as a helm parameter, which
-          # overrides this value - and applications/root.yaml now preserves
-          # that parameter instead of stripping it every 6h. So this is what a
-          # from-scratch cluster starts on, not necessarily what is running:
-          #   kubectl get application -n argocd valheim \
-          #     -o jsonpath='{.spec.sources[0].helm.parameters}'
-          #
-          # Bumped 2026-09-12 to the digest `latest` had on 2026-09-11
-          # (build-25185644). The previous pin was the 2026-09-09 build, which
-          # the flip-flop had kept the server stuck on since.
-          image:
-            tag: latest@sha256:2d9851fd9408d62f0a40b6018cb9bf8e2e4974bc96d8f69ace0dd619db9893b8
-          # JD only - the saves volume is JD-side iSCSI - and never the
-          # control-plane node: the server is CPU-bursty and etcd lives there.
-          nodeSelector:
-            datacenter: jd
-          affinity:
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: node-role.kubernetes.io/control-plane
-                        operator: DoesNotExist
-          # Chart docs: 2 cores / 4GB recommended. No CPU limit - a throttled
-          # game server shows up as rubber-banding, not as a number.
-          resources:
-            requests:
-              cpu: 4
-              memory: 6Gi
-            limits:
-              memory: 12Gi
-          valheimDedicatedServer:
-            # Generated once in-cluster (valheim/password.yaml).
-            existingSecret: valheim-password
-            # Only documents the size: the claim itself is pre-created in
-            # valheim/pvc.yaml because the chart cannot set a StorageClass.
-            volumeStorageSize: 5Gi
-          instances:
-            - name: LINDS
-              world: Midgard
-              public: "1"
-              # PlayFab backend: PC, PS5, Switch 2 and Xbox players join by
-              # the join code in the server log (changes on every restart),
-              # the server list, or Join IP with the public IP:2456, which
-              # PlayFab resolves - all through its relay, so no port-forward
-              # is needed. Crossplay never binds the game port, which the
-              # chart's hardcoded probes check, so
-              # kyverno/valheim-remove-probes.yaml strips them off the Pod.
-              # LAN IPs can't join.
-              crossPlay: true
-              saveInterval: "1800"
-              backups: "4"
-              backupShort: "7200"
-              backupLong: "43200"
-              service:
-                type: LoadBalancer
-                # Keep the players' real source IPs in the server log.
-                externalTrafficPolicy: Local
-                metadata:
-                  annotations:
-                    # Pinned, so a router port-forward has a stable target.
-                    # Only the Steam backend (crossPlay: false) needs one:
-                    # UDP 2456-2457 - staged as DNAT rule 22 in LINDS-Ansible
-                    # inventory/group_vars/jd_vyos.yml.
-                    lbipam.cilium.io/ips: "172.16.1.10"
-                    external-dns.alpha.kubernetes.io/hostname: valheim.linds.com.au
-    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
-      targetRevision: HEAD
-      path: valheim
+  # Single source since 2026-09-12: the max-pfeiffer Helm chart is gone, and
+  # with it the whole reason this app needed a chart repo alongside git. The
+  # chart baked one Valheim build into its image, so the server was only ever
+  # as current as that image's publisher - see valheim/statefulset.yaml. The
+  # replacement image updates the game itself from Steam, so there is nothing
+  # left for a chart to parameterise.
+  #
+  # As a single spec.source this app is also out of the way of the
+  # argocd-image-updater write-back collision described in applications/
+  # root.yaml, which only bites multi-source apps.
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: valheim
   syncPolicy:
     automated:
       prune: true

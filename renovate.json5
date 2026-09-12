@@ -19,6 +19,10 @@
     managerFilePatterns: [
       "/^base/monitoring/pushgateway\\.yaml$/",
       "/^catcrawl/[^/]+\\.ya?ml$/",
+      // Valheim's server image. The tag is the wrapper scripts, not the game
+      // version - the game is pulled from Steam at runtime - so this moves
+      // rarely and never needs to be urgent.
+      "/^valheim/statefulset\\.yaml$/",
       "/^zabbix/config-job\\.yaml$/",
     ],
   },

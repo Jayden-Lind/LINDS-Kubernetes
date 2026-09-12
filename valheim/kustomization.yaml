@@ -5,4 +5,7 @@ namespace: valheim
 
 resources:
   - pvc.yaml
+  - server-files-pvc.yaml
   - password.yaml
+  - service.yaml
+  - statefulset.yaml

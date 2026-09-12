@@ -1,0 +1,25 @@
+# The SteamCMD-downloaded Valheim server (~2GB), mounted at /opt/valheim.
+#
+# Its own volume rather than a subdirectory of the world volume because the
+# two want opposite treatment: this one is re-downloadable in a couple of
+# minutes and should be excluded from snapshots, the world one is the thing
+# worth keeping. Without it every reschedule pays the download again.
+#
+# TODO (Ansible, not here): set `au.com.linds:sanoid=off` on this zvol via
+# LINDS-Ansible inventory/proxmox.yml `proxmox_sanoid_optout`, the same
+# opt-out the Prometheus and Loki zvols use. Snapshotting 2GB of files Steam
+# will hand back on request is pure waste.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: valheim-server-files
+  annotations:
+    # Must exist before the StatefulSet.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  storageClassName: zfs-iscsi
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
