@@ -11,7 +11,7 @@ spec:
   sources:
   - repoURL: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
-    targetRevision: 90.0.0
+    targetRevision: 90.1.1
     helm:
       values: |
         # Rule groups built solely from the apiserver/etcd latency histogram
