@@ -79,9 +79,11 @@
     },
   ],
 
-  // Container image tags are argocd-image-updater's job (image-updates/),
-  // and it writes back to git itself. Renovate only ever touches
-  // spec.source[s].targetRevision, so the two don't collide.
+  // Container image tags are argocd-image-updater's job (image-updates/).
+  // It writes the resolved digest into the live Application object, NOT into
+  // git (writeBackConfig.method: argocd) - see the ignoreDifferences note in
+  // applications/root.yaml. Renovate only ever touches
+  // spec.source[s].targetRevision, so the two still don't collide.
   // Majors raise PRs like anything else - no dashboard approval gate. They
   // still get their own branch (separateMajorMinor), so a major sitting
   // unmerged doesn't hold up minor/patch bumps for the same chart.

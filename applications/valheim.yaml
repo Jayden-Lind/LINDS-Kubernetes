@@ -25,12 +25,21 @@ spec:
           # The image has one Valheim server build baked in (no SteamCMD at
           # runtime, so ~2GB of game files never land on the NAS). Clients
           # refuse an older server build, so new builds are rolled out by
-          # argocd-image-updater (image-updates/valheim-image-update.yaml),
-          # which rewrites this tag via parameters whenever `latest` moves.
-          # Pinned to the digest `latest` had on 2026-09-10 (server l-1.0.7)
-          # so the updater's first pass is a no-op, not a surprise restart.
+          # argocd-image-updater (image-updates/valheim-image-update.yaml).
+          #
+          # This tag is only the bootstrap floor. The updater writes the digest
+          # it resolves into the LIVE Application as a helm parameter, which
+          # overrides this value - and applications/root.yaml now preserves
+          # that parameter instead of stripping it every 6h. So this is what a
+          # from-scratch cluster starts on, not necessarily what is running:
+          #   kubectl get application -n argocd valheim \
+          #     -o jsonpath='{.spec.sources[0].helm.parameters}'
+          #
+          # Bumped 2026-09-12 to the digest `latest` had on 2026-09-11
+          # (build-25185644). The previous pin was the 2026-09-09 build, which
+          # the flip-flop had kept the server stuck on since.
           image:
-            tag: latest@sha256:4bc36bfb916ad088929f3834b565adac2d0604a2db898c1d9addba09b9dda954
+            tag: latest@sha256:2d9851fd9408d62f0a40b6018cb9bf8e2e4974bc96d8f69ace0dd619db9893b8
           # JD only - the saves volume is JD-side iSCSI - and never the
           # control-plane node: the server is CPU-bursty and etcd lives there.
           nodeSelector:

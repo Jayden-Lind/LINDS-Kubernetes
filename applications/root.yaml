@@ -22,6 +22,25 @@ spec:
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd
+  # argocd-image-updater (image-updates/) does NOT write to git: it writes the
+  # digest it resolves into the live child Application as
+  # spec.sources[].helm.parameters. spec.sources is an atomic list, so a
+  # server-side apply of this repo's copy replaces the whole list and takes
+  # those parameters with it. The updater rewrites them on its next pass, the
+  # child flip-flops between two images, and every cycle costs a pod kill.
+  # Verified 2026-09-12 on valheim: Application history alternating
+  # params/no-params one second apart at 12:22, 18:22 and 00:22 UTC - the game
+  # server was being deleted and recreated 4x a day while staying pinned to a
+  # build the updater had already superseded. plex-jd showed the same pattern.
+  #
+  # Single-source apps never hit this: spec.source is an object, which
+  # server-side apply merges field by field, so the parameters survive there
+  # (home-assistant has held its digest since 2026-09-02).
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jqPathExpressions:
+        - '.spec.sources[]? | select(.helm.parameters) | .helm.parameters'
   syncPolicy:
     automated:
       prune: true
@@ -29,6 +48,10 @@ spec:
     syncOptions:
       - ApplyOutOfSyncOnly=true
       - ServerSideApply=true
+      # ignoreDifferences alone only stops self-heal from firing. This is what
+      # keeps a real sync - one triggered by an actual change under
+      # applications/ - from stripping the digest as well.
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
