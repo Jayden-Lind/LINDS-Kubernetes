@@ -78,6 +78,14 @@ data:
   # history accordingly.
   COLES_STORE_ID: "7674"
   WOW_STORE_ID: "3161"
+
+  # The regions the viewer can show prices for, and the home stores' label.
+  # These are the crawlers' own CAT_EXTRA_STORES strings, joined on the label,
+  # and must stay identical to them: a store listed here but not crawled shows
+  # as a region with no prices, and one crawled but not listed is never shown.
+  HOME_REGION_LABEL: Melbourne
+  COLES_REGION_STORES: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
+  WOW_REGION_STORES: "1248=Sydney CBD,5662=Broken Hill,3304=Melbourne CBD,5674=Mildura,2596=Brisbane CBD,2537=Cairns,2539=Mount Isa,4365=Perth CBD,4304=Broome,5317=Adelaide CBD,5601=Port Augusta,7012=Hobart,7220=Launceston,5652=Darwin,5604=Alice Springs,1073=Canberra"
   # The index holds both catalogues in memory. The crawls are weekly, so this
   # exists to pick up a manually triggered crawl without a restart, not to keep
   # up with anything.
