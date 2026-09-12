@@ -1,11 +1,17 @@
 # Replaces the chart's pair of Services (headless `valheim` + LoadBalancer
 # `valheim-0`) with one LoadBalancer.
 #
-# 2458 is new: with CROSSPLAY=true the server opens a third UDP port for the
-# PlayFab backend, which the old chart never published. Crossplay traffic is
-# relayed by PlayFab so the LB is not on the hot path today, but the ports are
-# published so turning crossplay off is a one-line change plus the DNAT rule
-# already staged as rule 22 in LINDS-Ansible inventory/group_vars/jd_vyos.yml.
+# Since crossplay was turned off (2026-09-13, see valheim/statefulset.yaml)
+# this Service is the only way in, where before it was a spare: PlayFab relayed
+# every session and nothing arrived here. So the path now matters end to end -
+# jd-vyos-01 DNATs UDP 2456-2457 from eth2 to the pinned IP below (LINDS-Ansible
+# inventory/group_vars/jd_vyos.yml, destination rule 22, no translation port so
+# the numbers are preserved), Cilium BGP advertises 172.16.1.0/24 to the router,
+# and the router's forward chain defaults to accept. That DNAT rule is the whole
+# of it; there is nothing else to open.
+#
+# The 2458 port is gone with crossplay - it only ever carried the PlayFab
+# backend. Re-add it here and in the StatefulSet if CROSSPLAY goes back to true.
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,10 +19,18 @@ metadata:
   annotations:
     # Pinned, so the router port-forward has a stable target.
     lbipam.cilium.io/ips: "172.16.1.10"
+    # Internal only: external-dns writes this into the linds.com.au zone on
+    # 10.0.50.200 over RFC2136 and points it at the private VIP above. Now that
+    # players connect from the internet rather than through PlayFab, this name
+    # is not the one to hand them - they need the WAN address (the Cloudflare
+    # DDNS record jd-vyos-01 keeps pointed at eth2).
     external-dns.alpha.kubernetes.io/hostname: valheim.linds.com.au
 spec:
   type: LoadBalancer
-  # Keep the players' real source IPs in the server log.
+  # Keep the players' real source IPs in the server log - which only started
+  # mattering when crossplay went away and players began arriving here. It also
+  # means Cilium only advertises this VIP from the node actually running the
+  # pod, so the DNAT above lands on a node with a local backend.
   externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: valheim
@@ -29,8 +43,4 @@ spec:
     - name: query
       port: 2457
       targetPort: query
-      protocol: UDP
-    - name: crossplay
-      port: 2458
-      targetPort: crossplay
       protocol: UDP

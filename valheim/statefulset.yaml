@@ -107,13 +107,35 @@ spec:
               value: Midgard
             - name: SERVER_PORT
               value: "2456"
+            # Listed in the Steam server browser and the in-game Community
+            # list. Also load-bearing for the idle gates further down - see
+            # CROSSPLAY - so flipping it to false would quietly change how
+            # UPDATE_IF_IDLE/RESTART_IF_IDLE/BACKUPS_IF_IDLE decide.
             - name: SERVER_PUBLIC
               value: "true"
-            # Unchanged from the chart. Crossplay puts every player on the
-            # PlayFab relay and opens a third UDP port (2458) that the old
-            # chart never exposed.
+            # Steam matchmaking rather than PlayFab, since 2026-09-13. Every
+            # player here is on Steam, so crossplay bought nothing and cost
+            # two things:
+            #
+            #   - The direct path. A crossplay server does not listen on
+            #     SERVER_PORT at all - the image says so itself, in
+            #     server_is_listening: "crossplay-enabled servers don't listen
+            #     on $SERVER_PORT". It takes 2457 plus a third UDP port, 2458,
+            #     for the PlayFab backend, and sessions ride the PlayFab relay
+            #     instead of the LB two hops away.
+            #   - An honest player count. Under crossplay an A2S query always
+            #     answers 0 players, so the image's server_is_idle() falls
+            #     back to counting inbound UDP datagrams and calls >30 in a 3s
+            #     window busy - mDNS and stray internet scans included. Every
+            #     UPDATE_IF_IDLE, RESTART_IF_IDLE and BACKUPS_IF_IDLE decision
+            #     hung off that heuristic. Non-crossplay with SERVER_PUBLIC
+            #     true queries the real player count on the query port.
+            #
+            # In exchange the LB is now the only way in, so UDP 2456-2457 have
+            # to reach 172.16.1.10 from the WAN. They already do: DNAT rule 22
+            # in LINDS-Ansible inventory/group_vars/jd_vyos.yml.
             - name: CROSSPLAY
-              value: "true"
+              value: "false"
             # Deliberately a fresh top-level path, not the /run/secrets the
             # image's README uses for Docker. Anything under /run collides
             # here: /var/run is a symlink to /run, so /run/secrets swallows
@@ -165,9 +187,10 @@ spec:
             - name: query
               containerPort: 2457
               protocol: UDP
-            - name: crossplay
-              containerPort: 2458
-              protocol: UDP
+            # No 2458: that was only the PlayFab backend, and nothing binds it
+            # with CROSSPLAY=false. Some BepInEx mods do want gameport+2 for
+            # RPC - if one is ever installed it comes back here and in
+            # valheim/service.yaml.
           # No probes, deliberately. supervisord inside the container already
           # restarts the server process if it dies, and the chart's probes are
           # what used to kill this pod every 17 minutes. A kubelet probe here
