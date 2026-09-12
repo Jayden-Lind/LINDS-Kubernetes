@@ -42,16 +42,28 @@ spec:
   # 2026-09-13 and immich was the only app in the gap - a kustomize app on
   # spec.sources - so it alone kept losing its digest while plex-jd and zabbix
   # held theirs. Its sync history recorded the override appearing and vanishing
-  # in consecutive revisions (76 -> 77 at 08:00:52, 79 -> 80 at 13:00:07 UTC),
-  # so immich-server never left the floating v3 tag. Any future app that is
-  # multi-source and uses a manifest target not listed below will fail the same
-  # silent way: the updater logs a successful write and nothing rolls.
+  # in consecutive revisions (76 -> 77, 79 -> 80, 83 -> 84), one second apart
+  # every time, so immich-server never left the floating v3 tag.
+  #
+  # Note the asymmetry: the helm expression ends at .parameters, the kustomize
+  # one at .kustomize. Argo removes the matched path from the live object before
+  # diffing, so what it leaves behind has to equal what git has. Every helm app
+  # here declares .helm in git already (for values), so dropping .parameters
+  # leaves a helm block that matches. No Application declares .kustomize in git
+  # at all, so dropping only .images leaves an empty "kustomize: {}" - which
+  # still differs from absent, and immich kept being synced back on that alone.
+  # Verified 2026-09-13: with .kustomize.images the root sync applied immich
+  # one second after every write; ending at .kustomize is what actually holds.
+  #
+  # Adding a real kustomize block to an Application under applications/ would
+  # therefore be silently unsyncable - split it into its own app, or narrow
+  # this back to the specific keys the updater writes.
   ignoreDifferences:
     - group: argoproj.io
       kind: Application
       jqPathExpressions:
         - '.spec.sources[]? | select(.helm.parameters) | .helm.parameters'
-        - '.spec.sources[]? | select(.kustomize.images) | .kustomize.images'
+        - '.spec.sources[]? | select(.kustomize) | .kustomize'
   syncPolicy:
     automated:
       prune: true
