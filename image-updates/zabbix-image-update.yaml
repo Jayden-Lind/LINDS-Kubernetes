@@ -8,6 +8,29 @@ spec:
     method: argocd
   applicationRefs:
     - namePattern: zabbix
+      # Every image here MUST carry a helm manifestTarget. zabbix is a helm
+      # app, so a kustomize target is ignored outright and the updater falls
+      # back to its defaults of image.name/image.tag - which every alias then
+      # collides on, last one winning, and which this chart has no top-level
+      # key for anyway. That is what was deployed until 2026-09-13: the live
+      # Application carried exactly two parameters, image.name and image.tag,
+      # both holding snmptraps values that landed nowhere. No zabbix image had
+      # ever been updated, while the CR reported images_updated=3 each cycle.
+      #
+      # Value paths are helm-zabbix 7.1.0 (chart values zabbixServer.image,
+      # zabbixWeb.image, zabbixAgent.image, zabbixProxy.image). Re-check them
+      # on a chart upgrade - a renamed key fails silently, exactly as above.
+      #
+      # zabbix-web-service is deliberately absent: zabbixWebService.enabled is
+      # false in applications/zabbix.yaml, so tracking it polled a registry for
+      # an image nothing runs. Re-add it with zabbixWebService.image.* paths if
+      # that component is ever turned on.
+      #
+      # Tags: the chart renders "{repository}:{tag}", so the updater's
+      # "<tag>@sha256:..." is a valid tag+digest reference. Each entry keeps
+      # the tag that component runs today (ol for server and proxy, alpine for
+      # web and agent - see applications/zabbix.yaml), because writing the tag
+      # parameter overrides the zabbixImageTag global for that component.
       images:
         - alias: zabbix-server
           # ol, not alpine - see applications/zabbix.yaml (libcurl 8.21.0 leak)
@@ -15,33 +38,54 @@ spec:
           commonUpdateSettings:
             updateStrategy: digest
           manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-server-pgsql
+            helm:
+              name: zabbixServer.image.repository
+              tag: zabbixServer.image.tag
         - alias: zabbix-web
           imageName: zabbix/zabbix-web-nginx-pgsql:alpine-7.4-latest
           commonUpdateSettings:
             updateStrategy: digest
           manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-web-nginx-pgsql
-        - alias: zabbix-web-service
-          imageName: zabbix/zabbix-web-service:alpine-7.4-latest
-          commonUpdateSettings:
-            updateStrategy: digest
-          manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-web-service
+            helm:
+              name: zabbixWeb.image.repository
+              tag: zabbixWeb.image.tag
+        # agent2, not agent: zabbixAgent.image.repository is set to
+        # zabbix/zabbix-agent2 in applications/zabbix.yaml (and that is also
+        # the chart default). The old entry here tracked zabbix/zabbix-agent,
+        # an image this cluster does not run. Covers both the DaemonSet and
+        # the agent sidecar the chart puts in the proxy pod.
         - alias: zabbix-agent
-          imageName: zabbix/zabbix-agent:alpine-7.4-latest
+          imageName: zabbix/zabbix-agent2:alpine-7.4-latest
           commonUpdateSettings:
             updateStrategy: digest
           manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-agent
+            helm:
+              name: zabbixAgent.image.repository
+              tag: zabbixAgent.image.tag
+        # The linds-site proxy, which was never tracked at all. Same ol tag as
+        # the server and for the same libcurl reason.
+        - alias: zabbix-proxy
+          imageName: zabbix/zabbix-proxy-sqlite3:ol-7.4-latest
+          commonUpdateSettings:
+            updateStrategy: digest
+          manifestTargets:
+            helm:
+              name: zabbixProxy.image.repository
+              tag: zabbixProxy.image.tag
+        # snmptraps has no chart component - it is an extraContainers entry on
+        # zabbixServer, so the whole reference lives in one string and needs
+        # `spec` rather than name/tag. helm --set merges into the existing list
+        # element, so the container keeps its name, ports and volumeMounts.
+        #
+        # The [0] is positional: it is the FIRST entry of
+        # zabbixServer.extraContainers in applications/zabbix.yaml. Reordering
+        # that list - or inserting ahead of snmptraps - silently repoints this
+        # at the wrong container (ha-labels-sidecar is [1], and it is pinned to
+        # a specific build on purpose). Keep snmptraps first, or move this.
         - alias: zabbix-snmptraps
           imageName: zabbix/zabbix-snmptraps:alpine-7.4-latest
           commonUpdateSettings:
             updateStrategy: digest
           manifestTargets:
-            kustomize:
-              name: zabbix/zabbix-snmptraps
+            helm:
+              spec: zabbixServer.extraContainers[0].image
