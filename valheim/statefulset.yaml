@@ -54,6 +54,8 @@ spec:
       # The server writes the world on SIGTERM. Long enough that a node drain
       # or a rollout never costs progress.
       terminationGracePeriodSeconds: 300
+      # Nothing in here talks to the API server.
+      automountServiceAccountToken: false
       initContainers:
         # The Secret is frozen in the old chart's shape - key `valheim-0`
         # holding `password="..."` - because its ExternalSecret is
@@ -112,8 +114,13 @@ spec:
             # chart never exposed.
             - name: CROSSPLAY
               value: "true"
+            # NOT /run/secrets, which the image's README uses for Docker:
+            # /var/run is a symlink to /run here, so a volume there swallows
+            # the mountpoint kubelet needs for the service account token at
+            # /var/run/secrets/kubernetes.io/serviceaccount and the container
+            # dies in runc with "Read-only file system".
             - name: SERVER_PASS_FILE
-              value: /run/secrets/server_pass
+              value: /run/valheim/server_pass
             # Run the server as the uid/gid that already owns every file on
             # the config volume, so no ownership is rewritten on adoption.
             # 1.2.0 carries the per-world-directory permission handling this
@@ -184,7 +191,7 @@ spec:
             - name: server-files
               mountPath: /opt/valheim
             - name: server-pass
-              mountPath: /run/secrets
+              mountPath: /run/valheim
               readOnly: true
       volumes:
         - name: config
