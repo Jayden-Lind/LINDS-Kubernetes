@@ -114,13 +114,14 @@ spec:
             # chart never exposed.
             - name: CROSSPLAY
               value: "true"
-            # NOT /run/secrets, which the image's README uses for Docker:
-            # /var/run is a symlink to /run here, so a volume there swallows
-            # the mountpoint kubelet needs for the service account token at
-            # /var/run/secrets/kubernetes.io/serviceaccount and the container
-            # dies in runc with "Read-only file system".
+            # Deliberately a fresh top-level path, not the /run/secrets the
+            # image's README uses for Docker. Anything under /run collides
+            # here: /var/run is a symlink to /run, so /run/secrets swallows
+            # the mountpoint kubelet needs for the service account token
+            # (runc then fails the container outright), and /run/valheim is
+            # where the image's own supervisor keeps its PID files.
             - name: SERVER_PASS_FILE
-              value: /run/valheim/server_pass
+              value: /valheim-secret/server_pass
             # Run the server as the uid/gid that already owns every file on
             # the config volume, so no ownership is rewritten on adoption.
             # 1.2.0 carries the per-world-directory permission handling this
@@ -191,7 +192,7 @@ spec:
             - name: server-files
               mountPath: /opt/valheim
             - name: server-pass
-              mountPath: /run/valheim
+              mountPath: /valheim-secret
               readOnly: true
       volumes:
         - name: config
