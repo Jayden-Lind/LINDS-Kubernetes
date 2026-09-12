@@ -34,6 +34,30 @@ spec:
             # Every 6h: the hourly tag scans were tripping Docker Hub's
             # anonymous rate limit (toomanyrequests, ~45/day) at 60m.
             - --interval=6h
+            # replicaCount is 1 and the chart's updateStrategy is Recreate,
+            # so there is never a second pod for an election to decide
+            # between - but losing the lease makes controller-runtime exit(1),
+            # and on a single-control-plane cluster every controller loses its
+            # lease when the lone API server blips. Measured 2026-09-12 over
+            # the same 262 days: 244 transitions here, kube-scheduler 213,
+            # kube-controller-manager 209, cilium-operator 227, CNPG 265 - so
+            # this is the cluster, not this app. The difference is that the
+            # others re-acquire in place while this one exits and then spends
+            # several minutes warming its registry cache at 0/1 Ready, which
+            # is the whole of the "image updater is unhealthy" symptom
+            # (`Error: leader election lost`, roughly daily).
+            - --leader-election=false
+          # It idles at 1m CPU / 30Mi. Requests exist so it is not BestEffort
+          # next to etcd on the control-plane node; the memory limit covers
+          # the cache warm-up spike. No CPU limit - throttling a controller
+          # that has to renew things on a timer is how you cause the problem
+          # above.
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
       targetRevision: HEAD
       path: "image-updates"
