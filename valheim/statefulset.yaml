@@ -89,6 +89,71 @@ spec:
             allowPrivilegeEscalation: false
             seccompProfile:
               type: RuntimeDefault
+        # The server's mods. One so far: FiresGhettoNetworking, a networking
+        # and server-authority mod (MIT, fire-VA/FiresGhettoNetworking).
+        #
+        # BEPINEX=true below installs BepInEx itself and, on every merge,
+        # rsyncs /config/bepinex/{plugins,patchers}/ into the BepInEx server
+        # directory - so a plugin is "installed" by existing in that directory
+        # on the config volume. This container is what puts it there.
+        #
+        # Downloaded here rather than committed to this repo or baked into an
+        # image, because neither alternative is better than a pinned URL: the
+        # DLL is a 400 KB binary that the author re-releases most weeks, so
+        # git would carry a new blob forever each time, and a wrapper image
+        # would be a whole build pipeline for one file. The container already
+        # fetches Valheim from Steam and BepInEx from Thunderstore on every
+        # start, both completely unpinned - a fetch pinned to a release tag is
+        # the most controlled thing here, not the least.
+        #
+        # Renovate bumps the tag (renovate.json5, github-releases datasource).
+        # There is no checksum pin on purpose: Renovate cannot update one, so
+        # pinning a digest here would mean every mod PR merged a config that
+        # fails this container and takes the server down with it.
+        - name: install-mods
+          # Same image as the server, purely so this pulls nothing extra.
+          image: ghcr.io/community-valheim-tools/valheim-server:1.3.0@sha256:c43502d3b28c8d341f5362f365deb4802018bda9fc49f98c7631b099f597eb49
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -euc
+            - |
+              url=https://raw.githubusercontent.com/fire-VA/FiresGhettoNetworking/v1.4.31/plugins/FiresGhettoNetworking/VAGhettoNetworking.dll
+              dst=/config/bepinex/plugins/VAGhettoNetworking.dll
+
+              mkdir -p /config/bepinex/plugins /config/bepinex/patchers
+              if curl -fsSL --retry 3 --retry-delay 5 -o "$dst.tmp" "$url"; then
+                # A .NET assembly is a PE image. Checking the magic keeps a
+                # GitHub error page from being installed as a plugin, which
+                # BepInEx would then fail to load on every start.
+                test "$(head -c 2 "$dst.tmp")" = MZ
+                mv -f "$dst.tmp" "$dst"
+                chmod 0644 "$dst"
+              else
+                # The config volume still holds the last good copy, so a
+                # GitHub outage must not stop the server coming up. It only
+                # means the version already on the volume stays installed.
+                rm -f "$dst.tmp"
+                test -s "$dst"
+                echo "WARNING: could not fetch $url - keeping the copy already on the volume" >&2
+              fi
+
+              # Nothing removes a plugin that is dropped from this script: the
+              # image only syncs /config -> server, and this only ever adds.
+              # Deleting a mod means deleting its DLL from the volume by hand.
+              ls -l /config/bepinex/plugins
+          # As the uid that owns the config volume, so the files land with the
+          # same ownership as everything else on it and the server (also
+          # PUID 10001) can read them.
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /config
       containers:
         - name: valheim
           # Renovate bumps this (renovate.json5). It is NOT the game version -
@@ -136,6 +201,18 @@ spec:
             # in LINDS-Ansible inventory/group_vars/jd_vyos.yml.
             - name: CROSSPLAY
               value: "false"
+            # BepInEx, so the server can load mods - see the install-mods
+            # initContainer above for the one installed. The image fetches
+            # BepInExPack_Valheim from Thunderstore and merges it with the
+            # vanilla server into /opt/valheim/bepinex, which it then runs
+            # instead of /opt/valheim/server; the vanilla copy stays on disk
+            # either way, so this roughly doubles what the server-files volume
+            # holds (~2 GB -> ~4.3 GB, plus a second copy kept for the length
+            # of an update merge).
+            #
+            # Mutually exclusive with VALHEIM_PLUS, which is not set here.
+            - name: BEPINEX
+              value: "true"
             # Deliberately a fresh top-level path, not the /run/secrets the
             # image's README uses for Docker. Anything under /run collides
             # here: /var/run is a symlink to /run, so /run/secrets swallows
@@ -189,8 +266,10 @@ spec:
               protocol: UDP
             # No 2458: that was only the PlayFab backend, and nothing binds it
             # with CROSSPLAY=false. Some BepInEx mods do want gameport+2 for
-            # RPC - if one is ever installed it comes back here and in
-            # valheim/service.yaml.
+            # their own RPC, and would need it back here and in
+            # valheim/service.yaml - FiresGhettoNetworking does not. It patches
+            # Valheim's own ZDO/RPC layer, so all of its traffic rides the
+            # sockets already bound on 2456-2457.
           # No probes, deliberately. supervisord inside the container already
           # restarts the server process if it dies, and the chart's probes are
           # what used to kill this pod every 17 minutes. A kubelet probe here

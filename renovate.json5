@@ -47,6 +47,19 @@
       datasourceTemplate: "docker",
     },
     {
+      // The Valheim server's BepInEx plugin, pinned as a raw URL in the
+      // install-mods initContainer (see valheim/statefulset.yaml for why it
+      // is fetched rather than committed). Merging the PR installs the new
+      // version on the next pod start - the plugin only reaches the server
+      // directory on a BepInEx or Valheim merge, so if the game has not moved
+      // in the meantime, force one with DEBUG_REINSTALL_BEPINEX=true.
+      customType: "regex",
+      managerFilePatterns: ["/^valheim/statefulset\\.yaml$/"],
+      matchStrings: ["fire-VA/FiresGhettoNetworking/(?<currentValue>v[0-9.]+)/plugins/"],
+      depNameTemplate: "fire-VA/FiresGhettoNetworking",
+      datasourceTemplate: "github-releases",
+    },
+    {
       // Argo CD itself: pinned as a raw install.yaml URL in bootstrap/, which
       // the kustomize manager does not understand. Merging the PR upgrades
       // Argo CD through its own self-managed Application.
