@@ -72,8 +72,12 @@ spec:
               # docs/produce-pricing.md in the catcrawl repo.
               - name: CAT_EXTRA_STORES
                 value: "1248=Sydney CBD,5662=Broken Hill,3304=Melbourne CBD,5674=Mildura,2596=Brisbane CBD,2537=Cairns,2539=Mount Isa,4365=Perth CBD,4304=Broome,5317=Adelaide CBD,5601=Port Augusta,7012=Hobart,7220=Launceston,5652=Darwin,5604=Alice Springs,1073=Canberra"
+              # Produce is where regional prices move most, but it is not the
+              # whole story: Darwin and Broome carry a 5-9% loading across the
+              # packaged catalogue, and Tasmania prices beverages differently
+              # again. Drinks is the cheapest department that exposes both.
               - name: CAT_EXTRA_CATEGORIES
-                value: "Fruit & Veg"
+                value: "Fruit & Veg,Drinks"
               - name: API_KEY
                 valueFrom:
                   secretKeyRef:

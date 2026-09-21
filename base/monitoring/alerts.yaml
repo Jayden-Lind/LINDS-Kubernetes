@@ -636,6 +636,77 @@ spec:
             summary: "catcrawl-coles metrics are absent from the Pushgateway"
             description: "No Coles crawl metrics are present on crawl day (Wednesday). The Pushgateway may have restarted and lost its state, and today's run has not repopulated it — the crawl alerts are blind until it does."
 
+    # Aldi. Mirrors the catcrawl-coles group above, with Aldi's own metric
+    # prefix and schedule.
+    #
+    # Written as its own group rather than folded in with a __name__ regex
+    # spanning the three prefixes: several of these rules join two metrics with
+    # `and`, and vector matching compares every label including __name__, so a
+    # spanning regex produces rules that silently never fire.
+    - name: catcrawl-aldi
+      rules:
+        - alert: AldiCrawlJobFailed
+          expr: kube_job_failed{namespace="default", job_name=~"catcrawl-aldi-scheduler-.*", condition="true"} == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-aldi job {{ $labels.job_name }} failed"
+            description: "The Aldi crawl failed. Check `kubectl logs -n default job/{{ $labels.job_name }}` — likely causes are the database being unreachable, a failed migration, or Aldi changing its page payload."
+
+        - alert: AldiCrawlNotScheduled
+          # Weekly (0 4 * * 3); 8 days means a schedule was missed entirely.
+          expr: time() - kube_cronjob_status_last_schedule_time{namespace="default", cronjob="catcrawl-aldi-scheduler"} > 691200
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-aldi has not been scheduled for over 8 days"
+            description: "The Aldi CronJob last scheduled {{ $value | humanizeDuration }} ago. It may be suspended, or the image may not be pullable."
+
+        - alert: AldiCrawlNoRecentSuccess
+          expr: time() - catcrawl_aldi_last_success_timestamp_seconds{job="catcrawl_aldi"} > 691200
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-aldi has not completed successfully for over 8 days"
+            description: "Last successful Aldi crawl was {{ $value | humanizeDuration }} ago. The job may be running and failing each time."
+
+        - alert: AldiCrawlPartialFailure
+          expr: >-
+            catcrawl_aldi_category_errors{job="catcrawl_aldi"} > 0
+            and (time() - catcrawl_aldi_run_timestamp_seconds{job="catcrawl_aldi"} < 86400)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl-aldi completed with {{ $value }} failed categories"
+            description: "The crawl exited successfully but {{ $value }} categories failed, so those products were not refreshed."
+
+        - alert: AldiCrawlProductsDropped
+          expr: >-
+            catcrawl_aldi_products_seen{job="catcrawl_aldi"}
+            < 0.5 * max_over_time(catcrawl_aldi_products_seen{job="catcrawl_aldi"}[60d])
+            and (time() - catcrawl_aldi_run_timestamp_seconds{job="catcrawl_aldi"} < 86400)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl-aldi captured far fewer products than usual"
+            description: "Last crawl saw {{ $value }} products, less than half its 60-day peak. Aldi may have changed its page payload, or a category may be returning nothing."
+
+        - alert: AldiCrawlMetricsMissing
+          # Aldi runs at 04:00 rather than 02:00, so this settles later than the
+          # equivalent rules for the other two crawls.
+          expr: absent(catcrawl_aldi_run_timestamp_seconds{job="catcrawl_aldi"}) and on() (day_of_week() == 3)
+          for: 8h
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl-aldi metrics are absent from the Pushgateway"
+            description: "No Aldi crawl metrics are present on crawl day (Wednesday). The Pushgateway may have restarted and lost its state, and today's run has not repopulated it — the Aldi crawl alerts are blind until it does."
+
     # catcrawl-viewer serves catcrawl.linds.com.au: search, price history and
     # the Coles/Woolworths comparison. It replaced the Coles price-history API,
     # whose alert group was removed with it.
