@@ -111,8 +111,13 @@ spec:
                 # docs/produce-pricing.md in the catcrawl repo.
                 - name: CAT_EXTRA_STORES
                   value: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
+                # Produce is where regional prices move most, but it is not the
+                # whole story: Darwin and Broome carry a 5-9% loading across the
+                # packaged catalogue, Tasmania prices beverages differently, and
+                # four Coles beef lines split into two price groups that follow
+                # neither distance nor state. Drinks and meat expose all three.
                 - name: CAT_EXTRA_CATEGORIES
-                  value: "fruit-vegetables"
+                  value: "fruit-vegetables,drinks,meat-seafood"
                 # Persisted across runs on the PVC below, so Imperva sees a
                 # returning visitor rather than a brand-new one every week.
                 - name: CHROME_PROFILE
