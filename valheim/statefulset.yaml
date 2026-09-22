@@ -118,7 +118,7 @@ spec:
             - /bin/sh
             - -euc
             - |
-              url=https://raw.githubusercontent.com/fire-VA/FiresGhettoNetworking/v1.4.31/plugins/FiresGhettoNetworking/VAGhettoNetworking.dll
+              url=https://raw.githubusercontent.com/fire-VA/FiresGhettoNetworking/v1.4.50/plugins/FiresGhettoNetworking/VAGhettoNetworking.dll
               dst=/config/bepinex/plugins/VAGhettoNetworking.dll
 
               mkdir -p /config/bepinex/plugins /config/bepinex/patchers
