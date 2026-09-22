@@ -319,6 +319,25 @@ spec:
             summary: "PostgreSQL {{ $labels.cluster }} has not archived WAL in 36h"
             description: "No WAL segment has been archived for over 36 hours on {{ $labels.pod }}. The nightly base backup forces a segment switch, so this indicates backups or archiving have silently stopped."
 
+        # A failed nightly base backup.
+        #
+        # The obvious rule — the last failure newer than the last success — cannot
+        # work here. Backups go through the barman-cloud plugin (method: plugin),
+        # and with it CloudNativePG never records a successful backup:
+        # cnpg_collector_last_available_backup_timestamp and
+        # cnpg_collector_first_recoverability_point both read 0, so any comparison
+        # against them would fire forever. The failure timestamp is kept, and it
+        # still holds the failure of 2026-09-06, which went unnoticed because WAL
+        # kept archiving and neither archiving rule above had anything to say.
+        # So this fires when that timestamp moves, and resolves a day later.
+        - alert: PostgreSQLBaseBackupFailed
+          expr: changes(cnpg_collector_last_failed_backup_timestamp[1d]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL {{ $labels.cluster }} base backup failed"
+            description: "A base backup of {{ $labels.cluster }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
+
     - name: nginx
       rules:
         # NOTE: this cluster runs the NGINX Inc controller (ghcr.io/nginx),
