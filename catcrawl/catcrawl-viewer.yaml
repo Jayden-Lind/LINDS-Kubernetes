@@ -63,6 +63,7 @@ metadata:
 data:
   COLES_DB_NAME: catcrawl-coles
   WOW_DB_NAME: catcrawl
+  ALDI_DB_NAME: catcrawl-aldi
   VIEWER_DB_NAME: catcrawl-viewer
 
   # Which store's prices the viewer shows. The crawler tables are keyed by
