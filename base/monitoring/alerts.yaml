@@ -319,6 +319,25 @@ spec:
             summary: "PostgreSQL {{ $labels.cluster }} has not archived WAL in 36h"
             description: "No WAL segment has been archived for over 36 hours on {{ $labels.pod }}. The nightly base backup forces a segment switch, so this indicates backups or archiving have silently stopped."
 
+        # A failed nightly base backup.
+        #
+        # The obvious rule — the last failure newer than the last success — cannot
+        # work here. Backups go through the barman-cloud plugin (method: plugin),
+        # and with it CloudNativePG never records a successful backup:
+        # cnpg_collector_last_available_backup_timestamp and
+        # cnpg_collector_first_recoverability_point both read 0, so any comparison
+        # against them would fire forever. The failure timestamp is kept, and it
+        # still holds the failure of 2026-09-06, which went unnoticed because WAL
+        # kept archiving and neither archiving rule above had anything to say.
+        # So this fires when that timestamp moves, and resolves a day later.
+        - alert: PostgreSQLBaseBackupFailed
+          expr: changes(cnpg_collector_last_failed_backup_timestamp[1d]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL {{ $labels.cluster }} base backup failed"
+            description: "A base backup of {{ $labels.cluster }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
+
     - name: nginx
       rules:
         # NOTE: this cluster runs the NGINX Inc controller (ghcr.io/nginx),
@@ -780,3 +799,39 @@ spec:
           annotations:
             summary: "catcrawl-viewer is serving {{ $labels.retailer }} prices {{ $value | humanizeDuration }} old"
             description: "No {{ $labels.retailer }} product has been seen by a crawl in over 9 days. Cross-check that retailer's own NoRecentSuccess alert: if it is quiet, the crawl is running but writing nothing."
+
+    # The weekly VACUUM (ANALYZE) over the three crawler databases
+    # (catcrawl/catcrawl-vacuum-cron.yaml).
+    #
+    # Its own group, because `catcrawl`, `catcrawl-coles`, `catcrawl-aldi` and
+    # `catcrawl-viewer` all already exist above and Prometheus rejects the
+    # whole file if two groups in it share a name.
+    #
+    # Both rules read kube-state-metrics only. That is not a stylistic choice:
+    # this job is psql, not one of the Go crawlers, so it pushes nothing to the
+    # Pushgateway and there is no catcrawl_vacuum_* series to join against.
+    # Nothing here uses `and` across two metric families, and nothing reaches
+    # for a __name__ regex spanning the crawlers' prefixes — vector matching
+    # compares __name__ along with every other label, so such a rule would
+    # silently never fire.
+    - name: catcrawl-maintenance
+      rules:
+        - alert: CatcrawlVacuumJobFailed
+          expr: kube_job_failed{namespace="default", job_name=~"catcrawl-vacuum-.*", condition="true"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl vacuum job {{ $labels.job_name }} failed"
+            description: "The weekly VACUUM (ANALYZE) over catcrawl, catcrawl-coles and catcrawl-aldi failed. Check `kubectl logs -n default job/{{ $labels.job_name }}`; likely causes are the database being unreachable or the catcrawl role having lost ownership of a table. Warning, not critical: one skipped run loses nothing, autovacuum still runs, the tables just keep the dead space the last crawl left and the planner keeps stale statistics until the next run. Do NOT substitute VACUUM FULL — it locks these tables against catcrawl-viewer for its whole run."
+
+        - alert: CatcrawlVacuumNotScheduled
+          # Weekly; 8 days means a schedule was missed entirely. Same threshold
+          # as the three crawls above.
+          expr: time() - kube_cronjob_status_last_schedule_time{namespace="default", cronjob="catcrawl-vacuum"} > 691200
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "catcrawl vacuum has not been scheduled for over 8 days"
+            description: "The catcrawl-vacuum CronJob last scheduled {{ $value | humanizeDuration }} ago. It may be suspended, or a previous run may still be active — concurrencyPolicy is Forbid, so one wedged vacuum blocks every run after it."

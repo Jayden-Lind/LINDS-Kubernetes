@@ -58,9 +58,21 @@ kubectl get --raw "/api/v1/namespaces/postgresql-linds/pods/<primary-pod>:9187/p
 ```
 
 Prometheus alerts for failed/stale WAL archiving live in
-`base/monitoring/alerts.yaml`.
+`base/monitoring/alerts.yaml`. Note that neither those nor the CNPG collector
+metrics catch a single *failed base backup* — with `method: plugin` the
+collector's backup gauges read `0`, so `kubectl get backups` is still a manual
+check.
+
+To prove the backups are restorable, use
+[`docs/postgres-restore-drill.md`](../docs/postgres-restore-drill.md), which
+restores into a throwaway cluster in its own namespace. **Not** the rebuild
+procedure below: that one deletes the live cluster.
 
 ## Rebuilding the cluster from backup (no serverName bump needed)
+
+This is disaster recovery, not a backup test — it destroys and recreates the
+live cluster. To verify a backup without risking anything, drill instead:
+[`docs/postgres-restore-drill.md`](../docs/postgres-restore-drill.md).
 
 Historically every rebuild required inventing a new serverName
 (`linds-postgres` → `-new` → `-restored-3` → `-restored-4`) because the plugin

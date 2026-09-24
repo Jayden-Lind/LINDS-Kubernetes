@@ -1,0 +1,172 @@
+# Weekly post-crawl maintenance for the three crawler databases.
+#
+# Every crawl rewrites most of its products table whether or not anything
+# changed: last_seen_at is touched on every row the crawl sees (~26,000 for
+# Woolworths), and an UPDATE in Postgres writes a new row version and leaves
+# the old one dead. Autovacuum does get to them, but its thresholds are tuned
+# for a steady trickle of writes rather than one bulk rewrite a week, so the
+# tables carried dead space between crawls and the planner worked from
+# statistics taken before the rewrite. Until now this was reclaimed by hand.
+#
+# This runs a PLAIN `VACUUM (ANALYZE)`, deliberately NOT `VACUUM FULL`:
+#
+#   * VACUUM FULL holds an ACCESS EXCLUSIVE lock for its entire run, so every
+#     reader blocks — including catcrawl-viewer, which serves
+#     catcrawl.linds.com.au from these same tables. Plain VACUUM takes only
+#     SHARE UPDATE EXCLUSIVE and does not block reads or writes.
+#   * VACUUM FULL rewrites the table into a new relfilenode, so it needs as
+#     much free space again as the table and its indexes already occupy, and
+#     rebuilds every index on the way.
+#   * It also hands the reclaimed space back to the filesystem, which only
+#     helps a table that is shrinking for good. These tables are rewritten to
+#     roughly the same size every week, so what they want is space returned to
+#     the table for the next crawl to reuse — which is what plain VACUUM does.
+#
+# So VACUUM FULL stays a deliberate, supervised, manual act. Nothing in this
+# repo should ever issue it on a schedule.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: catcrawl-vacuum
+  namespace: default
+spec:
+  # Wednesdays at 18:00, and it has to be clear of the slowest crawl that
+  # could still be running. Worst case for each, from the sibling manifests in
+  # this directory:
+  #
+  #   catcrawl-scheduler       0 2 * * 3  + Job activeDeadlineSeconds 39600 → 13:00
+  #   catcrawl-col-scheduler   0 2 * * 3  + Job activeDeadlineSeconds 39600 → 13:00
+  #   catcrawl-aldi-scheduler  0 4 * * 3  + Job activeDeadlineSeconds  3600 → 05:00
+  #
+  # 18:00 is five hours past the last moment a crawl can still be writing, and
+  # six hours before the nightly CNPG base backup at 00:00
+  # (postgresql/postgres-cluster.yaml) — a vacuum generates WAL, and there is
+  # no reason for it to be doing so while a base backup runs.
+  #
+  # No timeZone here, matching the three crawl CronJobs, so all four are
+  # compared in one frame: the cluster's, which is UTC.
+  schedule: "0 18 * * 3"
+  # A vacuum that wedges must not stack up behind itself. See also the
+  # activeDeadlineSeconds below — Forbid alone would let one stuck run block
+  # every week after it, which is what CatcrawlVacuumNotScheduled watches for.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Ceiling for the Job as a whole: two attempts plus slack. The meaningful
+      # per-attempt cap is on the Pod template below. A full VACUUM (ANALYZE)
+      # over all three databases is minutes of work, so this is generous by an
+      # order of magnitude — its purpose is that a vacuum blocked behind some
+      # other session's lock dies rather than sitting there until the next
+      # crawl.
+      activeDeadlineSeconds: 3600
+      backoffLimit: 1
+      # Delete the Job 48h after it finishes, successful or not.
+      # kube_job_failed is derived from the Job object, so without this a
+      # failed run leaves a tombstone that keeps the alert firing until three
+      # more runs evict it from failedJobsHistoryLimit.
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          # Per-attempt budget. activeDeadlineSeconds on the Job covers the
+          # whole Job including retries, so a slow first attempt would
+          # otherwise leave the retry almost no time.
+          activeDeadlineSeconds: 1500
+          restartPolicy: Never
+          # The same context CNPG itself applies to this image on the cluster
+          # pods: uid/gid 26 (postgres), non-root, RuntimeDefault. Verified
+          # against the running primary rather than assumed.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 26
+            runAsGroup: 26
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: vacuum
+              # The same image, tag and digest the Postgres cluster itself runs
+              # (postgresql/postgres-cluster.yaml). Pinned by digest because
+              # that is this repo's rule for third-party images — see
+              # postgresql/README.md — and using the server's own image means
+              # the psql client here cannot drift from the server version.
+              # Bump this together with spec.imageName over there.
+              image: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie@sha256:802cb43a4d482acf1037b418e421c865b16959ba22e07f16fc003e06cb21084c
+              # Digest-pinned, so there is nothing to re-resolve; the crawler
+              # images use Always only because they float on :latest.
+              imagePullPolicy: IfNotPresent
+              # Not the image's entrypoint (docker-entrypoint.sh, which wants
+              # to start a server).
+              #
+              # VACUUM cannot run inside a transaction block, which is why each
+              # database gets its own psql -c rather than one --single-
+              # transaction invocation. Note that VACUUM skips relations the
+              # connecting role does not own with a WARNING rather than an
+              # error, so a permissions regression would show up in the log
+              # here, not in the exit status.
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  for db in ${VACUUM_DATABASES}; do
+                    echo "==> VACUUM (ANALYZE) ${db}"
+                    psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+                      --dbname="${db}" --command='VACUUM (ANALYZE)'
+                  done
+                  echo "all databases vacuumed"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                # libpq's own variable names, filled from the DB_* keys the Go
+                # crawlers read. Same secret, and the same `catcrawl` role: all
+                # three databases live on the one cluster behind it, owned by
+                # it, and VACUUM is a table-owner operation — no superuser is
+                # involved. The secret's Coles name is a misnomer it acquired
+                # by being first; catcrawl-aldi and catcrawl-viewer already
+                # take the shared credentials from it.
+                - name: PGHOST
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_HOST } }
+                - name: PGPORT
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PORT } }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_USER } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: catcrawl-coles-env-secret, key: DB_PASSWORD } }
+                # So the session is identifiable in pg_stat_activity while it
+                # runs, rather than showing up as another `psql`.
+                - name: PGAPPNAME
+                  value: catcrawl-vacuum
+                # Database names are not credentials, so they live here rather
+                # than in Vault — and pointing a run at a scratch database is
+                # then an edit to this file, the same reasoning as DB_NAME on
+                # the Aldi crawl.
+                #
+                # catcrawl-viewer's own database is deliberately absent: it
+                # holds derived match data that is rebuilt wholesale, not a
+                # catalogue rewritten row by row, so it is not what bloats.
+                - name: VACUUM_DATABASES
+                  value: "catcrawl catcrawl-coles catcrawl-aldi"
+              # A psql session and a loop. All the real work, and all the
+              # memory for it (maintenance_work_mem), happens server-side in
+              # the Postgres instance.
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "256Mi"
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            # The root filesystem is read-only, and bash writes a temporary
+            # file for any here-document or process substitution it is asked
+            # to handle. Cheaper than discovering that at 18:00 on a Wednesday.
+            - name: tmp
+              emptyDir:
+                sizeLimit: 32Mi
