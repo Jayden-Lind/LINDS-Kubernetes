@@ -4,7 +4,8 @@ metadata:
   name: catcrawl-scheduler
   namespace: default
 spec:
-  schedule: "0 2 * * 3" 
+  schedule: "0 2 * * 3"
+  concurrencyPolicy: Forbid        # never overlap two crawls
   jobTemplate:
     spec:
       # See the matching comment in catcrawl-col-cron.yaml: a failed Job
