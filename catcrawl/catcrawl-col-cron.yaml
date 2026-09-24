@@ -149,13 +149,21 @@ spec:
               # compressible, so requests still guarantee neighbours their share
               # — but an unbounded limit on a job that runs Chromium is a bigger
               # change than the evidence calls for.
+              #
+              # Memory: on 2026-09-23 the edge began challenging the direct path,
+              # the crawl fell back to loading every page in Chromium, and memory
+              # went from 400 MB to 1.9 GB in four minutes before the 2Gi limit
+              # killed it. The crawler now replaces its browser tab every ten
+              # pages, which is the fix; 3Gi is headroom on top of it, not a
+              # substitute. The workers have 16 GB, so one weekly job's extra
+              # gigabyte of limit costs its neighbours nothing it does not use.
               resources:
                 requests:
                   cpu: "1"
                   memory: "512Mi"
                 limits:
                   cpu: "3"
-                  memory: "2Gi"
+                  memory: "3Gi"
               volumeMounts:
                 - name: chrome-profile
                   mountPath: /data/chrome-profile
