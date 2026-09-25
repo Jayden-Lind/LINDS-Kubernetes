@@ -23,9 +23,11 @@ the role is changed, and then nothing can log in.
 
 ## When
 
-Not on a Wednesday. The crawls start at 02:00 UTC and may run until 13:00 UTC,
-and the vacuum runs at 18:00 UTC. A crawl that loses its login halfway through
-records a partial failure. Check that nothing is running:
+Not on a Wednesday, or on a Thursday before 07:00 UTC. The crawls start at
+02:00 UTC on Wednesday; Woolworths may run until 13:00 UTC and Coles until
+03:00 UTC on Thursday, and the vacuum runs at 06:00 UTC on Thursday. A crawl
+that loses its login halfway through records a partial failure. Check that
+nothing is running:
 
 ```sh
 kubectl get jobs -n default | grep catcrawl
