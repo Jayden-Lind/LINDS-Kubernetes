@@ -10,9 +10,18 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      # Ceiling for the Job as a whole: two 5h attempts plus slack. The
-      # meaningful per-attempt cap is on the Pod template below.
-      activeDeadlineSeconds: 39600
+      # Ceiling for the Job as a whole: two 12h attempts, the 20m pause the
+      # crawler takes before a retry, and slack. The meaningful per-attempt
+      # cap is on the Pod template below.
+      #
+      # catcrawl-coles derives two windows from these numbers:
+      # attempt.Window (how long after an attempt its retry can start) and
+      # previousCrawlSpan in pkg/store/discontinued.go (how far apart one
+      # Job's writes can lie, which the discontinued flag depends on). Raise
+      # either deadline past what those allow and they have to change too, as
+      # does the vacuum's schedule in catcrawl-vacuum-cron.yaml, which has to
+      # fall after the latest this Job can still be writing.
+      activeDeadlineSeconds: 90000
       backoffLimit: 1
       # Delete the Job object 48h after it finishes, successful or not.
       # kube_job_failed is derived from the Job object, so without this a
@@ -34,8 +43,18 @@ spec:
           # pushed its partial counts on the way out, which is what tripped
           # ColesCrawlProductsDropped. Setting the deadline on the Pod instead
           # gives every attempt the same budget, because each retry is a new
-          # Pod. 5h against a worst observed run of 3h37m.
-          activeDeadlineSeconds: 18000
+          # Pod.
+          #
+          # 12h since 2026-09-25, up from 5h against a worst observed run of
+          # 3h37m -- one store, every page through the browser. The crawl has
+          # covered seventeen stores since 2026-09-07, and when the edge
+          # refuses the direct path every page of all of them goes through the
+          # browser again; the cap is there so that such a run can finish
+          # rather than be cut off partway. Running against a site that is
+          # refusing the crawler outright is no longer what would use the
+          # time: the crawler stops after three pages in a row fail in the
+          # browser, and the Job's retry of that exits at once.
+          activeDeadlineSeconds: 43200
           restartPolicy: Never
           imagePullSecrets:
             - name: ghcr-pull-secret

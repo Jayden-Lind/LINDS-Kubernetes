@@ -30,22 +30,24 @@ metadata:
   name: catcrawl-vacuum
   namespace: default
 spec:
-  # Wednesdays at 18:00, and it has to be clear of the slowest crawl that
+  # Thursdays at 06:00, and it has to be clear of the slowest crawl that
   # could still be running. Worst case for each, from the sibling manifests in
   # this directory:
   #
-  #   catcrawl-scheduler       0 2 * * 3  + Job activeDeadlineSeconds 39600 → 13:00
-  #   catcrawl-col-scheduler   0 2 * * 3  + Job activeDeadlineSeconds 39600 → 13:00
-  #   catcrawl-aldi-scheduler  0 4 * * 3  + Job activeDeadlineSeconds  3600 → 05:00
+  #   catcrawl-scheduler       0 2 * * 3  + Job activeDeadlineSeconds 39600 → Wed 13:00
+  #   catcrawl-col-scheduler   0 2 * * 3  + Job activeDeadlineSeconds 90000 → Thu 03:00
+  #   catcrawl-aldi-scheduler  0 4 * * 3  + Job activeDeadlineSeconds  3600 → Wed 05:00
   #
-  # 18:00 is five hours past the last moment a crawl can still be writing, and
-  # six hours before the nightly CNPG base backup at 00:00
+  # 06:00 Thursday is three hours past the last moment a crawl can still be
+  # writing, and six hours after the nightly CNPG base backup starts at 00:00
   # (postgresql/postgres-cluster.yaml) — a vacuum generates WAL, and there is
-  # no reason for it to be doing so while a base backup runs.
+  # no reason for it to be doing so while a base backup runs. It was 18:00
+  # Wednesday until the Coles crawl's deadline went from 11h to 25h on
+  # 2026-09-25, which put that inside a Coles run.
   #
   # No timeZone here, matching the three crawl CronJobs, so all four are
   # compared in one frame: the cluster's, which is UTC.
-  schedule: "0 18 * * 3"
+  schedule: "0 6 * * 4"
   # A vacuum that wedges must not stack up behind itself. See also the
   # activeDeadlineSeconds below — Forbid alone would let one stuck run block
   # every week after it, which is what CatcrawlVacuumNotScheduled watches for.
@@ -166,7 +168,7 @@ spec:
           volumes:
             # The root filesystem is read-only, and bash writes a temporary
             # file for any here-document or process substitution it is asked
-            # to handle. Cheaper than discovering that at 18:00 on a Wednesday.
+            # to handle. Cheaper than discovering that at 06:00 on a Thursday.
             - name: tmp
               emptyDir:
                 sizeLimit: 32Mi
