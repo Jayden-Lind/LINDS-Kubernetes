@@ -28,6 +28,14 @@ spec:
           - name: alertname
             matchType: "=~"
             value: "InfoInhibitor|Watchdog"
+      # Coles refusing the crawler is a condition that lasts days, and nothing
+      # here can fix it. Once a day is enough to say it is still going on.
+      - receiver: discord
+        matchers:
+          - name: alertname
+            matchType: "="
+            value: ColesCrawlBlocked
+        repeatInterval: 24h
   receivers:
     - name: "null"
     - name: discord
@@ -61,3 +69,47 @@ spec:
       equal:
         - namespace
         - alertname
+    # While Coles is refusing the crawler (ColesCrawlBlocked, in
+    # base/monitoring/alerts.yaml), everything that follows from that is held
+    # back: it is one cause, and it was arriving as nine alerts. Three rules,
+    # because the alerts it stands in for live in three places.
+    #
+    # The crawler's own alerts, except the two that are not about the run:
+    # ColesCrawlNotScheduled (the CronJob not running at all) and
+    # ColesCrawlMetricsMissing (which the blocked alert, reading those metrics,
+    # could not stand in for).
+    - sourceMatch:
+        - name: alertname
+          value: ColesCrawlBlocked
+          matchType: "="
+      targetMatch:
+        - name: alertname
+          value: "ColesCrawl(JobFailed|NoRecentSuccess|PartialFailure|ProductsDropped|PriceParseDegraded|BeingChallenged)"
+          matchType: "=~"
+    # The stock kube-prometheus alert for the same failed Jobs.
+    - sourceMatch:
+        - name: alertname
+          value: ColesCrawlBlocked
+          matchType: "="
+      targetMatch:
+        - name: alertname
+          value: KubeJobFailed
+          matchType: "="
+        - name: job_name
+          value: "catcrawl-col-scheduler-.*"
+          matchType: "=~"
+    # ArgoCD calls the whole catcrawl app degraded while the Coles CronJob's last
+    # run has failed. This also holds back a degradation elsewhere in that app
+    # for as long as Coles is blocked; the Woolworths crawl, the Aldi crawl and
+    # the viewer each have alerts of their own, which this leaves alone.
+    - sourceMatch:
+        - name: alertname
+          value: ColesCrawlBlocked
+          matchType: "="
+      targetMatch:
+        - name: alertname
+          value: "ArgoCDAppDegraded|ArgoCDAppUnhealthy"
+          matchType: "=~"
+        - name: name
+          value: catcrawl
+          matchType: "="
