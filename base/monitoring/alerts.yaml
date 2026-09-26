@@ -530,6 +530,34 @@ spec:
     # nothing and cannot report on itself.
     - name: catcrawl-coles
       rules:
+        - alert: ColesCrawlBlocked
+          # Coles refusing the crawler outright. Since 2026-09-25 the crawler
+          # stops after three pages in a row fail in the browser and reports it
+          # as catcrawl_coles_run_blocked. It is one fact, and without this the
+          # rest of this group reports it as many: the Job failed (per Job, for
+          # 48h, alongside the stock KubeJobFailed), the products dropped, the
+          # run was partial, nothing has succeeded, and ArgoCD calls the
+          # catcrawl app degraded because the CronJob's last run failed -- nine
+          # alerts on 2026-09-26, in seven Discord notifications every four
+          # hours. Alertmanager holds those back while this fires, and repeats
+          # this one daily rather than every four hours
+          # (base/monitoring/alertmanager-config.yaml).
+          #
+          # Only for six days after the run that reported it. The gauge stays at
+          # 1 until another run pushes over it, and a run that fails for another
+          # reason before capturing anything pushes nothing. Without the limit a
+          # later, unrelated failure -- the database down on the next Wednesday,
+          # say -- would be held back behind a block that may have lifted.
+          expr: >-
+            catcrawl_coles_run_blocked{job="catcrawl_coles"} == 1
+            and on(store) (time() - catcrawl_coles_run_timestamp_seconds{job="catcrawl_coles"} < 518400)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Coles is refusing the crawler (store {{ $labels.store }})"
+            description: "The last Coles crawl stopped because the site served its bot block page (\"Pardon Our Interruption\") three pages in a row. Nothing in the cluster needs fixing; the weekly run tries again and resumes by itself once Coles stops refusing it. While this fires, the other Coles crawl alerts, KubeJobFailed for the Coles Jobs and ArgoCD's alerts for the catcrawl app are held back. The run's log has what the site showed in shown_title, shown_url and shown_text."
+
         - alert: ColesCrawlJobFailed
           expr: kube_job_failed{namespace="default", job_name=~"catcrawl-col-scheduler-.*", condition="true"} == 1
           for: 5m
