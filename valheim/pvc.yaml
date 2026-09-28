@@ -31,4 +31,8 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      # Grown online from 5Gi on 2026-09-28, at 81% full. Most of it is the
+      # image's hourly world zips (BACKUPS_CRON, kept BACKUPS_MAX_AGE=7 days in
+      # statefulset.yaml): ~170 of them at ~26 MB, each growing with the world.
+      # A claim can only grow - the API rejects a smaller request.
+      storage: 10Gi
