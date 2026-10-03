@@ -46,14 +46,14 @@ spec:
           # Pod.
           #
           # 12h since 2026-09-25, up from 5h against a worst observed run of
-          # 3h37m -- one store, every page through the browser. The crawl has
-          # covered seventeen stores since 2026-09-07, and when the edge
-          # refuses the direct path every page of all of them goes through the
-          # browser again; the cap is there so that such a run can finish
-          # rather than be cut off partway. Running against a site that is
-          # refusing the crawler outright is no longer what would use the
-          # time: the crawler stops after three pages in a row fail in the
-          # browser, and the Job's retry of that exits at once.
+          # 3h37m -- one store, every page through the browser. That same
+          # store took 5h05m on 2026-09-30, which is what the old cap could
+          # no longer hold, and is the whole crawl now that the regional
+          # stores are off (see CAT_EXTRA_STORES below): seventeen stores
+          # would be about 12.3 hours, and do not fit. Running against a site
+          # that is refusing the crawler outright is not what uses the time:
+          # the crawler stops after three pages in a row fail in the browser,
+          # and the Job's retry of that exits at once.
           activeDeadlineSeconds: 43200
           restartPolicy: Never
           imagePullSecrets:
@@ -117,26 +117,49 @@ spec:
                 # The CAT_STORE_ID key in Vault is now unused by this job.
                 - name: CAT_STORE_ID
                   value: "7674"
-                # One store per capital city and one regional town per state and
-                # territory, chosen through each chain's own locator and checked
+                # The regional stores are switched off, since 2026-10-03. Three
+                # things were wrong with them at once.
+                #
+                # They were recording the wrong prices. Since the crawl went
+                # back to rendering every page in the browser (2026-09-25),
+                # selecting a store has not taken effect past the first one: on
+                # 2026-09-30 Sydney CBD, Broken Hill, Melbourne CBD and Mildura
+                # each returned the same 488 meat, 557 produce and 1,257 drinks
+                # products at the same prices, where on 2026-09-16 they had
+                # returned 555, 491, 551 and 476 produce items. The rows went in
+                # under four store numbers.
+                #
+                # They did not fit. The home store took 5h05m (713 pages) and
+                # each regional store about 27 minutes (53 pages), so seventeen
+                # stores is about 12.3 hours against a 12-hour attempt.
+                #
+                # And they more than doubled what the crawl asks of the site:
+                # 1,561 pages a run against about 700 before 2026-09-07. Both
+                # runs that got that far were refused at nearly the same point,
+                # pages 872 and 882.
+                #
+                # The crawler now refuses to record a store whose pages are
+                # another store's (catcrawl_coles_stores_wrong_store), so
+                # turning these back on is safe to try, and the first run will
+                # say whether the switch works: "store finished" logs
+                # pages_naming_store, and a store that repeats an earlier one
+                # fails the run without writing anything. When they do come
+                # back, start with produce at a few stores rather than three
+                # departments at sixteen.
+                #
+                # The list is kept because choosing it was the work: one store
+                # per capital city and one regional town per state and
+                # territory, found through each chain's own locator and checked
                 # to be full-line supermarkets -- small formats (Woolworths
                 # Metro, Coles Local and Central) carry a narrower range at
                 # different prices, which would read as a regional difference.
+                # See docs/produce-pricing.md in the catcrawl repo for which
+                # departments vary: produce most, then drinks and meat.
                 #
-                # Only the categories below are captured at these stores. The
-                # whole catalogue sixteen times over is sixteen times the
-                # traffic for data that, department by department, mostly does
-                # not vary; produce is the department where it does. See
-                # docs/produce-pricing.md in the catcrawl repo.
-                - name: CAT_EXTRA_STORES
-                  value: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
-                # Produce is where regional prices move most, but it is not the
-                # whole story: Darwin and Broome carry a 5-9% loading across the
-                # packaged catalogue, Tasmania prices beverages differently, and
-                # four Coles beef lines split into two price groups that follow
-                # neither distance nor state. Drinks and meat expose all three.
-                - name: CAT_EXTRA_CATEGORIES
-                  value: "fruit-vegetables,drinks,meat-seafood"
+                # - name: CAT_EXTRA_STORES
+                #   value: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
+                # - name: CAT_EXTRA_CATEGORIES
+                #   value: "fruit-vegetables"
                 # Persisted across runs on the PVC below, so Imperva sees a
                 # returning visitor rather than a brand-new one every week.
                 - name: CHROME_PROFILE
