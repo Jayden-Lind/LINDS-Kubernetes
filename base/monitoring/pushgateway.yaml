@@ -4,15 +4,44 @@
 # Prometheus cannot scrape it directly. The job pushes its outcome here at the
 # end of each run and Prometheus scrapes this instead.
 #
-# Deliberately stateless (no PVC). If this pod restarts, the pushed values are
-# lost until the next crawl. That is acceptable because:
-#   * Prometheus keeps the scraped history in its own TSDB, so trend queries such
-#     as max_over_time() are unaffected.
-#   * The alerts that answer "did it run, did it fail" come from
-#     kube-state-metrics, which observes the job from outside and does not depend
-#     on this pod at all.
-#   * A missing series makes an alert go quiet rather than fire falsely, and
-#     CatcrawlMetricsMissing in alerts.yaml closes that gap explicitly.
+# It keeps what was pushed on a small volume, since 2026-10-03. It used to be
+# deliberately stateless, on the reasoning that Prometheus holds the history,
+# that the "did it run, did it fail" alerts come from kube-state-metrics, and
+# that a missing series makes an alert go quiet rather than fire falsely.
+#
+# The last of those was the problem. On 2026-10-02 a node upgrade moved this
+# pod, and every gauge the three crawlers had pushed was gone. The crawls are
+# weekly, so the alerts that read those gauges had nothing to read until the
+# next push, five days later -- and one of them for longer than that.
+# last_success_timestamp is pushed only by a run that succeeds, so for a
+# crawler that keeps failing it never comes back, and "no successful crawl in
+# eight days" could not fire for the one crawler that had not succeeded in
+# seventeen. Going quiet is the wrong way for that to fail.
+#
+# The NoRecentSuccess alerts now also read the CronJob's own last success from
+# kube-state-metrics (alerts.yaml), so they no longer depend on this pod at all.
+# Persistence is for everything else the crawlers report: what the last run
+# saw, whether it was refused, how many categories it lost.
+#
+# A restored value is as old as the run that pushed it. That is safe because
+# the alerts already judge freshness from run_timestamp rather than from a
+# series being present.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pushgateway
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: pushgateway
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: nfs-csi
+  resources:
+    requests:
+      # One file of a few hundred series. The class does not enforce a size;
+      # this is the smallest honest figure.
+      storage: 100Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -23,6 +52,12 @@ metadata:
     app.kubernetes.io/name: pushgateway
 spec:
   replicas: 1
+  # Not a rolling update. Two pods would both write the one persistence file,
+  # and for the seconds they overlapped a push would land on whichever the
+  # Service picked and be missing from the other's copy. A rollout is a few
+  # seconds without a Pushgateway instead, which a weekly push can afford.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: pushgateway
@@ -31,10 +66,16 @@ spec:
       labels:
         app.kubernetes.io/name: pushgateway
     spec:
+      # Beside its volume: the NFS server is at the jd site, and from the other
+      # one the mount would depend on the tunnel between them staying up.
+      nodeSelector:
+        datacenter: jd
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
         fsGroup: 65534
+        # The volume holds one file; there is nothing to walk on every start.
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: pushgateway
           # Pinned rather than :latest so a new upstream release cannot change
@@ -42,10 +83,17 @@ spec:
           image: prom/pushgateway:v1.11.3
           args:
             - --web.listen-address=:9091
+            # Written within five minutes of a push and again on shutdown, and
+            # read back on start. If the file cannot be written the
+            # Pushgateway logs it and carries on from memory, which is how it
+            # ran before.
+            - --persistence.file=/data/pushgateway.metrics
+            - --persistence.interval=5m
           # Note: the Pushgateway never expires metrics. A pushed value persists
-          # until it is overwritten, the group is deleted via the API, or this
-          # pod restarts. That is why staleness is judged from timestamps in the
-          # alert expressions rather than from the presence of a series.
+          # until it is overwritten or the group is deleted via the API, and
+          # now across a restart too. That is why staleness is judged from
+          # timestamps in the alert expressions rather than from the presence
+          # of a series.
           ports:
             - name: http
               containerPort: 9091
@@ -70,6 +118,13 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pushgateway
 ---
 apiVersion: v1
 kind: Service
