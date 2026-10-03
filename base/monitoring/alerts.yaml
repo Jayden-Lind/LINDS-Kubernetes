@@ -462,6 +462,28 @@ spec:
             summary: "catcrawl has not completed successfully for over 8 days (store {{ $labels.store }})"
             description: "Last successful crawl was {{ $value | humanizeDuration }} ago. The job may be running and failing each time."
 
+        - alert: CatcrawlNoRecentSuccess
+          # The same alert, from the other side. catcrawl_last_success_timestamp_seconds is pushed
+          # only by a run that succeeds, so when the Pushgateway has lost it --
+          # as it did on 2026-10-02 -- it does not come back until the crawl
+          # succeeds again, and the rule above cannot fire for exactly the
+          # crawler that keeps failing. The CronJob's own record of its last
+          # successful Job is held by the API server and survives all of that.
+          #
+          # Only while the pushed gauge is absent, so the two never fire
+          # together, and the rule above stays the one that normally speaks:
+          # it is the crawler's own account of success, which for a crawler
+          # that exits zero past failed categories is the stricter of the two.
+          expr: >-
+            (time() - kube_cronjob_status_last_successful_time{namespace="default", cronjob="catcrawl-scheduler"} > 691200)
+            unless on() catcrawl_last_success_timestamp_seconds{job="catcrawl"}
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl has not completed successfully for over 8 days"
+            description: "The catcrawl-scheduler CronJob last had a successful Job {{ $value | humanizeDuration }} ago, and the crawler's own last-success metric is missing from the Pushgateway. The job may be running and failing each time."
+
         - alert: CatcrawlPartialFailure
           # The crawl continues past a failed category and exits zero, so
           # Kubernetes reports success while data is quietly missing.
@@ -503,9 +525,11 @@ spec:
             description: "Last crawl saw {{ $value }} products, less than half its 60-day peak. The upstream API may have changed, or a category may be returning nothing."
 
         - alert: CatcrawlMetricsMissing
-          # The Pushgateway is stateless, so a restart drops these series. Without
-          # this rule the crawl alerts would go quiet rather than fire, which is
-          # the more dangerous failure: silence that looks like health.
+          # The Pushgateway keeps what was pushed on a volume since 2026-10-03,
+          # so a restart no longer drops these series; this is the backstop for
+          # the day that volume is lost or was never written. Without it the
+          # crawl alerts would go quiet rather than fire, which is the more
+          # dangerous failure: silence that looks like health.
           # Gated to Wednesdays (UTC, matching the 0 2 * * 3 schedule): missing
           # metrics only matter on the day the crawl is due, so a mid-week
           # Pushgateway restart stays quiet until then.
@@ -556,7 +580,38 @@ spec:
             severity: warning
           annotations:
             summary: "Coles is refusing the crawler (store {{ $labels.store }})"
-            description: "The last Coles crawl stopped because the site served its bot block page (\"Pardon Our Interruption\") three pages in a row. Nothing in the cluster needs fixing; the weekly run tries again and resumes by itself once Coles stops refusing it. While this fires, the other Coles crawl alerts, KubeJobFailed for the Coles Jobs and ArgoCD's alerts for the catcrawl app are held back. The run's log has what the site showed in shown_title, shown_url and shown_text."
+            description: "The last Coles crawl stopped because pages kept failing in the browser, which is what the site's block pages do (\"Pardon Our Interruption\", or \"Request unsuccessful. Incapsula incident ID\"). Nothing in the cluster needs fixing; the weekly run tries again and resumes by itself once Coles stops refusing it. While this fires, the other Coles crawl alerts, KubeJobFailed for the Coles Jobs and ArgoCD's alerts for the catcrawl app are held back. The run's log has what the site showed in shown_title, shown_url and shown_text."
+
+        - alert: ColesCrawlWrongStore
+          # Prices are per store, and a store that does not switch fails
+          # silently: the pages are good pages for somewhere else. From
+          # 2026-09-27 to 2026-09-30 that put Sydney CBD's prices under Broken
+          # Hill, Melbourne CBD and Mildura. This reads the two gauges the
+          # crawler now pushes about it.
+          #
+          # stores_wrong_store is a store refused, with nothing written for it:
+          # its whole listing repeated an earlier store's, or one of its pages
+          # named another store. The run fails as well, so ColesCrawlJobFailed
+          # fires beside this; this is the one that says why. It cannot happen
+          # while the regional stores are off (catcrawl/catcrawl-col-cron.yaml)
+          # and is here for the day they are turned back on.
+          #
+          # pages_naming_another_store can happen at the home store too, and
+          # there the pages are still recorded, because what the site means by
+          # the store it names has been seen on one page. So that half of this
+          # is the only notice there would be.
+          expr: >-
+            (
+              catcrawl_coles_stores_wrong_store{job="catcrawl_coles"} > 0
+              or catcrawl_coles_pages_naming_another_store{job="catcrawl_coles"} > 0
+            )
+            and (time() - catcrawl_coles_run_timestamp_seconds{job="catcrawl_coles"} < 86400)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Coles answered for a different store than the one selected (store {{ $labels.store }})"
+            description: "In the last Coles crawl the site answered for a store other than the one selected: a store's whole listing repeated an earlier store's, or pages said they were rendered for another store. A store after the first is refused and nothing is recorded for it; the first store's pages are recorded anyway, so if this fires with no failed Job, the home store's prices may be another store's. Check the run's log for \"the site answered for a different store\" and \"rendered for another store\", and for pages_naming_store and pages_naming_another_store on \"store finished\"."
 
         - alert: ColesCrawlJobFailed
           expr: kube_job_failed{namespace="default", job_name=~"catcrawl-col-scheduler-.*", condition="true"} == 1
@@ -587,6 +642,28 @@ spec:
           annotations:
             summary: "catcrawl-coles has not completed successfully for over 8 days (store {{ $labels.store }})"
             description: "Last successful crawl was {{ $value | humanizeDuration }} ago. The job may be running and failing each time."
+
+        - alert: ColesCrawlNoRecentSuccess
+          # The same alert, from the other side. catcrawl_coles_last_success_timestamp_seconds is pushed
+          # only by a run that succeeds, so when the Pushgateway has lost it --
+          # as it did on 2026-10-02 -- it does not come back until the crawl
+          # succeeds again, and the rule above cannot fire for exactly the
+          # crawler that keeps failing. The CronJob's own record of its last
+          # successful Job is held by the API server and survives all of that.
+          #
+          # Only while the pushed gauge is absent, so the two never fire
+          # together, and the rule above stays the one that normally speaks:
+          # it is the crawler's own account of success, which for a crawler
+          # that exits zero past failed categories is the stricter of the two.
+          expr: >-
+            (time() - kube_cronjob_status_last_successful_time{namespace="default", cronjob="catcrawl-col-scheduler"} > 691200)
+            unless on() catcrawl_coles_last_success_timestamp_seconds{job="catcrawl_coles"}
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-coles has not completed successfully for over 8 days"
+            description: "The catcrawl-col-scheduler CronJob last had a successful Job {{ $value | humanizeDuration }} ago, and the crawler's own last-success metric is missing from the Pushgateway. The job may be running and failing each time."
 
         - alert: ColesCrawlPartialFailure
           # The crawl continues past a failed category and exits zero, so
@@ -664,9 +741,11 @@ spec:
             description: "Imperva is challenging a large share of requests. The persisted Chrome profile may have lost its session, or the crawl rate may need slowing via CRAWL_MIN_DELAY_MS/CRAWL_MAX_DELAY_MS."
 
         - alert: ColesCrawlMetricsMissing
-          # The Pushgateway is stateless, so a restart drops these series.
-          # Without this rule the crawl alerts would go quiet rather than fire,
-          # which is the more dangerous failure: silence that looks like health.
+          # The Pushgateway keeps what was pushed on a volume since 2026-10-03,
+          # so a restart no longer drops these series; this is the backstop for
+          # the day that volume is lost or was never written. Without it the
+          # crawl alerts would go quiet rather than fire, which is the more
+          # dangerous failure: silence that looks like health.
           # Gated to Thursdays (UTC), the day after the 0 2 * * 3 crawl: missing
           # metrics only matter once the crawl should have pushed them, so a
           # mid-week Pushgateway restart stays quiet until then. The crawl pushes
@@ -722,6 +801,28 @@ spec:
           annotations:
             summary: "catcrawl-aldi has not completed successfully for over 8 days"
             description: "Last successful Aldi crawl was {{ $value | humanizeDuration }} ago. The job may be running and failing each time."
+
+        - alert: AldiCrawlNoRecentSuccess
+          # The same alert, from the other side. catcrawl_aldi_last_success_timestamp_seconds is pushed
+          # only by a run that succeeds, so when the Pushgateway has lost it --
+          # as it did on 2026-10-02 -- it does not come back until the crawl
+          # succeeds again, and the rule above cannot fire for exactly the
+          # crawler that keeps failing. The CronJob's own record of its last
+          # successful Job is held by the API server and survives all of that.
+          #
+          # Only while the pushed gauge is absent, so the two never fire
+          # together, and the rule above stays the one that normally speaks:
+          # it is the crawler's own account of success, which for a crawler
+          # that exits zero past failed categories is the stricter of the two.
+          expr: >-
+            (time() - kube_cronjob_status_last_successful_time{namespace="default", cronjob="catcrawl-aldi-scheduler"} > 691200)
+            unless on() catcrawl_aldi_last_success_timestamp_seconds{job="catcrawl_aldi"}
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "catcrawl-aldi has not completed successfully for over 8 days"
+            description: "The catcrawl-aldi-scheduler CronJob last had a successful Job {{ $value | humanizeDuration }} ago, and the crawler's own last-success metric is missing from the Pushgateway. The job may be running and failing each time."
 
         - alert: AldiCrawlPartialFailure
           expr: >-
