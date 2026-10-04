@@ -11,6 +11,26 @@ spec:
     targetRevision: 1.20.3
     helm:
       releaseName: csi-driver-smb
+      valuesObject:
+        controller:
+          # The provisioner and resizer sidecars each renewed a leader-election
+          # lease every 5s (lease 15s, renew deadline 10s) for a controller that
+          # runs one replica with a Recreate strategy. Lease renewals were 90%
+          # of all API writes in this cluster, each an etcd fsync on the JD SSD
+          # pool. Renewed every 15s it is a third of the writes; the cost is
+          # that a controller killed without releasing its lease is replaced
+          # after up to 60s instead of 15s, which only delays creating or
+          # resizing a volume. csi-driver-nfs has the same sidecars but its
+          # chart (4.13.4) has no hook for extra arguments.
+          extraArgs:
+            csiProvisioner:
+              - --leader-election-lease-duration=60s
+              - --leader-election-renew-deadline=40s
+              - --leader-election-retry-period=15s
+            csiResizer:
+              - --leader-election-lease-duration=60s
+              - --leader-election-renew-deadline=40s
+              - --leader-election-retry-period=15s
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
