@@ -82,6 +82,20 @@ spec:
       max_wal_size: "4GB"
       min_wal_size: "512MB"
       checkpoint_completion_target: "0.9"
+      # Both instances sit on the JD SSD pool and together were its second
+      # largest writer (31 GiB/day on 2026-10-04) for 0.6 GiB/day of actual WAL.
+      #
+      # checkpoint_timeout: at the 5min default the checkpointer rewrote the
+      # same hot pages 288 times a day, 3.3 GiB/day. The WAL between two
+      # checkpoints is ~13 MB here, so 30min stays far below max_wal_size and
+      # crash recovery still replays seconds, not minutes.
+      checkpoint_timeout: "30min"
+      # archive_timeout: CNPG's default is 5min. Every forced switch pads the
+      # rest of the 16 MB segment with zeros (5.6 MB on average, 1.4 GiB/day
+      # on the primary) and archives a mostly empty file. This is also the most
+      # WAL a point-in-time restore from the archive can be missing, so 15min
+      # rather than anything longer; the streaming replica is unaffected.
+      archive_timeout: "15min"
       track_io_timing: "on"
       log_min_duration_statement: "1000"
       idle_in_transaction_session_timeout: "300000"
