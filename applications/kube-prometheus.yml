@@ -324,6 +324,14 @@ spec:
                 action: drop
         kubelet:
           serviceMonitor:
+            # The chart scrapes cAdvisor every 10s regardless of the 60s
+            # scrapeInterval above. On 2026-10-04 that one endpoint was 2,306
+            # of the 4,869 samples/s Prometheus ingested, and the TSDB sits on
+            # the JD SSD pool (5.6 GiB/day). Nothing reads it at 10s
+            # resolution: the container recording rules use 5m windows, and
+            # the one dashboard on cAdvisor series (CNPG) reads gauges and
+            # those recording rules.
+            cAdvisorInterval: 60s
             # Kubelet operation-latency buckets; nothing dashboards on them.
             metricRelabelings:
               - sourceLabels: [__name__]

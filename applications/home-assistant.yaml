@@ -63,6 +63,15 @@ spec:
             logger:
               default: warning
 
+            # History goes to SQLite on a JD-pool zvol. At the default
+            # commit_interval of 5s the recorder committed 17,000 times a day:
+            # 3.7 GiB/day of block writes for about 175,000 small rows. 30s
+            # writes the same rows in a sixth of the commits. A crash can
+            # lose up to 30s of history; live states and automations are
+            # not affected.
+            recorder:
+              commit_interval: 30
+
             # Load frontend themes from the themes folder
             frontend:
               themes: !include_dir_merge_named themes
