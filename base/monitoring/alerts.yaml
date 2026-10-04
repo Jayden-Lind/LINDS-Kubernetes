@@ -685,8 +685,13 @@ spec:
             description: "The catcrawl-col-scheduler CronJob last had a successful Job {{ $value | humanizeDuration }} ago, and the crawler's own last-success metric is missing from the Pushgateway. The job may be running and failing each time."
 
         - alert: ColesCrawlPartialFailure
-          # The crawl continues past a failed category and exits zero, so
-          # Kubernetes reports success while data is quietly missing.
+          # Categories still failing when the run ended. The crawl carries on
+          # past a failed category and, since 2026-10-04, goes back for it
+          # twice at the end of its store (catcrawl_coles_categories_retried
+          # counts the ones gone back for), so this is what was left after
+          # that. The run exits non-zero as well, so ColesCrawlJobFailed fires
+          # beside this. That one says the Job failed; this one says the rest
+          # of the catalogue was captured, and how much was not.
           # Gated on push freshness for the reason spelled out under
           # CatcrawlProductsDropped: the Pushgateway re-serves the last push
           # to every scrape forever, so an ungated rule reading a weekly
@@ -698,8 +703,8 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "catcrawl-coles completed with {{ $value }} failed categories (store {{ $labels.store }})"
-            description: "The crawl exited successfully but {{ $value }} categories failed, so those products were not refreshed. Check the job logs for the per-category errors."
+            summary: "catcrawl-coles finished with {{ $value }} categories still failing (store {{ $labels.store }})"
+            description: "{{ $value }} categories were still failing after the crawler had gone back for them twice, so their products were not refreshed this week, and no product was marked discontinued. Everything else was captured. The Job fails as well. The run's log has each one under \"category failed again\", with the page it stopped on."
 
         - alert: ColesCrawlProductsDropped
           # Self-calibrating against the crawl's own history, so it needs no
