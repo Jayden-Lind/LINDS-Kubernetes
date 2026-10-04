@@ -169,6 +169,22 @@ spec:
                 # which the ColesCrawlMetricsMissing alert then catches.
                 - name: PUSHGATEWAY_URL
                   value: http://pushgateway.monitoring.svc:9091
+                # Debug on purpose, as the Aldi job is: this runs once a week
+                # and its failures cannot be reproduced on demand, so the run
+                # that goes wrong is the only chance to see why. The crawler's
+                # README has said the deployed job runs at debug since it was
+                # written, and this job never did.
+                #
+                # Debug adds a record for each page loaded and each page
+                # written, about 3,000 lines for a run of 730 pages, and they
+                # go to Loki. "page fetched" is the only place the site's own
+                # page size and result count are kept beside what each page
+                # actually held. That is what has to be read before the walk
+                # can be made to stop at a category's last page rather than
+                # loading the empty page after it, which is 21 page loads a
+                # run.
+                - name: LOG_LEVEL
+                  value: debug
               # API_KEY and API_URL are gone: the mobile API they authenticated
               # against has been blocked by Imperva since April and that code
               # path no longer exists. The keys remain in the secret for now.
