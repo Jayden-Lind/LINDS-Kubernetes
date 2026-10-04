@@ -7,6 +7,28 @@ metadata:
     release: monitoring-kube-prometheus-stack
 spec:
   groups:
+    # These rules and the ones kube-prometheus-stack ships do not repeat each
+    # other. Until 2026-10-04 many did, so a node reboot or a sealed Vault
+    # arrived as pairs of notifications. For each pair one side was kept:
+    #
+    # - The chart's rule, where it is the better one. Crash loops, pods not
+    #   ready and Deployments, StatefulSets and DaemonSets short of replicas
+    #   are KubePodCrashLooping, KubePodNotReady, Kube*ReplicasMismatch and
+    #   KubeDaemonSetRolloutStuck, and a failed Alertmanager reload is
+    #   AlertmanagerFailedReload. The copies that were here fired after 5
+    #   minutes instead of 15 and did not wait out a rollout, so what they
+    #   added was mostly controllers restarting after an API server blip. The
+    #   two for pods also left out kube-system, and the one for Deployments
+    #   read a metric that does not exist and never fired.
+    # - The rule here, where it says more or says it sooner: nodes, volumes and
+    #   scrape targets, below. The chart's version of each is switched off in
+    #   applications/kube-prometheus.yml (defaultRules.disabled), which lists
+    #   them against the rule here that stands in.
+    # - Node pressure is the exception. Both stay on, and Alertmanager holds
+    #   the chart's KubeNodePressure back (alertmanager-config.yaml).
+    #
+    # Before adding a generic rule, check the chart does not already have it:
+    # kubectl get prometheusrules -n monitoring
     - name: kubernetes.nodes
       rules:
         - alert: NodeNotReady
@@ -92,31 +114,6 @@ spec:
 
     - name: kubernetes.pods
       rules:
-        - alert: PodCrashLooping
-          expr: >
-            max_over_time(kube_pod_container_status_waiting_reason{
-              reason="CrashLoopBackOff",
-              namespace!~"kube-system"
-            }[10m]) >= 1
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} crash looping"
-            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is in CrashLoopBackOff."
-
-        - alert: PodNotReady
-          expr: >
-            kube_pod_status_phase{phase=~"Pending|Unknown",namespace!~"kube-system"}
-            * on(namespace, pod) group_left(owner_kind)
-            kube_pod_owner{owner_kind!="Job"} > 0
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
-            description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} has been in {{ $labels.phase }} state for more than 10 minutes."
-
         - alert: PodOOMKilled
           expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
           for: 0m
@@ -137,36 +134,6 @@ spec:
           annotations:
             summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} image pull error"
             description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) cannot pull image: {{ $labels.reason }}."
-
-    - name: kubernetes.workloads
-      rules:
-        - alert: DeploymentReplicasMismatch
-          expr: kube_deployment_spec_replicas > kube_deployment_status_available_replicas
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replica mismatch"
-            description: "Deployment {{ $labels.deployment }} in {{ $labels.namespace }} has fewer available replicas than desired."
-
-        - alert: StatefulSetReplicasMismatch
-          expr: kube_statefulset_replicas != kube_statefulset_status_replicas_ready
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} replica mismatch"
-            description: "StatefulSet {{ $labels.statefulset }} in {{ $labels.namespace }} has {{ $value }} replicas not ready."
-
-        - alert: DaemonSetNotFullyScheduled
-          expr: >
-            kube_daemonset_status_desired_number_scheduled - kube_daemonset_status_number_available > 0
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} not fully scheduled"
-            description: "DaemonSet {{ $labels.daemonset }} in {{ $labels.namespace }} has {{ $value }} pods unavailable."
 
     - name: kubernetes.storage
       rules:
@@ -411,15 +378,6 @@ spec:
           annotations:
             summary: "Prometheus target {{ $labels.job }}/{{ $labels.instance }} down"
             description: "Prometheus target {{ $labels.instance }} for job {{ $labels.job }} has been unreachable for 5 minutes."
-
-        - alert: AlertmanagerConfigError
-          expr: alertmanager_config_last_reload_successful == 0
-          for: 5m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Alertmanager configuration reload failed"
-            description: "Alertmanager failed to reload its configuration — alert routing may be broken."
 
         - alert: LokiNotIngesting
           expr: sum(rate(loki_ingester_streams_created_total[5m])) == 0

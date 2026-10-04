@@ -24,6 +24,31 @@ spec:
             kubeApiserverHistogram: false
             kubeApiserverSlos: false
             windows: false
+          # Alerts that base/monitoring/alerts.yaml already raises for the same
+          # condition, sooner or naming what is affected. With both on, each
+          # event notified twice. Each is listed under the rule there that
+          # stands in for it. (Where the chart's rule was the better of the
+          # two, the copy in alerts.yaml was deleted instead.)
+          disabled:
+            # PrometheusTargetDown: up == 0 per target, naming the instance.
+            # These three say it per job, or for one job only.
+            TargetDown: true
+            KubeletInstanceUnreachable: true
+            KubeAPIInstanceUnreachable: true
+            # NodeNotReady: critical after 2 minutes. These are warnings at 15.
+            KubeNodeNotReady: true
+            KubeNodeUnreachable: true
+            # NodeMemoryHigh: the same 10% available.
+            NodeMemoryHighUtilization: true
+            # NodeDiskAlmostFull and NodeDiskFull: 10% and 3% free. This is 5%
+            # and 3%, half an hour later. NodeFilesystemSpaceFillingUp, which
+            # goes by the trend rather than a threshold, stays on.
+            NodeFilesystemAlmostOutOfSpace: true
+            # NodeCPUHighLoad: the same 90% for 15 minutes.
+            NodeCPUHighUsage: true
+            # PVCAlmostFull and PVCFull: 15% and 5% free. This is 15% if the
+            # trend says full within four days, and 3%.
+            KubePersistentVolumeFillingUp: true
         grafana:
           # The ~26 mixin dashboards the chart ships by default are replaced by
           # the curated dotdc set under dashboards.kubernetes below.
