@@ -211,7 +211,10 @@ spec:
             description: "ArgoCD application {{ $labels.name }} (project: {{ $labels.project }}) has sync status: {{ $labels.sync_status }}."
 
         - alert: ArgoCDAppUnhealthy
-          expr: argocd_app_info{health_status!~"Healthy|Progressing|Suspended"} == 1
+          # Missing or Unknown. Degraded is left to ArgoCDAppDegraded below:
+          # this used to match it too, so every degraded app arrived twice,
+          # once at each severity.
+          expr: argocd_app_info{health_status!~"Healthy|Progressing|Suspended|Degraded"} == 1
           for: 5m
           labels:
             severity: warning
@@ -220,7 +223,14 @@ spec:
             description: "ArgoCD application {{ $labels.name }} has health status: {{ $labels.health_status }}."
 
         - alert: ArgoCDAppDegraded
-          expr: argocd_app_info{health_status="Degraded"} == 1
+          # Not the catcrawl app. ArgoCD calls a CronJob degraded from the
+          # moment a run fails until the next one succeeds, and catcrawl's run
+          # weekly: the Coles crawl that failed on 2026-09-30 held this at
+          # critical, repeating every four hours, for as long as nothing else
+          # was holding it back. It said nothing the crawl alerts had not: each
+          # crawler, the vacuum and the viewer have alerts of their own, which
+          # name the one that is failing and stop when there is nothing new.
+          expr: argocd_app_info{health_status="Degraded", name!="catcrawl"} == 1
           for: 2m
           labels:
             severity: critical
@@ -329,14 +339,21 @@ spec:
         # against them would fire forever. The failure timestamp is kept, and it
         # still holds the failure of 2026-09-06, which went unnoticed because WAL
         # kept archiving and neither archiving rule above had anything to say.
-        # So this fires when that timestamp moves, and resolves a day later.
+        # So this fires while that timestamp is less than a day old.
+        #
+        # Its age, not whether it moved. Until 2026-10-04 this was
+        # changes(...[1d]) > 0, which fired on every switchover and never on a
+        # failed backup: only the primary reports the timestamp and a replica
+        # reports 0, so two pods trading roles is two series changing value.
+        # That was 2026-09-24, 09-30 and 10-02, for a day each. max by () reads
+        # the primary's value whichever pod that is.
         - alert: PostgreSQLBaseBackupFailed
-          expr: changes(cnpg_collector_last_failed_backup_timestamp[1d]) > 0
+          expr: time() - max by (namespace, job) (cnpg_collector_last_failed_backup_timestamp) < 86400
           labels:
             severity: warning
           annotations:
-            summary: "PostgreSQL {{ $labels.cluster }} base backup failed"
-            description: "A base backup of {{ $labels.cluster }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
+            summary: "PostgreSQL {{ $labels.job }} base backup failed"
+            description: "A base backup of {{ $labels.job }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
 
     - name: nginx
       rules:
@@ -565,7 +582,9 @@ spec:
           # alerts on 2026-09-26, in seven Discord notifications every four
           # hours. Alertmanager holds those back while this fires, and repeats
           # this one daily rather than every four hours
-          # (base/monitoring/alertmanager-config.yaml).
+          # (base/monitoring/alertmanager-config.yaml). ArgoCD's are the
+          # exception: they no longer fire for the catcrawl app at all (see
+          # ArgoCDAppDegraded).
           #
           # Only for six days after the run that reported it. The gauge stays at
           # 1 until another run pushes over it, and a run that fails for another
@@ -580,7 +599,7 @@ spec:
             severity: warning
           annotations:
             summary: "Coles is refusing the crawler (store {{ $labels.store }})"
-            description: "The last Coles crawl stopped because pages kept failing in the browser, which is what the site's block pages do (\"Pardon Our Interruption\", or \"Request unsuccessful. Incapsula incident ID\"). Nothing in the cluster needs fixing; the weekly run tries again and resumes by itself once Coles stops refusing it. While this fires, the other Coles crawl alerts, KubeJobFailed for the Coles Jobs and ArgoCD's alerts for the catcrawl app are held back. The run's log has what the site showed in shown_title, shown_url and shown_text."
+            description: "The last Coles crawl stopped because pages kept failing in the browser, which is what the site's block pages do (\"Pardon Our Interruption\", or \"Request unsuccessful. Incapsula incident ID\"). Nothing in the cluster needs fixing; the weekly run tries again and resumes by itself once Coles stops refusing it. While this fires, the other Coles crawl alerts and KubeJobFailed for the Coles Jobs are held back. The run's log has what the site showed in shown_title, shown_url and shown_text."
 
         - alert: ColesCrawlWrongStore
           # Prices are per store, and a store that does not switch fails

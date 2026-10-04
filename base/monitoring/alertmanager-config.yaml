@@ -71,8 +71,10 @@ spec:
         - alertname
     # While Coles is refusing the crawler (ColesCrawlBlocked, in
     # base/monitoring/alerts.yaml), everything that follows from that is held
-    # back: it is one cause, and it was arriving as nine alerts. Three rules,
-    # because the alerts it stands in for live in three places.
+    # back: it is one cause, and it was arriving as nine alerts. Two rules,
+    # because the alerts it stands in for live in two places. (ArgoCD's alerts
+    # for the catcrawl app were a third, until ArgoCDAppDegraded stopped firing
+    # for that app at all.)
     #
     # The crawler's own alerts, except the two that are not about the run:
     # ColesCrawlNotScheduled (the CronJob not running at all) and
@@ -98,18 +100,19 @@ spec:
         - name: job_name
           value: "catcrawl-col-scheduler-.*"
           matchType: "=~"
-    # ArgoCD calls the whole catcrawl app degraded while the Coles CronJob's last
-    # run has failed. This also holds back a degradation elsewhere in that app
-    # for as long as Coles is blocked; the Woolworths crawl, the Aldi crawl and
-    # the viewer each have alerts of their own, which this leaves alone.
+    # A failed crawl or vacuum Job is reported by its own alert, which says what
+    # to look at, and again by the stock KubeJobFailed for the same Job. One is
+    # enough. Matched on the Job itself, so a failed Job with no alert of its
+    # own -- one started by hand to test something, say -- still gets
+    # KubeJobFailed.
     - sourceMatch:
         - name: alertname
-          value: ColesCrawlBlocked
-          matchType: "="
+          value: "(Catcrawl|ColesCrawl|AldiCrawl|CatcrawlVacuum)JobFailed"
+          matchType: "=~"
       targetMatch:
         - name: alertname
-          value: "ArgoCDAppDegraded|ArgoCDAppUnhealthy"
-          matchType: "=~"
-        - name: name
-          value: catcrawl
+          value: KubeJobFailed
           matchType: "="
+      equal:
+        - namespace
+        - job_name
