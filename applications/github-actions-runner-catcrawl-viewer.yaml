@@ -36,6 +36,26 @@ spec:
         # a Docker daemon.
         containerMode:
           type: "dind"
+
+        # Keep runner pods off the control plane and prefer the LINDS workers;
+        # the reasons are in github-actions-runner-catcrawl.yaml.
+        template:
+          spec:
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                    - matchExpressions:
+                        - key: node-role.kubernetes.io/control-plane
+                          operator: DoesNotExist
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: datacenter
+                          operator: In
+                          values:
+                            - linds
   syncPolicy:
     automated:
       selfHeal: false
