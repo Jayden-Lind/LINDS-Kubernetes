@@ -23,6 +23,21 @@ spec:
             enabled: false
           cleanupController:
             enabled: false
+          # Each controller renewed its leader-election lease every 2s. On
+          # 2026-10-04 lease renewals were 90% of all API writes in this
+          # cluster (6.4 of 7.1 a second), and etcd fsyncs every one of them
+          # onto the JD SSD pool. Kyverno sets the lease to six times this
+          # value, so 10s means a 60s lease renewed every 10s. Each controller
+          # runs one replica; the only cost is that one killed without
+          # releasing its lease is replaced as leader after up to 60s instead
+          # of 12s. The admission webhook answers whether or not it is leader.
+          admissionController:
+            container:
+              extraArgs:
+                leaderElectionRetryPeriod: 10s
+          backgroundController:
+            extraArgs:
+              leaderElectionRetryPeriod: 10s
     # Policies live here; ArgoCD-managed from GitHub, so they must be
     # pushed to master before they take effect.
     - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"

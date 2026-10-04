@@ -51,6 +51,23 @@ spec:
           # if VolumeSnapshots on zfs-iscsi are ever wanted.
           externalSnapshotter:
             enabled: false
+          # Provisioner and resizer renewed a leader-election lease every 5s
+          # each; see csi-smb.yaml for why that matters here. Renewed every
+          # 15s instead, at the cost that a controller killed without
+          # releasing its lease is replaced after up to 60s rather than 15s.
+          # The attacher is deliberately left at its defaults: this driver has
+          # attachRequired=true, so a slow attacher takeover would hold up
+          # every pod that needs a volume attached, Postgres failover included.
+          externalProvisioner:
+            extraArgs:
+              - --leader-election-lease-duration=60s
+              - --leader-election-renew-deadline=40s
+              - --leader-election-retry-period=15s
+          externalResizer:
+            extraArgs:
+              - --leader-election-lease-duration=60s
+              - --leader-election-renew-deadline=40s
+              - --leader-election-retry-period=15s
           driver:
             logLevel: info
         node:
