@@ -339,14 +339,21 @@ spec:
         # against them would fire forever. The failure timestamp is kept, and it
         # still holds the failure of 2026-09-06, which went unnoticed because WAL
         # kept archiving and neither archiving rule above had anything to say.
-        # So this fires when that timestamp moves, and resolves a day later.
+        # So this fires while that timestamp is less than a day old.
+        #
+        # Its age, not whether it moved. Until 2026-10-04 this was
+        # changes(...[1d]) > 0, which fired on every switchover and never on a
+        # failed backup: only the primary reports the timestamp and a replica
+        # reports 0, so two pods trading roles is two series changing value.
+        # That was 2026-09-24, 09-30 and 10-02, for a day each. max by () reads
+        # the primary's value whichever pod that is.
         - alert: PostgreSQLBaseBackupFailed
-          expr: changes(cnpg_collector_last_failed_backup_timestamp[1d]) > 0
+          expr: time() - max by (namespace, job) (cnpg_collector_last_failed_backup_timestamp) < 86400
           labels:
             severity: warning
           annotations:
-            summary: "PostgreSQL {{ $labels.cluster }} base backup failed"
-            description: "A base backup of {{ $labels.cluster }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
+            summary: "PostgreSQL {{ $labels.job }} base backup failed"
+            description: "A base backup of {{ $labels.job }} failed in the last day. WAL archiving is separate and may still be healthy, in which case the previous base backup plus WAL still recovers to now — but retention is 7 days, so each failed night shortens the window a restore can reach back to. Check `kubectl get backups -n {{ $labels.namespace }}` for the failed Backup and its error."
 
     - name: nginx
       rules:
