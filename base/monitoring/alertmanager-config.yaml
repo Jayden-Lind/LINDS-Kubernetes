@@ -44,13 +44,23 @@ spec:
             name: alertmanager-discord-secret
             key: discord_webhook_url
           sendResolved: true
+          # The workload lines are for the chart's Deployment, StatefulSet and
+          # DaemonSet alerts, whose summaries do not name what they are about.
+          # On those the pod label is the kube-state-metrics pod the figure was
+          # scraped from, not a pod of the workload, so it is left out.
           title: '{{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}: {{ .GroupLabels.alertname }}{{ with .GroupLabels.namespace }} ({{ . }}){{ end }}'
           message: |-
             {{ range .Alerts -}}
             **{{ .Labels.alertname }}** | Severity: {{ .Labels.severity }}
             {{ if .Labels.namespace -}}Namespace: `{{ .Labels.namespace }}`
             {{ end -}}
-            {{ if .Labels.pod -}}Pod: `{{ .Labels.pod }}`
+            {{ if .Labels.deployment -}}Deployment: `{{ .Labels.deployment }}`
+            {{ end -}}
+            {{ if .Labels.statefulset -}}StatefulSet: `{{ .Labels.statefulset }}`
+            {{ end -}}
+            {{ if .Labels.daemonset -}}DaemonSet: `{{ .Labels.daemonset }}`
+            {{ end -}}
+            {{ if and .Labels.pod (not (or .Labels.deployment .Labels.statefulset .Labels.daemonset)) -}}Pod: `{{ .Labels.pod }}`
             {{ end -}}
             {{ if .Labels.node -}}Node: `{{ .Labels.node }}`
             {{ end -}}
@@ -116,3 +126,19 @@ spec:
       equal:
         - namespace
         - job_name
+    # A node under disk or memory pressure is reported by NodeDiskPressure and
+    # NodeMemoryPressure, critical, two minutes in. The chart's KubeNodePressure
+    # says it again at ten, as info. Held back here rather than switched off in
+    # the chart, because it is also the only alert for PIDPressure; matching on
+    # the condition leaves that one alone.
+    - sourceMatch:
+        - name: alertname
+          value: "NodeDiskPressure|NodeMemoryPressure"
+          matchType: "=~"
+      targetMatch:
+        - name: alertname
+          value: KubeNodePressure
+          matchType: "="
+      equal:
+        - node
+        - condition
