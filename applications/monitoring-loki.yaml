@@ -146,6 +146,8 @@ spec:
           monitoring:
             serviceMonitor:
               enabled: true
+              # Chart default is 15s; everything else is scraped at 60s.
+              interval: 60s
               labels:
                 release: monitoring-kube-prometheus-stack
               metricsInstance:
