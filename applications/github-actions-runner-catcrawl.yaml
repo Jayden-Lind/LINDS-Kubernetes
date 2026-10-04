@@ -25,6 +25,34 @@ spec:
 
         containerMode:
           type: "dind"
+
+        # Where runner pods may land. The dind sidecar unpacks image layers
+        # onto the node's own disk: on 2026-10-03/04, 13 of 15 runner pods ran
+        # on talos-cp and wrote 40 GiB to the disk etcd lives on (79 GiB that
+        # day against a usual 16-21). Bulk writes there are what make etcd miss
+        # its fsync deadline and the API server drop out.
+        #
+        # required: never the control plane. preferred: the LINDS workers,
+        # whose disks are not on the JD SSD pool at all. They have 4 older
+        # cores each, so builds run slower there; if that hurts, delete the
+        # preferred block and the JD workers take the jobs again.
+        template:
+          spec:
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                    - matchExpressions:
+                        - key: node-role.kubernetes.io/control-plane
+                          operator: DoesNotExist
+                preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    preference:
+                      matchExpressions:
+                        - key: datacenter
+                          operator: In
+                          values:
+                            - linds
   syncPolicy:
     automated:
       selfHeal: false
