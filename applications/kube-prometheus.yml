@@ -203,6 +203,11 @@ spec:
               # single point of failure and Grafana keeps a local path.
               oauth_auto_login: false
               signout_redirect_url: https://grafana.linds.com.au/login
+              # Match the Keycloak realm (keycloak/realm/linds.yaml). Grafana's
+              # own defaults are 7d idle / 30d total, which would end a login
+              # well before the Keycloak session it rides on does.
+              login_maximum_inactive_lifetime_duration: 30d
+              login_maximum_lifetime_duration: 365d
             auth.generic_oauth:
               enabled: true
               name: Keycloak

@@ -22,10 +22,17 @@ permanentLockout: false
 maxFailureWaitSeconds: 900
 failureFactor: 10
 
-# Short access token, 10h session. Grafana and Argo CD both refresh.
+# Short access token, long session: 30 days idle, 365 days at most. Grafana
+# and Argo CD both refresh, so the session length is what decides how often
+# either asks for a password; the access token stays at 5 minutes.
 accessTokenLifespan: 300
-ssoSessionIdleTimeout: 3600
-ssoSessionMaxLifespan: 36000
+ssoSessionIdleTimeout: 2592000
+ssoSessionMaxLifespan: 31536000
+# Without rememberMe the login cookie is a browser-session cookie, and closing
+# the browser ends the session whatever the timeouts above say. This adds the
+# "Remember me" box to the login page; ticking it makes the cookie persistent.
+# The two RememberMe timeouts are left unset, which inherits the pair above.
+rememberMe: true
 
 clientScopes:
   - name: groups
