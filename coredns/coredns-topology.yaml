@@ -12,7 +12,13 @@
 # the emptier linds nodes; ScheduleAnyway, so a dead site never blocks
 # scheduling), and PreferClose keeps each site's lookups
 # on its local replica while still falling back to the other site when a zone
-# has no ready endpoint. Cilium honours PreferClose once
+# has no ready endpoint.
+#
+# The spread is a preference the scheduler applies only when it places a pod.
+# A full restart can place all four on one node (talos-cp, 2026-10-04), and
+# PreferClose then sends every linds lookup to jd without complaint. The
+# `coredns-site-spread` profile in applications/kube-descheduler.yaml evicts
+# the surplus so they are placed again; do not drop one without the other. Cilium honours PreferClose once
 # loadBalancer.serviceTopology is on and the nodes carry
 # topology.kubernetes.io/zone (both set in LINDS-Terraform).
 #
