@@ -14,10 +14,106 @@ spec:
     targetRevision: 0.36.0
     helm:
       values: |
-        schedule: "*/30 * * * *"
+        # Every 15 minutes (was 30), so a restart is put right sooner.
+        schedule: "*/15 * * * *"
         deschedulerPolicy:
           maxNoOfPodsToEvictPerNode: 5
+          # Without a total, one run after a restart evicted five pods from
+          # each of two nodes at once (ten on 2026-10-04 12:00). Every pod that
+          # lands on a jd node may pull its image there, and several pulls
+          # together are what stall etcd on talos-cp (slow fdatasync on the VM
+          # pool; the API server was dropped for 47 s on 2026-10-03). Five a
+          # run at this cadence moves as many pods an hour as before, in
+          # smaller steps. The cap is shared by the profiles, in order, so
+          # CoreDNS is served first.
+          maxNoOfPodsToEvictTotal: 5
           profiles:
+            # CoreDNS only: put its site spread back when it has been lost.
+            #
+            # coredns/coredns-topology.yaml spreads four replicas over
+            # `datacenter` as a preference (ScheduleAnyway, so a dead site
+            # never blocks scheduling), and kube-dns is PreferClose so each
+            # site answers its own lookups. The scheduler only applies that
+            # when it places a pod. After the full restart on 2026-10-04 all
+            # four were placed in the same second, on talos-cp, and stayed
+            # there: every lookup from a linds pod crossed the inter-site link
+            # again (the Zabbix proxy alone was two a second) until two pods
+            # were deleted by hand a day later.
+            #
+            # This profile is that manual step: evict the fewest CoreDNS pods
+            # needed to bring `datacenter` back within maxSkew and let the
+            # scheduler place them. Soft constraints are only considered when
+            # listed in `constraints`. CoreDNS is system-cluster-critical,
+            # which the evictor protects by default, hence a profile of its
+            # own with that protection off; the evictor's labelSelector keeps
+            # it to kube-dns pods, so nothing else can be evicted through it.
+            # Nodes that are not Ready are not counted, so with a site down
+            # the replicas stay where they are until it is back.
+            #
+            # RemoveDuplicates is deliberately not in this profile. With one
+            # linds node down, the spread wants two replicas on the node that
+            # is left and RemoveDuplicates wants one: they would evict each
+            # other's work every run.
+            - name: coredns-site-spread
+              pluginConfig:
+                - name: DefaultEvictor
+                  args:
+                    nodeFit: true
+                    labelSelector:
+                      matchLabels:
+                        k8s-app: kube-dns
+                    podProtections:
+                      defaultDisabled:
+                        - SystemCriticalPods
+                - name: RemovePodsViolatingTopologySpreadConstraint
+                  args:
+                    constraints:
+                      - DoNotSchedule
+                      - ScheduleAnyway
+                    namespaces:
+                      include:
+                        - kube-system
+              plugins:
+                balance:
+                  enabled:
+                    - RemovePodsViolatingTopologySpreadConstraint
+            # Replicas of one workload stacked on one node are spread out
+            # when other nodes can take them. Same cause as CoreDNS: after the
+            # 2026-10-04 restart all three immich-machine-learning pods sat on
+            # talos-cp, and the default profile below could not touch them
+            # because they have an emptyDir. Here a pod with an emptyDir may
+            # go: it is only ever a duplicate that is evicted, so another
+            # replica is still serving and the scratch space is rebuilt. Pods
+            # with a PVC stay protected (see below), system-critical and
+            # DaemonSet pods are protected by default, and Job pods are left
+            # alone because evicting one throws its work away.
+            - name: spread-replicas
+              pluginConfig:
+                - name: DefaultEvictor
+                  args:
+                    nodeFit: true
+                    podProtections:
+                      defaultDisabled:
+                        - PodsWithLocalStorage
+                      extraEnabled:
+                        - PodsWithPVC
+                - name: RemoveDuplicates
+                  args:
+                    excludeOwnerKinds:
+                      - Job
+              plugins:
+                balance:
+                  enabled:
+                    - RemoveDuplicates
+            # The rebalancer after a restart, unchanged. It only acts while
+            # some node is below 20% on cpu, memory and pods at once, which is
+            # a node that has just come back empty: 117 evictions on five
+            # restart days in the month to 2026-10-05, none in the other
+            # 1,412 runs. Lower thresholds would not gain much. What it leaves
+            # on a busy node are pods it must not move: ones with a PVC (the
+            # 95% memory on talos-worker-01 is Postgres and Valheim) and
+            # single-replica pods with an emptyDir, whose scratch data and
+            # uptime are not worth trading for balance.
             - name: default
               pluginConfig:
                 - name: DefaultEvictor
