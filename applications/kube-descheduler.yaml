@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://kubernetes-sigs.github.io/descheduler/
     chart: descheduler
-    targetRevision: 0.36.0
+    targetRevision: 0.37.0
     helm:
       values: |
         # Every 15 minutes (was 30), so a restart is put right sooner.
