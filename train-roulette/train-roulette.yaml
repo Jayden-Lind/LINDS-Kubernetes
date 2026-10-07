@@ -31,7 +31,7 @@ spec:
         - name: train-roulette
           # Pinned to a commit of the site's repository, whose CI publishes an
           # image per commit. To run a newer build, change this tag.
-          image: ghcr.io/jayden-lind/melbourne-train-roulette:cf069120e4d3b00733f0939b107ad314ccc171dd
+          image: ghcr.io/jayden-lind/melbourne-train-roulette:91f85ff340950f37f78d25370b83d5d63be29d07
           imagePullPolicy: Always
           env:
             # The address visitors use. Only link previews need it.
