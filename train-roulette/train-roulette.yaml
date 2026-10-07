@@ -1,0 +1,150 @@
+# Melbourne Train Roulette at trainroulette.linds.com.au: spin for a platform
+# at Flinders Street or Southern Cross, roll for a stop on the next train from
+# it. This is a copy to try the site out on; the source is
+# github.com/Jayden-Lind/melbourne-train-roulette.
+#
+# It keeps no state and depends on nothing else in the cluster. The train
+# timetable is baked into the image, and the running pod replaces it whenever
+# Transport Victoria publishes a new one.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: train-roulette
+  namespace: default
+spec:
+  # One replica is the design, not thrift. Each copy of the site keeps its own
+  # copy of the live train feeds in memory and does its own fetching, so a
+  # single pod is what makes this the one place that talks to the
+  # rate-limited API: every visitor is answered from its copy. A second
+  # replica would work, and would fetch everything a second time.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: train-roulette
+  template:
+    metadata:
+      labels:
+        app: train-roulette
+    spec:
+      containers:
+        - name: train-roulette
+          # Pinned to a commit of the site's repository, whose CI publishes an
+          # image per commit. To run a newer build, change this tag.
+          image: ghcr.io/jayden-lind/melbourne-train-roulette:cf069120e4d3b00733f0939b107ad314ccc171dd
+          imagePullPolicy: Always
+          env:
+            # The address visitors use. Only link previews need it.
+            - name: PUBLIC_URL
+              value: https://trainroulette.linds.com.au
+            # Live delays and cancellations need a free API key from
+            # opendata.transport.vic.gov.au. It is optional: with no such
+            # Secret the pod starts anyway, serves timetabled times, and the
+            # page says they are not live. The value is read once at start-up,
+            # so restart the pod after creating or changing the Secret.
+            - name: TRANSPORT_VIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: train-roulette
+                  key: TRANSPORT_VIC_API_KEY
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              # /readyz answers once a timetable is loaded: about a second
+              # from the copy in the image. If that copy has expired the pod
+              # downloads a new one first (65 MB), which this allows a minute
+              # for before the container is restarted to try again.
+              path: /readyz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              # /healthz says only that the process is up. Being unable to
+              # reach Transport Victoria is not something a restart fixes.
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "25m"
+              memory: "128Mi"
+            limits:
+              # Measured at about 80MB resident. A new timetable is loaded in
+              # full alongside the old one before replacing it, so allow for
+              # two.
+              cpu: "1"
+              memory: "320Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # The only thing it writes: downloaded timetables. Nothing here
+            # is worth keeping across restarts, since the image carries one.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: train-roulette
+  namespace: default
+  labels:
+    app: train-roulette
+spec:
+  selector:
+    app: train-roulette
+  ports:
+    - port: 8080
+      name: http
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: train-roulette
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: linds-ca
+  # Reachable from inside the network only. To use it on a phone away from
+  # home, which is where this game is meant to be played, add the label
+  #   linds.com.au/mtls-mirror: "true"
+  # here to mirror it onto the client-certificate ingress, and a public DNS
+  # record for the hostname alongside the ones the other mirrored apps have.
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - trainroulette.linds.com.au
+      secretName: trainroulette-linds-com-au-tls
+  rules:
+    - host: trainroulette.linds.com.au
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: train-roulette
+                port:
+                  number: 8080
