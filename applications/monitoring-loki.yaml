@@ -199,7 +199,7 @@ spec:
 
     - repoURL: https://grafana.github.io/helm-charts
       chart: alloy
-      targetRevision: 1.13.0
+      targetRevision: 1.13.1
       helm:
         releaseName: alloy-podlogs
         values: |
