@@ -112,6 +112,15 @@ spec:
       labels:
         app: catcrawl-viewer
     spec:
+      # Run at the site the database runs at; the CNPG cluster carries the same
+      # selector. Every index rebuild reads both catalogues in full, about
+      # 150 MB. With the viewer at the other site that crossed the WAN and took
+      # JD's whole upload (70-110 Mb/s) for about 14 seconds at :30:20 every
+      # hour (seen in 22 hours out of 23 on 2026-10-08), and in 10 of those
+      # hours pings from the LAN to the internet were lost while it did. At
+      # the same site the read stays on the LAN.
+      nodeSelector:
+        datacenter: jd
       containers:
         - name: catcrawl-viewer
           image: ghcr.io/jayden-lind/catcrawl-viewer:f0feaf1309c42bd1ddcdfbc91476c726f0e68c58
