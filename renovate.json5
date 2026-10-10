@@ -2,6 +2,11 @@
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:recommended"],
 
+  // Same label in LINDS-Terraform and LINDS-Ansible, so one search lists
+  // every open update across the three (links in
+  // .github/workflows/renovate.yaml, which runs Renovate for all of them).
+  labels: ["renovate"],
+
   // The argocd manager ships with NO default file patterns, so it does
   // nothing until this is set. Scoped to the top level of applications/
   // only, mirroring the root app-of-apps (recurse is off): apps parked in
@@ -80,6 +85,19 @@
       datasourceTemplate: "github-releases",
     },
     {
+      // The Postgres cluster's own image. A CNPG Cluster names it in
+      // spec.imageName, which the kubernetes manager does not read (it only
+      // knows `image:`), so the pin sat at 18.4 while the vacuum CronJob's
+      // copy in catcrawl/ moved to 18.6. Merging restarts the instances one
+      // at a time with a switchover.
+      customType: "regex",
+      managerFilePatterns: ["/^postgresql/postgres-cluster\\.yaml$/"],
+      matchStrings: [
+        "imageName: (?<depName>ghcr\\.io/cloudnative-pg/postgresql):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)",
+      ],
+      datasourceTemplate: "docker",
+    },
+    {
       // The community.zabbix collection is pinned in two places that must
       // agree: the config Job installs it, CI caches and syntax-checks it.
       customType: "regex",
@@ -133,6 +151,12 @@
         "quay.io/adorsys/keycloak-config-cli",
       ],
       groupName: "keycloak",
+    },
+    {
+      // The cluster and the vacuum CronJob that runs psql from the same image
+      // (catcrawl/catcrawl-vacuum-cron.yaml) move in one PR.
+      matchPackageNames: ["ghcr.io/cloudnative-pg/postgresql"],
+      groupName: "postgresql",
     },
     {
       // Both pins of the Ansible collection move in one PR (see the regex

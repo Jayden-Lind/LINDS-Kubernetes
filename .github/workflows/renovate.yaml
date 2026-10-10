@@ -1,13 +1,23 @@
 name: Renovate
 
-# Self-hosted Renovate: bumps Helm chart targetRevisions in applications/
-# (see renovate.json5) and opens a PR per chart. Merging to master is what
-# actually deploys - the root app-of-apps syncs from GitHub HEAD.
+# Self-hosted Renovate for the three IaC repositories, run from this one place:
 #
-# Requires a RENOVATE_TOKEN secret. The default GITHUB_TOKEN works for
-# creating PRs but PRs it opens do NOT trigger other workflows, so
-# validate.yaml would never run on them - use a PAT (repo scope) or a
-# GitHub App token instead.
+#   LINDS-Kubernetes  Helm chart targetRevisions in applications/, and the
+#                     other pins listed in renovate.json5. Merging to master
+#                     is what deploys - the root app-of-apps syncs from GitHub.
+#   LINDS-Terraform   providers, Talos, Kubernetes, Cilium. Merging deploys
+#                     nothing; the change lands at the next `terraform apply`.
+#   LINDS-Ansible     Galaxy roles and collections in requirements.yml.
+#
+# Each repository carries its own renovate.json5 and gets its own Dependency
+# Dashboard issue. Everything open, across all three:
+#   https://github.com/pulls?q=is%3Aopen+is%3Apr+user%3AJayden-Lind+label%3Arenovate
+#   https://github.com/issues?q=is%3Aopen+is%3Aissue+user%3AJayden-Lind+in%3Atitle+%22Dependency+Dashboard%22
+#
+# Requires a RENOVATE_TOKEN secret that can push to all three repositories.
+# The default GITHUB_TOKEN cannot: it is scoped to this repository, and PRs it
+# opens do NOT trigger other workflows, so validate.yaml would never run on
+# them - use a PAT (repo scope) or a GitHub App token instead.
 
 on:
   schedule:
@@ -37,15 +47,42 @@ concurrency:
 jobs:
   renovate:
     runs-on: ubuntu-latest
+    env:
+      # To add a repository: list it here and commit a renovate.json5 to it.
+      RENOVATE_REPOSITORIES: >-
+        Jayden-Lind/LINDS-Kubernetes,
+        Jayden-Lind/LINDS-Terraform,
+        Jayden-Lind/LINDS-Ansible
     steps:
       - uses: actions/checkout@v7
+
+      # Renovate skips a repository it cannot write to with one log line and
+      # still exits 0, so a token that has lost access to a repository would
+      # look like "no updates". Fail the run instead.
+      - name: Check the token can push to every repository
+        env:
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          rc=0
+          for repo in ${RENOVATE_REPOSITORIES//,/ }; do
+            push=$(gh api "repos/${repo}" --jq .permissions.push 2>/dev/null || true)
+            if [ "${push}" = true ]; then
+              echo "ok    ${repo}"
+            else
+              echo "::error::RENOVATE_TOKEN cannot push to ${repo}"
+              rc=1
+            fi
+          done
+          exit "${rc}"
 
       - uses: renovatebot/github-action@v46.3.7
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
-          # renovate.json5 is discovered from the repo automatically; this
-          # only scopes the run to this one repository.
-          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          # Each repository's renovate.json5 is discovered automatically. One
+          # without a config is skipped rather than sent a "Configure
+          # Renovate" pull request.
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: required
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
           RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
