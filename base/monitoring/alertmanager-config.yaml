@@ -36,6 +36,22 @@ spec:
             matchType: "="
             value: ColesCrawlBlocked
         repeatInterval: 24h
+      # Disks, pools and arrays of the two Proxmox hosts
+      # (proxmox-storage-health.yaml). What these say stays true for days - a
+      # pool waiting on a replacement drive, a worn SSD - and does not change
+      # from one hour to the next, so once a day here too. Grouped by host as
+      # well: both hosts raise the same alert names, and a dozen drives on
+      # one of them is one message about that host.
+      - receiver: discord
+        matchers:
+          - name: alertname
+            matchType: "=~"
+            value: "Storage.+"
+        groupBy:
+          - alertname
+          - instance
+          - severity
+        repeatInterval: 24h
   receivers:
     - name: "null"
     - name: discord

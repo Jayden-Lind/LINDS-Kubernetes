@@ -1,0 +1,486 @@
+# Storage health of the two Proxmox hosts: ZFS pools, SMART, the PERC at linds,
+# LVM thin pools.
+#
+# The hosts are not in the cluster, so everything on them is in LINDS-Ansible,
+# roles/storage_health (its README is the place to start): node_exporter
+# serving one file of storage_* metrics, the script that writes that file every
+# ten minutes, and the schedules for the patrols the metrics report on (scrubs,
+# SMART long self-tests, the controller's patrol read). What is here is the
+# cluster's half: the scrape, and the rules that turn the metrics into alerts.
+# They go to Discord by the Storage route in alertmanager-config.yaml.
+#
+# Before this (2026-10-11) the only thing either host could do about a failing
+# disk was mail root, and that mail bounced.
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: proxmox-storage-health
+  namespace: monitoring
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: proxmox-storage-health
+  staticConfigs:
+    # instance is set so that alerts name the host, not an address.
+    - targets: ["10.0.50.246:9100"]
+      labels:
+        instance: jd-proxmox-02
+    # Across the site tunnel. About four scrapes a day to that side fail (the
+    # Talos workers there show the same), which is why the rules below keep
+    # firing through a gap rather than resolving into it.
+    - targets: ["192.168.6.205:9100"]
+      labels:
+        instance: linds-proxmox-01
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: proxmox-storage-health
+  namespace: monitoring
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  groups:
+    # Three things hold for every rule in this file.
+    #
+    # - keep_firing_for. A scrape that fails marks every series of that target
+    #   stale on the spot, so for one evaluation the condition looks gone. To
+    #   the far site that happens several times a day, and to either host
+    #   whenever it reboots. Without this each one would arrive as RESOLVED
+    #   followed by FIRING for a pool that had been degraded throughout.
+    # - No long "for". A gap also resets a pending alert, so a rule that waited
+    #   hours could wait for ever. Where a condition has to have lasted, the
+    #   expression says so itself with a range (min_over_time and the like),
+    #   which a gap does not interrupt.
+    # - Counters are compared with their own value a day earlier, not with
+    #   zero. Several drives carry old damage that is known and stable (one SSD
+    #   has replaced 1,231 sectors; another reported 7,734 unreadable ones), and
+    #   an alert that never clears teaches nothing. What matters is one more.
+    #
+    # The summary is the only annotation Discord shows, so it names the host
+    # and the object. The description says what to do.
+    - name: storage-health.exporter
+      rules:
+        # A host that does not answer at all is PrometheusTargetDown, in
+        # alerts.yaml. This is the host answering with no storage metrics in
+        # the answer: the timer is not running, or the file is not where
+        # node_exporter looks. Every other rule here would be silent too.
+        - alert: StorageHealthNotReported
+          expr: up{job="proxmox-storage-health"} == 1 unless on(instance) storage_health_last_run_timestamp_seconds
+          for: 20m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: node_exporter answers but serves no storage health metrics"
+            description: "storage-health-exporter is not writing /run/node-exporter-textfile/storage_health.prom on {{ $labels.instance }}, so none of the storage alerts can fire for it. Check `systemctl status storage-health-exporter.timer storage-health-exporter.service`."
+
+        - alert: StorageHealthStale
+          # Written every ten minutes; node_exporter goes on serving the last
+          # file for as long as it is there.
+          expr: time() - storage_health_last_run_timestamp_seconds > 1800
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: storage health metrics are {{ $value | humanizeDuration }} old"
+            description: "storage-health-exporter last wrote its metrics {{ $value | humanizeDuration }} ago; the storage alerts for {{ $labels.instance }} are judging old data. Check `systemctl status storage-health-exporter.timer` and `journalctl -u storage-health-exporter`."
+
+        - alert: StorageHealthCollectorFailed
+          expr: max_over_time(storage_health_collector_success[30m]) == 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the {{ $labels.collector }} part of storage health has been failing for half an hour"
+            description: "The {{ $labels.collector }} collector of storage-health-exporter fails on every run, so its alerts cannot fire. Run `/usr/local/sbin/storage-health-exporter` on {{ $labels.instance }}: it prints the metrics, and the reason on stderr."
+
+    - name: storage-health.zfs
+      rules:
+        # A pool that fails to import is not in `zpool status`, so it has no
+        # state to alert on. The host says which pools it should have
+        # (storage_health_zfs_pools in the Ansible inventory).
+        - alert: StorageZfsPoolMissing
+          expr: storage_zfs_pool_expected unless on(instance, pool) storage_zfs_pool_state
+          for: 15m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.pool }} is not imported"
+            description: "{{ $labels.instance }} is configured to have pool {{ $labels.pool }} and `zpool status` does not list it. `zpool import` shows what it can see of it."
+
+        - alert: StorageZfsPoolNotOnline
+          expr: storage_zfs_pool_state{state!="ONLINE"} == 1
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.pool }} is {{ $labels.state }}"
+            description: "`zpool status {{ $labels.pool }}` on {{ $labels.instance }} says which device. DEGRADED means the pool is running without its redundancy."
+
+        - alert: StorageZfsDeviceNotOnline
+          expr: storage_zfs_vdev_state{type="disk", state!~"ONLINE|AVAIL"} == 1
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.vdev }} in ZFS pool {{ $labels.pool }} is {{ $labels.state }}"
+            description: "The device name ends in the drive's serial number."
+
+        # Blocks that are gone: every copy and the parity failed to produce
+        # them. The count stays until the files are dealt with and a scrub
+        # finds nothing wrong.
+        - alert: StorageZfsDataErrors
+          expr: storage_zfs_pool_data_errors > 0
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.pool }} has {{ $value }} blocks it can neither read nor rebuild"
+            description: "`zpool status -v {{ $labels.pool }}` on {{ $labels.instance }} names the files (or zvol offsets) affected. Restore them from the other site, then `zpool scrub {{ $labels.pool }}`; the count clears once a scrub comes back clean."
+
+        # Errors ZFS has counted against one device. ZFS usually repairs what
+        # it finds, so this is often the only sign of a drive, cable or
+        # controller going bad. The counters stand until `zpool clear`.
+        - alert: StorageZfsDeviceErrors
+          expr: sum without (kind) (storage_zfs_vdev_errors{type="disk"}) > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.vdev }} in ZFS pool {{ $labels.pool }} has {{ $value }} read, write or checksum errors"
+            description: "Counted since the last `zpool clear`. The same count on every drive of a pool points at something they share, not at the drives. Once the cause is understood, `zpool clear {{ $labels.pool }}` resets it."
+
+        # A scrub is the only thing that reads every allocated block and
+        # checks it, so a schedule that has quietly stopped is how unreadable
+        # blocks get to sit unnoticed. Measured from the last scrub that ran to
+        # the end; for a pool that has not finished one, from when its first
+        # started, or from when the pool was made. The limit comes from the
+        # host: nine days for a pool it scrubs weekly, forty for a monthly one.
+        # Divided by a day so that the value reads as days.
+        - alert: StorageZfsScrubOverdue
+          expr: >-
+            (
+              time() - (
+                   storage_zfs_scrub_last_end_timestamp_seconds
+                or storage_zfs_scrub_last_start_timestamp_seconds
+                or storage_zfs_pool_created_timestamp_seconds
+              ) > storage_zfs_scrub_max_age_seconds
+            ) / 86400
+          for: 30m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.pool }} has not finished a scrub in {{ printf \"%.1f\" $value }} days"
+            description: "Monthly scrubs come from /etc/cron.d/zfsutils-linux, weekly ones from zfs-scrub-weekly@{{ $labels.pool }}.timer. `zpool status {{ $labels.pool }}` shows whether one is running, paused or was cancelled; `zpool scrub {{ $labels.pool }}` starts one."
+
+        - alert: StorageZfsPoolNearlyFull
+          expr: storage_zfs_pool_allocated_bytes / storage_zfs_pool_size_bytes > 0.85
+          for: 15m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.pool }} is {{ $value | humanizePercentage }} full"
+            description: "Past about 85% ZFS has to work to find free space, writes slow down, and on SSDs every write costs more wear."
+
+    - name: storage-health.smart
+      rules:
+        # The drive's own verdict, a SMART attribute at its failure threshold,
+        # or an NVMe critical warning. By the time a drive says this it means it.
+        - alert: StorageSmartFailing
+          expr: >-
+            storage_smart_healthy == 0
+            or storage_smart_attributes_failing > 0
+            or storage_smart_nvme_critical_warning > 0
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) reports that it is failing"
+            description: "`smartctl -x` on the drive shows which attribute. Replace it."
+
+        # The most recent self-test that ran to a verdict. A failed long test
+        # is nearly always "read failure": a sector the drive cannot read.
+        - alert: StorageSmartSelfTestFailed
+          expr: storage_smart_selftest_last_passed == 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) failed its last self-test"
+            description: "`smartctl -l selftest` on the drive shows the result and the first failing LBA. Where the pool or array has redundancy, a scrub or consistency check rewrites the sector and a later test can pass; a drive that keeps failing them is on its way out."
+
+        - alert: StorageSmartReallocating
+          expr: storage_smart_reallocated_sectors - storage_smart_reallocated_sectors offset 1d > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) replaced {{ $value }} more sectors in the last day"
+            description: "The drive is using up its spare area. One step is not an emergency; a count that keeps climbing is a drive to replace."
+
+        - alert: StorageSmartUncorrectableErrors
+          expr: storage_smart_uncorrectable_errors - storage_smart_uncorrectable_errors offset 1d > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) reported {{ $value }} more unreadable sectors in the last day"
+            description: "Reads the drive could not correct. ZFS or the RAID controller will have rebuilt the data from the other drives if it could; check the pool or virtual disk for errors of its own."
+
+        # Sectors the drive could not read and is waiting to replace. Zero on a
+        # healthy drive, and it goes back to zero once they are rewritten.
+        - alert: StorageSmartPendingSectors
+          expr: storage_smart_pending_sectors > 0 or storage_smart_offline_uncorrectable_sectors > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has {{ $value }} sectors it cannot read"
+            description: "A scrub (ZFS) or patrol read (RAID) rewrites them from redundancy, after which the drive replaces or reuses them."
+
+        - alert: StorageSmartCrcErrors
+          expr: storage_smart_crc_errors - storage_smart_crc_errors offset 1d > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) had {{ $value }} more transfer errors in the last day"
+            description: "Data damaged between the drive and the controller: cable, backplane slot or connector, not the media."
+
+        - alert: StorageSmartWearHigh
+          expr: storage_smart_endurance_used_ratio >= 0.80
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has used {{ $value | humanizePercentage }} of its rated endurance"
+            description: "Time to have a replacement on hand. `rate(storage_smart_written_bytes[7d])` shows how fast it is being written."
+
+        - alert: StorageSmartWornOut
+          expr: storage_smart_endurance_used_ratio >= 0.95
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has used {{ $value | humanizePercentage }} of its rated endurance"
+            description: "Replace it. Past its rating a drive may keep working, but it no longer promises to hold data."
+
+        - alert: StorageSmartSpareLow
+          expr: storage_smart_spare_available_ratio < 0.25
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has {{ $value | humanizePercentage }} of its spare area left"
+            description: "Every replaced sector comes out of the spare area, and the drive declares itself failed when it runs low. Replace it before then."
+
+        # A long self-test has the drive read all of itself. smartd starts one
+        # a month on every drive; this is the check that it still does. The
+        # limit comes from the host (45 days). A drive with no long test on
+        # record counts its whole powered life, so a used drive put into
+        # service shows up here straight away.
+        - alert: StorageSmartSelfTestOverdue
+          expr: >-
+            (
+              storage_smart_selftest_long_age_seconds
+              > on(instance) group_left() storage_smart_selftest_long_max_age_seconds
+            ) / 86400
+          for: 30m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has been powered for {{ printf \"%.0f\" $value }} days without a long self-test"
+            description: "smartd should start one on the third Friday of each month (`smartd -q showtests` prints the dates; `journalctl -u smartmontools` shows what it did). `smartctl -t long` on the drive starts one by hand."
+
+        - alert: StorageSmartHot
+          expr: min_over_time(storage_smart_temperature_celsius[30m]) > 55
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.model }} {{ $labels.serial }} ({{ $labels.device }}) has been above 55 °C for half an hour (coolest: {{ $value }} °C)"
+            description: "Check the fans and what is blocking the airflow. On jd-proxmox-02 the fan curve is the fan-control service."
+
+        - alert: StorageSmartUnreadable
+          expr: max_over_time(storage_smart_read_success[30m]) == 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.device }} has not answered a SMART query for half an hour"
+            description: "The kernel still lists the device and smartctl gets nothing from it. `dmesg` on {{ $labels.instance }} will say why."
+
+        # A drive that has gone altogether takes its series with it, and with
+        # them every alert above. A pool or array member will be missed there;
+        # a spare or an unused disk would not be.
+        - alert: StorageSmartDriveGone
+          expr: storage_smart_devices offset 1d - storage_smart_devices > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $value }} fewer drives answer SMART than a day ago"
+            description: "`smartctl --scan-open` on {{ $labels.instance }} lists the ones that still do. Expected for a day after a drive is pulled on purpose."
+
+    - name: storage-health.raid
+      rules:
+        - alert: StorageRaidControllerNotOptimal
+          expr: storage_raid_controller_state{state!="Optimal"} == 1
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: RAID controller {{ $labels.controller }} ({{ $labels.model }}) is {{ $labels.state }}"
+            description: "`perccli /c{{ $labels.controller }} show all` on {{ $labels.instance }}."
+
+        - alert: StorageRaidVirtualDiskNotOptimal
+          expr: storage_raid_vd_state{state!="Optl"} == 1
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: virtual disk {{ $labels.vd }} \"{{ $labels.name }}\" ({{ $labels.raid }}) is {{ $labels.state }}"
+            description: "Dgrd is degraded: the array is running without its redundancy. Pdgd is partially degraded, OfLn offline. `perccli /c{{ $labels.controller }}/v{{ $labels.vd }} show all` and `perccli /c{{ $labels.controller }} show` on {{ $labels.instance }}."
+
+        # Anything but a member (Onln), an unused disk (UGood), a hot spare or
+        # a pass-through disk. Rbld, a rebuild in progress, is meant to show.
+        - alert: StorageRaidDiskNotOnline
+          expr: storage_raid_pd_state{state!~"Onln|UGood|GHS|DHS|JBOD"} == 1
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: disk in slot {{ $labels.slot }} ({{ $labels.model }} {{ $labels.serial }}) is {{ $labels.state }}"
+            description: "Slot is enclosure:bay. Rbld is a rebuild in progress (`perccli /c{{ $labels.controller }}/eall/sall show rebuild`); Offln, UBad and Failed are a disk the controller has dropped."
+
+        - alert: StorageRaidDiskFailurePredicted
+          expr: storage_raid_pd_predictive_failures > 0 or storage_raid_pd_smart_alert == 1
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: disk in slot {{ $labels.slot }} ({{ $labels.model }} {{ $labels.serial }}) has told the controller it is about to fail"
+            description: "Replace it while the array still has its redundancy."
+
+        - alert: StorageRaidMediaErrors
+          expr: storage_raid_pd_media_errors - storage_raid_pd_media_errors offset 1d > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: disk in slot {{ $labels.slot }} ({{ $labels.model }} {{ $labels.serial }}) had {{ $value }} more media errors in the last day"
+            description: "Sectors the controller could not read from this disk. It rebuilds them from the rest of the array where it can; where it cannot, they show up in the virtual disk's bad block table."
+
+        # An uncorrected entry is a block the controller knows it cannot
+        # return: the array had no good copy when a disk failed to read it. It
+        # is cleared by writing to the block. The table holds about a thousand
+        # entries, so a full one stops counting.
+        - alert: StorageRaidBadBlocks
+          expr: >-
+            storage_raid_vd_bad_blocks{kind="uncorrected"}
+            - storage_raid_vd_bad_blocks{kind="uncorrected"} offset 1d > 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: virtual disk {{ $labels.vd }} \"{{ $labels.name }}\" gained {{ $value }} blocks it cannot return"
+            description: "`perccli /c{{ $labels.controller }}/v{{ $labels.vd }} show bbmt` lists them. Reading one gives an I/O error; find out what sits on those blocks before anything else."
+
+        # Until 2026-10-10 patrol read on linds-proxmox-01 was switched on and
+        # excluded every virtual disk, and consistency check was off. Nothing
+        # had read those arrays end to end in years, and a rebuild found
+        # thousands of sectors that had gone bad unnoticed. This is that state.
+        - alert: StorageRaidNotPatrolled
+          expr: storage_raid_vd_patrol_read_scheduled + storage_raid_vd_consistency_check_scheduled == 0
+          for: 15m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: nothing patrols virtual disk {{ $labels.vd }} \"{{ $labels.name }}\""
+            description: "Neither scheduled patrol read nor scheduled consistency check covers this virtual disk, so a sector that goes bad stays unnoticed until something needs it. `perccli /c{{ $labels.controller }} show patrolread` and `show cc`; LINDS-Ansible roles/storage_health/README.md has the settings and the commands."
+
+        # Scheduled is not the same as running. Both patrols are weekly, so
+        # the count of completed rounds should move within nine days. The
+        # "offset" half keeps this quiet until there are nine days to look at.
+        - alert: StorageRaidPatrolReadStalled
+          expr: >-
+            (changes(storage_raid_patrol_read_iterations[9d]) == 0 and storage_raid_patrol_read_iterations offset 9d)
+            and on(instance, controller) max by (instance, controller) (storage_raid_vd_patrol_read_scheduled) == 1
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: RAID controller {{ $labels.controller }} has not completed a patrol read in nine days"
+            description: "`perccli /c{{ $labels.controller }} show patrolread` shows the mode, the state and the next start time."
+
+        - alert: StorageRaidConsistencyCheckStalled
+          expr: >-
+            (changes(storage_raid_consistency_check_iterations[9d]) == 0 and storage_raid_consistency_check_iterations offset 9d)
+            and on(instance, controller) max by (instance, controller) (storage_raid_vd_consistency_check_scheduled) == 1
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: RAID controller {{ $labels.controller }} has not completed a consistency check in nine days"
+            description: "`perccli /c{{ $labels.controller }} show cc` shows the mode, the state and the next start time."
+
+        # Not optimal at more than 60 of the 72 ten-minute marks in the last
+        # twelve hours. The battery spends a few hours in a learn cycle every
+        # three months, which is not a fault.
+        - alert: StorageRaidBatteryNotOptimal
+          expr: count_over_time((storage_raid_battery_state{state!="Optimal"})[12h:10m]) > 60
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the RAID controller's cache battery is {{ $labels.state }}"
+            description: "Without a good battery the controller stops caching writes, or caches them with nothing to hold them through a power cut. `perccli /c{{ $labels.controller }}/bbu show all`."
+
+    - name: storage-health.lvm
+      rules:
+        # A thin pool that fills up stops taking writes, and the guests on it
+        # find out as I/O errors: on 2026-08-15 the NAS pool at linds reached
+        # 100% and a domain controller's writes were dropped. The pools there
+        # promise more than they have, so this is the only warning.
+        - alert: StorageThinPoolFilling
+          expr: storage_lvm_thin_used_ratio >= 0.80 < 0.90
+          for: 15m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: thin pool {{ $labels.vg }}/{{ $labels.lv }} has used {{ $value | humanizePercentage }} of its {{ $labels.space }} space"
+            description: "Free space inside the guests does not come back to the pool by itself: it takes a trim in the guest (and discard enabled on the virtual disk). `lvs -a {{ $labels.vg }}` on {{ $labels.instance }}."
+
+        - alert: StorageThinPoolNearlyFull
+          expr: storage_lvm_thin_used_ratio >= 0.90
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: thin pool {{ $labels.vg }}/{{ $labels.lv }} has used {{ $value | humanizePercentage }} of its {{ $labels.space }} space"
+            description: "At 100% the pool refuses writes and every guest on it sees I/O errors. Free space now: trim inside the guests, remove snapshots, or extend the pool if the volume group has room (`vgs {{ $labels.vg }}`)."
+
+        - alert: StorageThinPoolUnhealthy
+          expr: storage_lvm_thin_healthy == 0
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: thin pool {{ $labels.vg }}/{{ $labels.lv }} is not healthy"
+            description: "device-mapper reports a health status for the pool (out of data space, metadata read-only, failed). `lvs -o+lv_health_status {{ $labels.vg }}` on {{ $labels.instance }}."
