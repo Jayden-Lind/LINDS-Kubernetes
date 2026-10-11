@@ -1,0 +1,682 @@
+# promtool unit tests for ../proxmox-storage-health.yaml. Not a manifest, and
+# not in the kustomization.
+#
+# promtool reads plain rule files, so the PrometheusRule's spec is cut out
+# first. The descriptions are dropped on the way: promtool wants every
+# annotation of an expected alert spelled out, and the summary - the line
+# Discord shows - is the one worth pinning down.
+#
+#   yq 'select(.kind == "PrometheusRule") | .spec | del(.groups[].rules[].annotations.description)' \
+#     base/monitoring/proxmox-storage-health.yaml > /tmp/proxmox-storage-health.rules.yaml
+#   promtool check rules /tmp/proxmox-storage-health.rules.yaml
+#   promtool test rules base/monitoring/tests/proxmox-storage-health.test.yaml
+#
+# Time starts at zero in each test, so timestamps below are small numbers.
+rule_files:
+  - /tmp/proxmox-storage-health.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- the exporter itself -----------------------------------------------------
+  - name: a host that answers without storage metrics, and one whose metrics have gone old
+    interval: 1m
+    input_series:
+      - series: 'up{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x60'
+      - series: 'up{job="proxmox-storage-health", instance="linds-proxmox-01"}'
+        values: '1x60'
+      # Written once, at time zero, and never again.
+      - series: 'storage_health_last_run_timestamp_seconds{job="proxmox-storage-health", instance="linds-proxmox-01"}'
+        values: '0x60'
+      - series: 'storage_health_collector_success{job="proxmox-storage-health", instance="linds-proxmox-01", collector="raid"}'
+        values: '1x10 0x50'
+      - series: 'storage_health_collector_success{job="proxmox-storage-health", instance="linds-proxmox-01", collector="lvm"}'
+        values: '1x60'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: StorageHealthNotReported
+      - eval_time: 25m
+        alertname: StorageHealthNotReported
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: node_exporter answers but serves no storage health metrics"
+      - eval_time: 30m
+        alertname: StorageHealthStale
+      - eval_time: 40m
+        alertname: StorageHealthStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: linds-proxmox-01
+            exp_annotations:
+              summary: "linds-proxmox-01: storage health metrics are 40m 0s old"
+      # Failing since minute 11; one good run in the half hour is enough to wait.
+      - eval_time: 35m
+        alertname: StorageHealthCollectorFailed
+      - eval_time: 45m
+        alertname: StorageHealthCollectorFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: linds-proxmox-01
+              collector: raid
+            exp_annotations:
+              summary: "linds-proxmox-01: the raid part of storage health has been failing for half an hour"
+
+  # --- zfs ------------------------------------------------------------------------
+  - name: a pool that did not import, a degraded one, and blocks that are gone
+    interval: 1m
+    input_series:
+      - series: 'storage_zfs_pool_expected{instance="jd-proxmox-02", pool="VM"}'
+        values: '1x30'
+      - series: 'storage_zfs_pool_expected{instance="jd-proxmox-02", pool="NAS-SSD"}'
+        values: '1x30'
+      - series: 'storage_zfs_pool_expected{instance="jd-proxmox-02", pool="HDD-20T"}'
+        values: '1x30'
+      - series: 'storage_zfs_pool_state{instance="jd-proxmox-02", pool="NAS-SSD", state="ONLINE"}'
+        values: '1x30'
+      - series: 'storage_zfs_pool_state{instance="jd-proxmox-02", pool="HDD-20T", state="DEGRADED"}'
+        values: '1x30'
+      - series: 'storage_zfs_vdev_state{instance="jd-proxmox-02", pool="HDD-20T", type="mirror", vdev="mirror-0", state="DEGRADED"}'
+        values: '1x30'
+      - series: 'storage_zfs_vdev_state{instance="jd-proxmox-02", pool="HDD-20T", type="disk", vdev="ata-ST22000NM001E-3HM103_ZX283CSD", state="FAULTED"}'
+        values: '1x30'
+      - series: 'storage_zfs_vdev_state{instance="jd-proxmox-02", pool="HDD-20T", type="disk", vdev="ata-ST22000NM001E-3HM103_ZX282R9P", state="ONLINE"}'
+        values: '1x30'
+      - series: 'storage_zfs_pool_data_errors{instance="jd-proxmox-02", pool="NAS-SSD"}'
+        values: '4x30'
+      - series: 'storage_zfs_pool_data_errors{instance="jd-proxmox-02", pool="HDD-20T"}'
+        values: '0x30'
+      - series: 'storage_zfs_vdev_errors{instance="jd-proxmox-02", pool="NAS-SSD", type="disk", vdev="ata-Samsung_SSD_870_EVO_4TB_S751NX0W607557V", kind="read"}'
+        values: '0x30'
+      - series: 'storage_zfs_vdev_errors{instance="jd-proxmox-02", pool="NAS-SSD", type="disk", vdev="ata-Samsung_SSD_870_EVO_4TB_S751NX0W607557V", kind="write"}'
+        values: '0x30'
+      - series: 'storage_zfs_vdev_errors{instance="jd-proxmox-02", pool="NAS-SSD", type="disk", vdev="ata-Samsung_SSD_870_EVO_4TB_S751NX0W607557V", kind="checksum"}'
+        values: '8x30'
+      - series: 'storage_zfs_vdev_errors{instance="jd-proxmox-02", pool="NAS-SSD", type="raidz", vdev="raidz1-0", kind="checksum"}'
+        values: '3x30'
+      - series: 'storage_zfs_pool_size_bytes{instance="jd-proxmox-02", pool="NAS-SSD"}'
+        values: '1000x30'
+      - series: 'storage_zfs_pool_allocated_bytes{instance="jd-proxmox-02", pool="NAS-SSD"}'
+        values: '900x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: StorageZfsPoolMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: jd-proxmox-02
+              pool: VM
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool VM is not imported"
+      - eval_time: 20m
+        alertname: StorageZfsPoolNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: jd-proxmox-02
+              pool: HDD-20T
+              state: DEGRADED
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool HDD-20T is DEGRADED"
+      - eval_time: 20m
+        alertname: StorageZfsDeviceNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: HDD-20T
+              type: disk
+              vdev: ata-ST22000NM001E-3HM103_ZX283CSD
+              state: FAULTED
+            exp_annotations:
+              summary: "jd-proxmox-02: ata-ST22000NM001E-3HM103_ZX283CSD in ZFS pool HDD-20T is FAULTED"
+      - eval_time: 20m
+        alertname: StorageZfsDataErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: jd-proxmox-02
+              pool: NAS-SSD
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool NAS-SSD has 4 blocks it can neither read nor rebuild"
+      - eval_time: 20m
+        alertname: StorageZfsDeviceErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: NAS-SSD
+              type: disk
+              vdev: ata-Samsung_SSD_870_EVO_4TB_S751NX0W607557V
+            exp_annotations:
+              summary: "jd-proxmox-02: ata-Samsung_SSD_870_EVO_4TB_S751NX0W607557V in ZFS pool NAS-SSD has 8 read, write or checksum errors"
+      - eval_time: 20m
+        alertname: StorageZfsPoolNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: NAS-SSD
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool NAS-SSD is 90% full"
+
+  - name: scrub age is measured from the last finished scrub, else its start, else the pool's creation
+    interval: 5m
+    input_series:
+      # Weekly pool, last finished a scrub at 100000 s. Nine days later is 877600 s (10d 3h 46m).
+      - series: 'storage_zfs_scrub_last_end_timestamp_seconds{instance="jd-proxmox-02", pool="VM"}'
+        values: '100000x3600'
+      - series: 'storage_zfs_scrub_last_start_timestamp_seconds{instance="jd-proxmox-02", pool="VM"}'
+        values: '99000x3600'
+      - series: 'storage_zfs_pool_created_timestamp_seconds{instance="jd-proxmox-02", pool="VM"}'
+        values: '0x3600'
+      - series: 'storage_zfs_scrub_max_age_seconds{instance="jd-proxmox-02", pool="VM"}'
+        values: '777600x3600'
+      # Monthly pool, never seen to finish a scrub. Its first started on day 9
+      # and is still going, so that is where its forty days are counted from.
+      - series: 'storage_zfs_scrub_last_start_timestamp_seconds{instance="jd-proxmox-02", pool="HDD-20T"}'
+        values: '_x2592 777600x1008'
+      - series: 'storage_zfs_pool_created_timestamp_seconds{instance="jd-proxmox-02", pool="HDD-20T"}'
+        values: '-4000000x3600'
+      - series: 'storage_zfs_scrub_max_age_seconds{instance="jd-proxmox-02", pool="HDD-20T"}'
+        values: '3456000x3600'
+      # Never scrubbed at all, on a nine-day limit.
+      - series: 'storage_zfs_pool_created_timestamp_seconds{instance="jd-proxmox-02", pool="scratch"}'
+        values: '0x3600'
+      - series: 'storage_zfs_scrub_max_age_seconds{instance="jd-proxmox-02", pool="scratch"}'
+        values: '777600x3600'
+    alert_rule_test:
+      # Day 8: the pool made 46 days before the test began is past its forty
+      # and has not started a scrub yet. The other two are within nine.
+      - eval_time: 8d
+        alertname: StorageZfsScrubOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: HDD-20T
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool HDD-20T has not finished a scrub in 54.3 days"
+      # Its scrub starts on day 9. The alert outlives that by the half hour it is kept firing.
+      - eval_time: 9d2h
+        alertname: StorageZfsScrubOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: scratch
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool scratch has not finished a scrub in 9.1 days"
+      - eval_time: 11d
+        alertname: StorageZfsScrubOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: scratch
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool scratch has not finished a scrub in 11.0 days"
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              pool: VM
+            exp_annotations:
+              summary: "jd-proxmox-02: ZFS pool VM has not finished a scrub in 9.8 days"
+
+  - name: a failed scrape in the middle of a standing condition does not resolve it
+    interval: 1m
+    input_series:
+      - series: 'storage_zfs_pool_data_errors{instance="linds-proxmox-01", pool="tank"}'
+        values: '4x10 stale _x3 4x10 0x60'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: StorageZfsDataErrors
+        exp_alerts: &still_firing
+          - exp_labels:
+              severity: critical
+              instance: linds-proxmox-01
+              pool: tank
+            exp_annotations:
+              summary: "linds-proxmox-01: ZFS pool tank has 4 blocks it can neither read nor rebuild"
+      - eval_time: 12m
+        alertname: StorageZfsDataErrors
+        exp_alerts: *still_firing
+      - eval_time: 20m
+        alertname: StorageZfsDataErrors
+        exp_alerts: *still_firing
+      # Really gone from minute 25; half an hour later the alert is too.
+      - eval_time: 40m
+        alertname: StorageZfsDataErrors
+        exp_alerts: *still_firing
+      - eval_time: 60m
+        alertname: StorageZfsDataErrors
+
+  # --- smart ----------------------------------------------------------------------
+  - name: the drive's own verdict, a failed self-test, wear and spare
+    interval: 1m
+    input_series:
+      - series: 'storage_smart_healthy{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '1x30'
+      - series: 'storage_smart_attributes_failing{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '1x30'
+      - series: 'storage_smart_healthy{instance="jd-proxmox-02", device="sda", model="Samsung SSD 870 EVO 4TB", serial="S751NX0W607557V"}'
+        values: '1x30'
+      - series: 'storage_smart_attributes_failing{instance="jd-proxmox-02", device="sda", model="Samsung SSD 870 EVO 4TB", serial="S751NX0W607557V"}'
+        values: '0x30'
+      - series: 'storage_smart_selftest_last_passed{instance="linds-proxmox-01", device="megaraid,5", model="Samsung SSD 870 EVO 1TB", serial="S74ZNL0X502776K"}'
+        values: '0x30'
+      - series: 'storage_smart_selftest_last_passed{instance="linds-proxmox-01", device="megaraid,6", model="Samsung SSD 870 EVO 1TB", serial="S74ZNX0Y829912E"}'
+        values: '1x30'
+      - series: 'storage_smart_endurance_used_ratio{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '0.83x30'
+      - series: 'storage_smart_endurance_used_ratio{instance="jd-proxmox-02", device="sda", model="Samsung SSD 870 EVO 4TB", serial="S751NX0W607557V"}'
+        values: '0.01x30'
+      - series: 'storage_smart_spare_available_ratio{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '0.24x30'
+      - series: 'storage_smart_spare_available_ratio{instance="jd-proxmox-02", device="sda", model="Samsung SSD 870 EVO 4TB", serial="S751NX0W607557V"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: StorageSmartFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: jd-proxmox-02
+              device: sde
+              model: Samsung SSD 870 EVO 2TB
+              serial: S5Y3NF0RA03724J
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) reports that it is failing"
+      - eval_time: 10m
+        alertname: StorageSmartSelfTestFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              device: megaraid,5
+              model: Samsung SSD 870 EVO 1TB
+              serial: S74ZNL0X502776K
+            exp_annotations:
+              summary: "linds-proxmox-01: Samsung SSD 870 EVO 1TB S74ZNL0X502776K (megaraid,5) failed its last self-test"
+      - eval_time: 10m
+        alertname: StorageSmartWearHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sde
+              model: Samsung SSD 870 EVO 2TB
+              serial: S5Y3NF0RA03724J
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) has used 83% of its rated endurance"
+      - eval_time: 10m
+        alertname: StorageSmartWornOut
+      - eval_time: 10m
+        alertname: StorageSmartSpareLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sde
+              model: Samsung SSD 870 EVO 2TB
+              serial: S5Y3NF0RA03724J
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) has 24% of its spare area left"
+
+  - name: old damage is quiet and one more sector is not
+    interval: 10m
+    input_series:
+      # 1,231 replaced sectors for a day and a half, then two more.
+      - series: 'storage_smart_reallocated_sectors{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '1231x216 1233x288'
+      - series: 'storage_smart_uncorrectable_errors{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '171599x504'
+      - series: 'storage_smart_crc_errors{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '0x216 5x288'
+      - series: 'storage_smart_pending_sectors{instance="jd-proxmox-02", device="sdh", model="ST22000NM001E-3HM103", serial="ZX283CSD"}'
+        values: '0x216 8x288'
+      - series: 'storage_smart_offline_uncorrectable_sectors{instance="jd-proxmox-02", device="sdh", model="ST22000NM001E-3HM103", serial="ZX283CSD"}'
+        values: '0x504'
+      - series: 'storage_smart_devices{instance="jd-proxmox-02"}'
+        values: '11x216 10x288'
+    alert_rule_test:
+      - eval_time: 1d
+        alertname: StorageSmartReallocating
+      - eval_time: 1d
+        alertname: StorageSmartUncorrectableErrors
+      - eval_time: 1d
+        alertname: StorageSmartDriveGone
+      - eval_time: 2d
+        alertname: StorageSmartReallocating
+        exp_alerts:
+          - exp_labels: &sde
+              severity: warning
+              instance: jd-proxmox-02
+              device: sde
+              model: Samsung SSD 870 EVO 2TB
+              serial: S5Y3NF0RA03724J
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) replaced 2 more sectors in the last day"
+      - eval_time: 2d
+        alertname: StorageSmartUncorrectableErrors
+      - eval_time: 2d
+        alertname: StorageSmartCrcErrors
+        exp_alerts:
+          - exp_labels: *sde
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) had 5 more transfer errors in the last day"
+      - eval_time: 2d
+        alertname: StorageSmartPendingSectors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sdh
+              model: ST22000NM001E-3HM103
+              serial: ZX283CSD
+            exp_annotations:
+              summary: "jd-proxmox-02: ST22000NM001E-3HM103 ZX283CSD (sdh) has 8 sectors it cannot read"
+      - eval_time: 2d
+        alertname: StorageSmartDriveGone
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: 1 fewer drives answer SMART than a day ago"
+      # A day after the step nothing is newer than yesterday any more (plus
+      # the half hour the alerts are kept firing).
+      - eval_time: 3d
+        alertname: StorageSmartReallocating
+      - eval_time: 3d
+        alertname: StorageSmartDriveGone
+
+  - name: long self-tests are judged against the host's own limit, and a hot drive has to stay hot
+    interval: 1m
+    input_series:
+      - series: 'storage_smart_selftest_long_max_age_seconds{instance="jd-proxmox-02"}'
+        values: '3888000x90'
+      - series: 'storage_smart_selftest_long_max_age_seconds{instance="linds-proxmox-01"}'
+        values: '3888000x90'
+      # Never tested: 41,744 powered hours.
+      - series: 'storage_smart_selftest_long_age_seconds{instance="jd-proxmox-02", device="sde", model="Samsung SSD 870 EVO 2TB", serial="S5Y3NF0RA03724J"}'
+        values: '150278400x90'
+      # Tested three days ago.
+      - series: 'storage_smart_selftest_long_age_seconds{instance="jd-proxmox-02", device="sda", model="Samsung SSD 870 EVO 4TB", serial="S751NX0W607557V"}'
+        values: '259200x90'
+      - series: 'storage_smart_selftest_long_age_seconds{instance="linds-proxmox-01", device="megaraid,4", model="WDC WDS500G2B0A", serial="1846A5800477"}'
+        values: '0x90'
+      - series: 'storage_smart_temperature_celsius{instance="jd-proxmox-02", device="sdh", model="ST22000NM001E-3HM103", serial="ZX283CSD"}'
+        values: '40x10 57x80'
+      - series: 'storage_smart_read_success{instance="jd-proxmox-02", device="sdq"}'
+        values: '1x10 0x80'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: StorageSmartSelfTestOverdue
+      - eval_time: 40m
+        alertname: StorageSmartSelfTestOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sde
+              model: Samsung SSD 870 EVO 2TB
+              serial: S5Y3NF0RA03724J
+            exp_annotations:
+              summary: "jd-proxmox-02: Samsung SSD 870 EVO 2TB S5Y3NF0RA03724J (sde) has been powered for 1739 days without a long self-test"
+      - eval_time: 30m
+        alertname: StorageSmartHot
+      - eval_time: 45m
+        alertname: StorageSmartHot
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sdh
+              model: ST22000NM001E-3HM103
+              serial: ZX283CSD
+            exp_annotations:
+              summary: "jd-proxmox-02: ST22000NM001E-3HM103 ZX283CSD (sdh) has been above 55 °C for half an hour (coolest: 57 °C)"
+      - eval_time: 30m
+        alertname: StorageSmartUnreadable
+      - eval_time: 45m
+        alertname: StorageSmartUnreadable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-proxmox-02
+              device: sdq
+            exp_annotations:
+              summary: "jd-proxmox-02: sdq has not answered a SMART query for half an hour"
+
+  # --- raid -----------------------------------------------------------------------
+  - name: controller, virtual disks, physical disks and the battery
+    interval: 5m
+    input_series:
+      - series: 'storage_raid_controller_state{instance="linds-proxmox-01", controller="0", model="PERC H730 Adapter", state="Optimal"}'
+        values: '1x601'
+      - series: 'storage_raid_vd_state{instance="linds-proxmox-01", controller="0", vd="0", name="NAS", raid="RAID5", state="Optl"}'
+        values: '1x601'
+      - series: 'storage_raid_vd_state{instance="linds-proxmox-01", controller="0", vd="1", name="OS", raid="RAID1", state="Dgrd"}'
+        values: '1x601'
+      - series: 'storage_raid_pd_state{instance="linds-proxmox-01", controller="0", slot="32:4", model="WDC WDS500G2B0A", serial="1846A5800477", state="UGood"}'
+        values: '1x601'
+      - series: 'storage_raid_pd_state{instance="linds-proxmox-01", controller="0", slot="32:5", model="Samsung SSD 870 EVO 1TB", serial="S74ZNL0X502776K", state="Onln"}'
+        values: '1x601'
+      - series: 'storage_raid_pd_state{instance="linds-proxmox-01", controller="0", slot="32:6", model="Samsung SSD 870 EVO 1TB", serial="S74ZNX0Y829912E", state="Rbld"}'
+        values: '1x601'
+      - series: 'storage_raid_pd_media_errors{instance="linds-proxmox-01", controller="0", slot="32:5", model="Samsung SSD 870 EVO 1TB", serial="S74ZNL0X502776K"}'
+        values: '7734x433 7740x169'
+      - series: 'storage_raid_pd_media_errors{instance="linds-proxmox-01", controller="0", slot="32:6", model="Samsung SSD 870 EVO 1TB", serial="S74ZNX0Y829912E"}'
+        values: '2536x601'
+      - series: 'storage_raid_pd_predictive_failures{instance="linds-proxmox-01", controller="0", slot="32:5", model="Samsung SSD 870 EVO 1TB", serial="S74ZNL0X502776K"}'
+        values: '0x601'
+      - series: 'storage_raid_pd_smart_alert{instance="linds-proxmox-01", controller="0", slot="32:5", model="Samsung SSD 870 EVO 1TB", serial="S74ZNL0X502776K"}'
+        values: '1x601'
+      - series: 'storage_raid_vd_bad_blocks{instance="linds-proxmox-01", controller="0", vd="1", name="OS", kind="uncorrected"}'
+        values: '1011x433 1015x169'
+      - series: 'storage_raid_vd_bad_blocks{instance="linds-proxmox-01", controller="0", vd="1", name="OS", kind="corrected"}'
+        values: '78x433 500x169'
+      # A learn cycle of three hours, then a battery that really has failed.
+      - series: 'storage_raid_battery_state{instance="linds-proxmox-01", controller="0", state="Optimal"}'
+        values: '1x121 _x37 1x121 _x325'
+      - series: 'storage_raid_battery_state{instance="linds-proxmox-01", controller="0", state="Learning"}'
+        values: '_x121 1x37 _x445'
+      - series: 'storage_raid_battery_state{instance="linds-proxmox-01", controller="0", state="Failed"}'
+        values: '_x279 1x323'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: StorageRaidControllerNotOptimal
+      - eval_time: 1h
+        alertname: StorageRaidVirtualDiskNotOptimal
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: linds-proxmox-01
+              controller: "0"
+              vd: "1"
+              name: OS
+              raid: RAID1
+              state: Dgrd
+            exp_annotations:
+              summary: 'linds-proxmox-01: virtual disk 1 "OS" (RAID1) is Dgrd'
+      - eval_time: 1h
+        alertname: StorageRaidDiskNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+              slot: "32:6"
+              model: Samsung SSD 870 EVO 1TB
+              serial: S74ZNX0Y829912E
+              state: Rbld
+            exp_annotations:
+              summary: "linds-proxmox-01: disk in slot 32:6 (Samsung SSD 870 EVO 1TB S74ZNX0Y829912E) is Rbld"
+      - eval_time: 1h
+        alertname: StorageRaidDiskFailurePredicted
+        exp_alerts:
+          - exp_labels: &bay5
+              severity: critical
+              instance: linds-proxmox-01
+              controller: "0"
+              slot: "32:5"
+              model: Samsung SSD 870 EVO 1TB
+              serial: S74ZNL0X502776K
+            exp_annotations:
+              summary: "linds-proxmox-01: disk in slot 32:5 (Samsung SSD 870 EVO 1TB S74ZNL0X502776K) has told the controller it is about to fail"
+      - eval_time: 1d
+        alertname: StorageRaidMediaErrors
+      - eval_time: 1d
+        alertname: StorageRaidBadBlocks
+      - eval_time: 2d
+        alertname: StorageRaidMediaErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+              slot: "32:5"
+              model: Samsung SSD 870 EVO 1TB
+              serial: S74ZNL0X502776K
+            exp_annotations:
+              summary: "linds-proxmox-01: disk in slot 32:5 (Samsung SSD 870 EVO 1TB S74ZNL0X502776K) had 6 more media errors in the last day"
+      - eval_time: 2d
+        alertname: StorageRaidBadBlocks
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+              vd: "1"
+              name: OS
+              kind: uncorrected
+            exp_annotations:
+              summary: 'linds-proxmox-01: virtual disk 1 "OS" gained 4 blocks it cannot return'
+      # The learn cycle (hours 10 to 13) is over without a word.
+      - eval_time: 13h
+        alertname: StorageRaidBatteryNotOptimal
+      - eval_time: 20h
+        alertname: StorageRaidBatteryNotOptimal
+      # Failed from hour 23h10m: ten of twelve hours bad at about hour 33.
+      - eval_time: 30h
+        alertname: StorageRaidBatteryNotOptimal
+      - eval_time: 34h
+        alertname: StorageRaidBatteryNotOptimal
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+              state: Failed
+            exp_annotations:
+              summary: "linds-proxmox-01: the RAID controller's cache battery is Failed"
+
+  - name: every virtual disk is patrolled one way or the other, and the patrols actually run
+    interval: 5m
+    input_series:
+      - series: 'storage_raid_vd_patrol_read_scheduled{instance="linds-proxmox-01", controller="0", vd="0", name="NAS"}'
+        values: '1x3600'
+      - series: 'storage_raid_vd_consistency_check_scheduled{instance="linds-proxmox-01", controller="0", vd="0", name="NAS"}'
+        values: '0x3600'
+      - series: 'storage_raid_vd_patrol_read_scheduled{instance="linds-proxmox-01", controller="0", vd="1", name="OS"}'
+        values: '0x3600'
+      - series: 'storage_raid_vd_consistency_check_scheduled{instance="linds-proxmox-01", controller="0", vd="1", name="OS"}'
+        values: '1x3600'
+      # Dropped from patrol read on day 2, and consistency check never covered it.
+      - series: 'storage_raid_vd_patrol_read_scheduled{instance="linds-proxmox-01", controller="0", vd="3", name="RAID-5"}'
+        values: '1x576 0x3024'
+      - series: 'storage_raid_vd_consistency_check_scheduled{instance="linds-proxmox-01", controller="0", vd="3", name="RAID-5"}'
+        values: '0x3600'
+      # Patrol read completes a round every week; consistency check stops after day 3.
+      - series: 'storage_raid_patrol_read_iterations{instance="linds-proxmox-01", controller="0"}'
+        values: '507x864 508x2016 509x720'
+      - series: 'storage_raid_consistency_check_iterations{instance="linds-proxmox-01", controller="0"}'
+        values: '1x864 2x2736'
+    alert_rule_test:
+      - eval_time: 1d
+        alertname: StorageRaidNotPatrolled
+      - eval_time: 3d
+        alertname: StorageRaidNotPatrolled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+              vd: "3"
+              name: RAID-5
+            exp_annotations:
+              summary: 'linds-proxmox-01: nothing patrols virtual disk 3 "RAID-5"'
+      # Nine days of history are needed before either "stalled" rule can speak.
+      - eval_time: 8d
+        alertname: StorageRaidConsistencyCheckStalled
+      - eval_time: 12d1h
+        alertname: StorageRaidPatrolReadStalled
+      # Last moved at day 3, so nine days without a change is day 12.
+      - eval_time: 11d
+        alertname: StorageRaidConsistencyCheckStalled
+      - eval_time: 12d2h
+        alertname: StorageRaidConsistencyCheckStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              controller: "0"
+            exp_annotations:
+              summary: "linds-proxmox-01: RAID controller 0 has not completed a consistency check in nine days"
+
+  # --- lvm ------------------------------------------------------------------------
+  - name: a thin pool is a warning from 80% and critical from 90%, never both
+    interval: 1m
+    input_series:
+      - series: 'storage_lvm_thin_used_ratio{instance="linds-proxmox-01", vg="NAS", lv="NAS", space="data"}'
+        values: '0.5225x30'
+      - series: 'storage_lvm_thin_used_ratio{instance="linds-proxmox-01", vg="NAS", lv="NAS", space="metadata"}'
+        values: '0.83x30'
+      - series: 'storage_lvm_thin_used_ratio{instance="linds-proxmox-01", vg="TrueNAS", lv="TrueNAS", space="data"}'
+        values: '0.9512x30'
+      - series: 'storage_lvm_thin_healthy{instance="linds-proxmox-01", vg="NAS", lv="NAS"}'
+        values: '1x30'
+      - series: 'storage_lvm_thin_healthy{instance="linds-proxmox-01", vg="pve", lv="data"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: StorageThinPoolFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: linds-proxmox-01
+              vg: NAS
+              lv: NAS
+              space: metadata
+            exp_annotations:
+              summary: "linds-proxmox-01: thin pool NAS/NAS has used 83% of its metadata space"
+      - eval_time: 20m
+        alertname: StorageThinPoolNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: linds-proxmox-01
+              vg: TrueNAS
+              lv: TrueNAS
+              space: data
+            exp_annotations:
+              summary: "linds-proxmox-01: thin pool TrueNAS/TrueNAS has used 95.12% of its data space"
+      - eval_time: 20m
+        alertname: StorageThinPoolUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: linds-proxmox-01
+              vg: pve
+              lv: data
+            exp_annotations:
+              summary: "linds-proxmox-01: thin pool pve/data is not healthy"
