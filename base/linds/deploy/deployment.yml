@@ -203,6 +203,14 @@ spec:
               value: "0"
             - name: PUID
               value: "1000"
+            # Since the August 2026 releases, *arr only honours X-Forwarded-For
+            # from proxies in Trusted Networks; without this every request via
+            # ingress-nginx counts as remote and "Disabled for Local Addresses"
+            # asks LAN and VPN clients to log in. 10.244.0.0/16 is the pod CIDR
+            # (both ingress classes); clients of the public mTLS ingress still
+            # resolve to their public address and get the login.
+            - name: RADARR__SERVER__TRUSTEDNETWORKS
+              value: 10.244.0.0/16
           volumeMounts:
             - mountPath: /config
               name: arr-config
@@ -298,6 +306,9 @@ spec:
               value: "1000"
             - name: SONARR_BRANCH
               value: main
+            # See radarr above.
+            - name: SONARR__SERVER__TRUSTEDNETWORKS
+              value: 10.244.0.0/16
           volumeMounts:
             - mountPath: /config
               name: arr-config
