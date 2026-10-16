@@ -274,7 +274,10 @@ spec:
       nodeSelector:
         datacenter: jd
       # Never on the control plane: thumbnail generation and video transcoding
-      # use every vCPU (see immich-machine-learning above).
+      # use every vCPU (see immich-machine-learning above). Preferably not
+      # beside a machine-learning pod either: on 2026-10-16 the two shared
+      # talos-worker-03 (4.7 + 2.8 of 8 vCPUs) and thumbnails ran at a tenth
+      # of their speed while three JD workers sat idle.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -282,6 +285,15 @@ spec:
               - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: machine-learning
+                    app.kubernetes.io/instance: immich
       initContainers:
         # Renders immich-config-template into the real config, substituting the
         # OIDC client secret from the immich-oidc secret. Keeps the secret out
