@@ -9,7 +9,7 @@ exist only on the host. Applied 2026-09-10.
 ## Snapshots: sanoid, with a per-dataset opt-out
 
 sanoid takes a daily snapshot of everything under `VM/truenas-nas` (the NFS
-share, MinIO, every zfs-iscsi zvol) and keeps 14. The source of truth is
+share, the S3 gateway's buckets, every zfs-iscsi zvol) and keeps 14. The source of truth is
 LINDS-Ansible: `roles/proxmox/templates/sanoid.conf.j2`, the
 `proxmox_sanoid_templates` defaults and the `proxmox_sanoid_policies` /
 `proxmox_sanoid_optout` inventory vars in `inventory/proxmox.yml`. Edit
@@ -44,7 +44,7 @@ instead, which is deterministic.
 | Opted out | What | Why |
 |---|---|---|
 | `VM/truenas-nas/k8s-iscsi/v/pvc-6bc3d715-6306-4c54-a4ca-871de99d36f1` | Prometheus TSDB | Compaction rewrites TSDB blocks every few hours, so 14 dailies pinned 20.9G of deleted blocks — rollback points for data Prometheus expires on its own (14d / 15GB). |
-| `VM/truenas-nas/k8s-iscsi/v/pvc-cf4eacc1-da88-451b-92a7-71126abc6559` | Loki WAL / compactor scratch | Chunks live in MinIO; the volume held 3.7G of snapshots for ~20 MB of live data. |
+| `VM/truenas-nas/k8s-iscsi/v/pvc-cf4eacc1-da88-451b-92a7-71126abc6559` | Loki WAL / compactor scratch | Chunks live on jd-s3-01 (S3); the volume held 3.7G of snapshots for ~20 MB of live data. |
 
 The zvols are named after their PV, so if either PVC is ever recreated, put
 the new `pvc-<uid>` in `proxmox_sanoid_optout` (the role reports names it
