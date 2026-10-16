@@ -37,6 +37,16 @@ spec:
             type: LoadBalancer
           nodeSelector:
             datacenter: jd
+          # Never on the control plane: transcodes and the scheduled analysis
+          # tasks (loudness, markers, previews) use every vCPU, and on talos-cp
+          # that starves etcd (see immich-machine-learning in immich/immich.yaml).
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-role.kubernetes.io/control-plane
+                        operator: DoesNotExist
           extraVolumeMounts:
             - name: nas
               mountPath: /data/media

@@ -152,6 +152,19 @@ spec:
       hostNetwork: false
       hostPID: false
       dnsPolicy: ClusterFirst
+      # Never on the control plane. A pod with a cold cache first downloads
+      # ~8.2 GB of models (SigLIP2 CLIP 7.5 GB, OCR, faces) into the emptyDir
+      # on its node's system disk, then uses every vCPU. On talos-cp that disk
+      # is etcd's: on 2026-10-16 a catch-up run did both there, etcd stalled
+      # (requests up to 9.9 s, a 43 s compaction) and the API server was down
+      # for two minutes. Same rule as the runner sets.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
       containers:
         - env:
           - name: DB_DATABASE_NAME
@@ -260,6 +273,15 @@ spec:
       dnsPolicy: ClusterFirst
       nodeSelector:
         datacenter: jd
+      # Never on the control plane: thumbnail generation and video transcoding
+      # use every vCPU (see immich-machine-learning above).
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
       initContainers:
         # Renders immich-config-template into the real config, substituting the
         # OIDC client secret from the immich-oidc secret. Keeps the secret out
