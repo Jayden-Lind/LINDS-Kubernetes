@@ -32,6 +32,12 @@ data:
           "hevc"
         ]
       },
+      "image": {
+        "preview": {
+          "format": "webp",
+          "quality": 80
+        }
+      },
       "job": {
         "faceDetection": {
           "concurrency": 5
