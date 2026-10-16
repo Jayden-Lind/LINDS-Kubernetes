@@ -83,7 +83,11 @@ data:
         },
         "ocr": {
           "modelName": "PP-OCRv5_server"
-        }
+        },
+        "urls": [
+          "http://jayden-linux-desktop.linds.com.au:3003",
+          "http://immich-machine-learning:3003"
+        ]
       },
       "metadata": {
         "faces": {
