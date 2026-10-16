@@ -1,7 +1,8 @@
 # CloudNativePG — `linds-postgres`
 
 PostgreSQL cluster managed by the CNPG operator, with backups and WAL archiving
-to MinIO via the **Barman Cloud plugin** (CNPG-I).
+to `jd-s3-01` (versitygw, LXC 107 on jd-proxmox-02) via the **Barman Cloud
+plugin** (CNPG-I).
 
 | Component | Where | Version source |
 |---|---|---|
@@ -40,8 +41,11 @@ curl -sI -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.oci.image
 - **Nightly base backup** (`ScheduledBackup`, midnight) + **continuous WAL
   archiving** (`isWALArchiver: true`) → full **PITR** within the 7-day
   retention window.
-- Everything lives in `s3://postgresql-backup/<serverName>/` on MinIO
-  (`jd-s3-01.linds.com.au:9000`). The active `serverName` is set **once** on the
+- Everything lives in `s3://postgresql-backup/<serverName>/` on versitygw
+  (`jd-s3-01.linds.com.au:9000`; until 2026-10-17 MinIO, hence the ObjectStore
+  name `minio-store`, kept because renaming it changes the Cluster spec and
+  restarts both instances). The gateway stores objects as plain files, so on
+  jd-proxmox-02 the same data is under `/mnt/NAS/s3/buckets/postgresql-backup/`. The active `serverName` is set **once** on the
   Cluster's plugin config (currently `linds-postgres-restored-4`). Base backups
   and WALs must share one serverName path or restores are impossible — the
   plugin ignores any `serverName` in `ScheduledBackup.pluginConfiguration`, so
@@ -133,8 +137,11 @@ retention only prunes the **active** path. Safe to delete manually once
 comfortable:
 
 ```sh
-mc alias set minio http://jd-s3-01.linds.com.au:9000 <USER> '<PASS>'
-mc rb --force minio/postgresql-backup/linds-postgres \
-  minio/postgresql-backup/linds-postgres-new \
-  minio/postgresql-backup/linds-postgres-restored-3
+mc alias set s3 http://jd-s3-01.linds.com.au:9000 <ACCESS_KEY> '<SECRET_KEY>'
+mc rm --recursive --force s3/postgresql-backup/linds-postgres/ \
+  s3/postgresql-backup/linds-postgres-new/ \
+  s3/postgresql-backup/linds-postgres-restored-3/
 ```
+
+(Any S3 client works; sign for region `us-east-1`, the only one versitygw
+accepts. The keys are in Vault at `linds-keyvault/cnpg-s3-creds`.)

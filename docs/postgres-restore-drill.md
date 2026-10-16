@@ -3,7 +3,7 @@
 How to prove the nightly backups of the CNPG cluster are actually restorable,
 **without touching the live cluster**. Applies to `linds-postgres` in
 `postgresql-linds` (`postgresql/postgres-cluster.yaml`), whose backups go to
-MinIO through the Barman Cloud plugin.
+`jd-s3-01` (versitygw; MinIO until 2026-10-17) through the Barman Cloud plugin.
 
 The backups have existed since the cluster did and have **never been
 restore-tested**. That matters more than usual right now, because the crawler
@@ -17,7 +17,7 @@ nightly backup has also failed outright (2026-09-06).
 | Thing | Value |
 |---|---|
 | Cluster | `linds-postgres`, namespace `postgresql-linds`, 2 instances, PG 18.4 |
-| Object store CR | `ObjectStore/minio-store` in `postgresql-linds` |
+| Object store CR | `ObjectStore/minio-store` in `postgresql-linds` (name kept from the MinIO days) |
 | Bucket | `s3://postgresql-backup` on `http://jd-s3-01.linds.com.au:9000` |
 | Archive path (`serverName`) | **`linds-postgres-restored-4`** |
 | Nightly base backup | `ScheduledBackup/linds-postgres-nightly`, `0 0 0 * * *` → **00:00 UTC daily** (six fields: the leading `0` is seconds) |
@@ -96,11 +96,20 @@ Finally, look in the bucket, which is the only real source of truth — the
 or present while the upload was truncated:
 
 ```sh
-mc alias set minio http://jd-s3-01.linds.com.au:9000 <USER> '<PASS>'
-mc ls   minio/postgresql-backup/linds-postgres-restored-4/
-mc ls   minio/postgresql-backup/linds-postgres-restored-4/base/
-mc du   minio/postgresql-backup/linds-postgres-restored-4/base/
-mc ls   minio/postgresql-backup/linds-postgres-restored-4/wals/ | tail
+mc alias set s3 http://jd-s3-01.linds.com.au:9000 <ACCESS_KEY> '<SECRET_KEY>'
+mc ls   s3/postgresql-backup/linds-postgres-restored-4/
+mc ls   s3/postgresql-backup/linds-postgres-restored-4/base/
+mc du   s3/postgresql-backup/linds-postgres-restored-4/base/
+mc ls   s3/postgresql-backup/linds-postgres-restored-4/wals/ | tail
+```
+
+versitygw keeps every object as a plain file, so the same check works on
+jd-proxmox-02 without any client:
+
+```sh
+ls -l /mnt/NAS/s3/buckets/postgresql-backup/linds-postgres-restored-4/base/*/
+du -sh /mnt/NAS/s3/buckets/postgresql-backup/linds-postgres-restored-4/base/*
+ls /mnt/NAS/s3/buckets/postgresql-backup/linds-postgres-restored-4/wals/*/ | tail
 ```
 
 Expect one `base/` entry per retained nightly backup, each a non-trivial size,
