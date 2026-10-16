@@ -78,6 +78,9 @@ spec:
               type: 's3'
               s3:
                 endpoint: jd-s3-01.linds.com.au:9000
+                # versitygw rejects a SigV4 signature for any region but its
+                # own. Unset, Loki signs for "dummy" (MinIO accepted that).
+                region: us-east-1
                 s3ForcePathStyle: true
                 insecure: true
                 accessKeyId: ${accessKeyId}
