@@ -323,14 +323,22 @@ spec:
         # A drive that has gone altogether takes its series with it, and with
         # them every alert above. A pool or array member will be missed there;
         # a spare or an unused disk would not be.
+        #
+        # The exporter counts the drives that answered, so one slow answer
+        # lowers the count for one run. During a long self-test, the SAS disks
+        # behind the PERC on linds-proxmox-01 sometimes take more than the
+        # exporter's 30 seconds to answer. On 17 and 18 Oct 2026 this fired
+        # the alert three times, for one run each. Thus the count must stay
+        # low for a full hour, and the count of a day ago is the highest in
+        # its hour.
         - alert: StorageSmartDriveGone
-          expr: storage_smart_devices offset 1d - storage_smart_devices > 0
+          expr: max_over_time(storage_smart_devices[1h] offset 1d) - max_over_time(storage_smart_devices[1h]) > 0
           keep_firing_for: 30m
           labels:
             severity: warning
           annotations:
             summary: "{{ $labels.instance }}: {{ $value }} fewer drives answer SMART than a day ago"
-            description: "`smartctl --scan-open` on {{ $labels.instance }} lists the ones that still do. Expected for a day after a drive is pulled on purpose."
+            description: "`smartctl --scan-open` on {{ $labels.instance }} lists the drives that are still there. A drive that is there but does not answer also fires StorageSmartUnreadable. Expected for a day after a drive is pulled on purpose."
 
     - name: storage-health.raid
       rules:
