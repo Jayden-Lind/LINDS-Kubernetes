@@ -399,6 +399,19 @@ tests:
       - eval_time: 3d
         alertname: StorageSmartDriveGone
 
+  - name: one run that misses drives is not a drive gone
+    interval: 10m
+    input_series:
+      # 17 Oct 2026, 20:30 on linds-proxmox-01: two SAS disks in their long
+      # self-tests did not answer within 30 seconds on one run.
+      - series: 'storage_smart_devices{instance="linds-proxmox-01"}'
+        values: '11x150 9 11x20'
+    alert_rule_test:
+      - eval_time: 1510m
+        alertname: StorageSmartDriveGone
+      - eval_time: 1540m
+        alertname: StorageSmartDriveGone
+
   - name: long self-tests are judged against the host's own limit, and a hot drive has to stay hot
     interval: 1m
     input_series:
