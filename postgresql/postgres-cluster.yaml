@@ -17,8 +17,14 @@ spec:
     wal:
       compression: zstd
       maxParallel: 8
-    data:
-      compression: lz4 # requires plugin >= 0.13; much faster backups than bzip2
+    # No `data.compression`: base backups go up as a plain tar and the bucket's
+    # ZFS dataset (VM/truenas-nas/s3, zstd) compresses them, better than
+    # barman's lz4 did (2026-10-17 backup, 9.84 GB tar: 3.59 GB on disk as a
+    # plain tar, 3.97 GB as the lz4 file). Postgres is pinned to JD, so the
+    # bigger upload only crosses the host bridge, and the LINDS replica is
+    # sent with the blocks still compressed. WALs keep zstd: the same size on
+    # disk either way (1.41 vs 1.45 GB per 200 segments), with 2.4x fewer bytes
+    # per upload. The plugin offers no zstd for base backups.
   retentionPolicy: 7d
 ---
 apiVersion: postgresql.cnpg.io/v1
