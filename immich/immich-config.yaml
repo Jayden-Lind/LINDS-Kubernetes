@@ -46,7 +46,7 @@ data:
           "concurrency": 10
         },
         "metadataExtraction": {
-          "concurrency": 10
+          "concurrency": 2
         },
         "ocr": {
           "concurrency": 5
