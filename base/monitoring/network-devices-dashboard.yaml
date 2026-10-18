@@ -1,0 +1,622 @@
+---
+# Grafana dashboard "Network devices": what each device on the network looks
+# up and connects to (DNS query names, TLS and QUIC SNI, HTTP hosts, alerts).
+# Source: Suricata EVE from jd-router-01 -> rsyslog -> Alloy -> Loki. Panels
+# filter on the structured metadata that Alloy attaches (src_ip, dns_rrname,
+# tls_sni, quic_sni, http_hostname, ...), never `| json` over the stream.
+# Loki allows 2000 series a query, so the name panels work for one device at
+# a time (a busy device has about 1400 names in 7 days; all devices together
+# have about 3600 in one day). Picked up by the Grafana dashboard sidecar.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-devices-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Logs
+data:
+  network-devices.json: |
+    {
+      "uid": "network-devices",
+      "title": "Network devices",
+      "description": "What each device looks up and connects to: DNS, TLS and QUIC names, HTTP hosts and alerts from Suricata on jd-router-01 (WAN traffic and DNS only). Config: LINDS-Ansible roles/router (suricata.yaml), Alloy in applications/monitoring-loki.yaml.",
+      "tags": [
+        "suricata",
+        "network",
+        "logs"
+      ],
+      "timezone": "browser",
+      "editable": true,
+      "graphTooltip": 1,
+      "schemaVersion": 39,
+      "refresh": "1m",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "device",
+            "label": "Device (IP, regex)",
+            "type": "textbox",
+            "query": "",
+            "current": {
+              "text": "",
+              "value": ""
+            },
+            "options": []
+          },
+          {
+            "name": "name",
+            "label": "Name (regex)",
+            "type": "textbox",
+            "query": "",
+            "current": {
+              "text": "",
+              "value": ""
+            },
+            "options": []
+          },
+          {
+            "name": "local",
+            "type": "constant",
+            "hide": 2,
+            "query": "10[.].*|172[.](1[6-9]|2[0-9]|3[01])[.].*|192[.]168[.].*|fe80:.*|f[cd][0-9a-f][0-9a-f]:.*|2001:8003:dc6f:63[0-9a-f][0-9a-f]:.*"
+          }
+        ]
+      },
+      "annotations": {
+        "list": []
+      },
+      "links": [
+        {
+          "title": "Suricata",
+          "type": "link",
+          "url": "/d/suricata-vyos",
+          "icon": "dashboard"
+        }
+      ],
+      "panels": [
+        {
+          "type": "text",
+          "title": "",
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**What each device on the network looks up and connects to.** Click an address in *Devices* to see that device below. Type part of a name in *Name* (for example `tiktok`) to see which devices use it. Source: Suricata on jd-router-01, which sees internet traffic and DNS only: not traffic between two devices on the network. IPv6 devices change address often, so one device can have several rows. *Device* takes an address or a regex, for example `10.0.50.41|10.0.50.72`."
+          }
+        },
+        {
+          "type": "table",
+          "title": "Devices",
+          "description": "Counts per device address in the time range. DNS, TLS, QUIC and HTTP follow the Name filter; alerts are all alerts with the device as source. Click an address to select the device.",
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 3
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | src_ip=~\"$local\" | dns_type=\"query\" | dns_rrname=~\"(?i).*${name}.*\" [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            },
+            {
+              "refId": "B",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"tls\"} | src_ip=~\"$local\" | tls_sni=~\"(?i).*${name}.*\" [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            },
+            {
+              "refId": "C",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"quic\"} | src_ip=~\"$local\" | quic_sni!=\"\" | quic_sni=~\"(?i).*${name}.*\" [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            },
+            {
+              "refId": "D",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"http\"} | src_ip=~\"$local\" | http_hostname=~\"(?i).*${name}.*\" [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            },
+            {
+              "refId": "E",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"alert\"} | src_ip=~\"$local\" [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "src_ip": "device",
+                  "Value #A": "DNS queries",
+                  "Value #B": "TLS",
+                  "Value #C": "QUIC",
+                  "Value #D": "HTTP",
+                  "Value #E": "alerts"
+                }
+              }
+            },
+            {
+              "id": "calculateField",
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "sum"
+                },
+                "alias": "events",
+                "replaceFields": false
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "events",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              },
+              "noValue": "0"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "device"
+                },
+                "properties": [
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "title": "Show this device",
+                        "url": "/d/network-devices/network-devices?var-device=${__value.raw}&${name:queryparam}&${__url_time_range}"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "events"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 140
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "title": "Device: $device",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "panels": []
+        },
+        {
+          "type": "table",
+          "title": "Names",
+          "description": "Names the device looked up (DNS) or connected to (TLS and QUIC SNI, HTTP host). Pick a device: click its address in Devices, or type one in Device.",
+          "gridPos": {
+            "h": 12,
+            "w": 10,
+            "x": 0,
+            "y": 14
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(300, sum by (dst_name, event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!=\"answer\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname }}\" | dst_name!=\"\" | dst_name=~\"(?i).*${name}.*\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "dst_name": "name",
+                  "event_type": "kind",
+                  "Value #A": "count"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "count",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              },
+              "noValue": "Pick a device: click its address in Devices, or type one in Device."
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "count"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "kind"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "title": "Destinations",
+          "description": "Connections from the device: the name it asked for and the address it reached. A row with no name is a TLS connection without SNI. Pick a device: click its address in Devices, or type one in Device.",
+          "gridPos": {
+            "h": 12,
+            "w": 14,
+            "x": 10,
+            "y": 14
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(300, sum by (dst_name, event_type, dest_ip, dest_port) (count_over_time({job=\"suricata\", event_type=~\"tls|quic|http\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | event_type!=\"quic\" or quic_sni!=\"\" | label_format dst_name=\"{{ or .tls_sni .quic_sni .http_hostname }}\" | dst_name=~\"(?i).*${name}.*\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "dst_name": "name",
+                  "event_type": "kind",
+                  "dest_ip": "address",
+                  "dest_port": "port",
+                  "Value #A": "connections"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "connections",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              },
+              "noValue": "Pick a device: click its address in Devices, or type one in Device."
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "connections"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Activity",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 26
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "description": "Events per interval for the device, by kind. Pick a device: click its address in Devices, or type one in Device.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!=\"answer\" | event_type!=\"quic\" or quic_sni!=\"\" [$__interval]))",
+              "queryType": "range",
+              "legendFormat": "{{event_type}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "type": "table",
+          "title": "Alerts",
+          "description": "Suricata alerts with the device as source or destination. Severity 1 is high. The Events panel has the addresses. Pick a device: click its address in Devices, or type one in Device.",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 34
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (alert_signature, alert_severity) (count_over_time({job=\"suricata\", event_type=\"alert\"} | (src_ip!=\"\" and src_ip=~\"^(${device})$\") or (dest_ip!=\"\" and dest_ip=~\"^(${device})$\") [$__range]))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "alert_signature": "signature",
+                  "alert_severity": "severity",
+                  "Value #A": "count"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "count",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              },
+              "noValue": "Pick a device: click its address in Devices, or type one in Device."
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "count"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "severity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "logs",
+          "title": "Events",
+          "gridPos": {
+            "h": 14,
+            "w": 24,
+            "x": 0,
+            "y": 42
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "description": "One line per DNS query, TLS or QUIC client hello, HTTP request and alert of the device. Open a line for all its fields. Pick a device: click its address in Devices, or type one in Device.",
+          "targets": [
+            {
+              "refId": "A",
+              "queryType": "range",
+              "maxLines": 2000,
+              "expr": "{job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | (src_ip!=\"\" and src_ip=~\"^(${device})$\") or (dest_ip!=\"\" and dest_ip=~\"^(${device})$\") | dns_type!=\"answer\" | event_type!=\"quic\" or quic_sni!=\"\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname .alert_signature }}\" | dst_name=~\"(?i).*${name}.*\" | line_format \"{{ .event_type }}  {{ .dst_name }}  ({{ .dest_ip }}:{{ .dest_port }})\""
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none",
+            "prettifyLogMessage": false,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "enableInfiniteScrolling": true
+          }
+        }
+      ]
+    }
