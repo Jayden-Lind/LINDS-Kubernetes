@@ -111,7 +111,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | src_ip=~\"$local\" | dns_type=\"query\" | dns_rrname=~\"(?i).*${name}.*\" [$__range]))",
+              "expr": "sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | src_ip=~\"$local\" | dns_type=~\"query|request\" | dns_rrname=~\"(?i).*${name}.*\" [$__range]))",
               "queryType": "instant",
               "format": "table"
             },
@@ -269,7 +269,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "topk(300, sum by (dst_name, event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!=\"answer\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname }}\" | dst_name!=\"\" | dst_name=~\"(?i).*${name}.*\" [$__range])))",
+              "expr": "topk(300, sum by (dst_name, event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!~\"answer|response\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname }}\" | dst_name!=\"\" | dst_name=~\"(?i).*${name}.*\" [$__range])))",
               "queryType": "instant",
               "format": "table"
             }
@@ -457,7 +457,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!=\"answer\" | event_type!=\"quic\" or quic_sni!=\"\" [$__interval]))",
+              "expr": "sum by (event_type) (count_over_time({job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | src_ip!=\"\" | src_ip=~\"^(${device})$\" | dns_type!~\"answer|response\" | event_type!=\"quic\" or quic_sni!=\"\" [$__interval]))",
               "queryType": "range",
               "legendFormat": "{{event_type}}"
             }
@@ -603,7 +603,7 @@ data:
               "refId": "A",
               "queryType": "range",
               "maxLines": 2000,
-              "expr": "{job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | (src_ip!=\"\" and src_ip=~\"^(${device})$\") or (dest_ip!=\"\" and dest_ip=~\"^(${device})$\") | dns_type!=\"answer\" | event_type!=\"quic\" or quic_sni!=\"\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname .alert_signature }}\" | dst_name=~\"(?i).*${name}.*\" | line_format \"{{ .event_type }}  {{ .dst_name }}  ({{ .dest_ip }}:{{ .dest_port }})\""
+              "expr": "{job=\"suricata\", event_type=~\"dns|tls|quic|http|alert\"} | (src_ip!=\"\" and src_ip=~\"^(${device})$\") or (dest_ip!=\"\" and dest_ip=~\"^(${device})$\") | dns_type!~\"answer|response\" | event_type!=\"quic\" or quic_sni!=\"\" | label_format dst_name=\"{{ or .dns_rrname .tls_sni .quic_sni .http_hostname .alert_signature }}\" | dst_name=~\"(?i).*${name}.*\" | line_format \"{{ .event_type }}  {{ .dst_name }}  ({{ .dest_ip }}:{{ .dest_port }})\""
             }
           ],
           "options": {

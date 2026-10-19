@@ -204,7 +204,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"query\" [$__range]))",
+              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=~\"query|request\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -802,7 +802,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "topk(20, sum by (dns_rrname) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"query\" [$__range])))",
+              "expr": "topk(20, sum by (dns_rrname) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=~\"query|request\" [$__range])))",
               "queryType": "instant",
               "format": "table"
             }
@@ -886,7 +886,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "topk(15, sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"query\" [$__range])))",
+              "expr": "topk(15, sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=~\"query|request\" [$__range])))",
               "queryType": "instant",
               "format": "table"
             }
