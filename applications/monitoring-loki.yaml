@@ -484,7 +484,10 @@ spec:
                         proto              = "proto",
                         app_proto          = "app_proto",
                         dns_type           = "dns.type",
-                        dns_rrname         = "dns.rrname",
+                        // Suricata DNS log v2 has the name in dns.rrname, v3 in
+                        // dns.queries[0].rrname; dns_type is query/answer (v2)
+                        // or request/response (v3). The dashboards accept both.
+                        dns_rrname         = "dns.rrname || dns.queries[0].rrname",
                         tls_sni            = "tls.sni",
                         quic_sni           = "quic.sni",
                         http_hostname      = "http.hostname",
