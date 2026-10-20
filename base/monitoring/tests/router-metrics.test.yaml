@@ -13,6 +13,251 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  # --- Reporting ---------------------------------------------------------------
+  - name: node-exporter without the router metrics fires after 10 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="router-node", instance="jd-router-01"}'
+        values: '1x30'
+      # Written for the first 5 minutes, then the file is gone.
+      - series: 'router_failed_units{job="router-node", instance="jd-router-01"}'
+        values: '0x5 stale'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RouterMetricsMissing
+      - eval_time: 14m
+        alertname: RouterMetricsMissing
+      - eval_time: 18m
+        alertname: RouterMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: node-exporter answers but serves no router_* metrics"
+
+  - name: a file that is no longer written fires once it is 5 minutes old for 5 minutes
+    interval: 1m
+    input_series:
+      # mtime follows the clock for 5 minutes, then stays at 300 s.
+      - series: 'node_textfile_mtime_seconds{job="router-node", instance="jd-router-01", file="/var/lib/prometheus/node-exporter/router.prom"}'
+        values: '0+60x5 300x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RouterMetricsStale
+      - eval_time: 17m
+        alertname: RouterMetricsStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              file: /var/lib/prometheus/node-exporter/router.prom
+            exp_annotations:
+              summary: "jd-router-01: router metrics are 12m 0s old"
+
+  # --- WAN ---------------------------------------------------------------------
+  - name: a one-minute failover does not fire; ten minutes on the backup does
+    interval: 1m
+    input_series:
+      # The backup for one minute at 5m, then from 21m on.
+      - series: 'router_wan_active{job="router-node", instance="jd-router-01", wan="backup", dev="lan0.99"}'
+        values: '0x4 1 0x14 1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RouterOnBackupWAN
+      - eval_time: 25m
+        alertname: RouterOnBackupWAN
+      - eval_time: 32m
+        alertname: RouterOnBackupWAN
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              wan: backup
+              dev: lan0.99
+            exp_annotations:
+              summary: "jd-router-01: on the backup WAN (lan0.99) for 10 minutes or more"
+
+  - name: a backup WAN that fails its checks for 15 minutes fires
+    interval: 1m
+    input_series:
+      - series: 'router_wan_healthy{job="router-node", instance="jd-router-01", wan="backup", dev="lan0.99"}'
+        values: '1x10 0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RouterBackupWANDown
+      - eval_time: 27m
+        alertname: RouterBackupWANDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              wan: backup
+              dev: lan0.99
+            exp_annotations:
+              summary: "jd-router-01: the backup WAN (lan0.99) fails its health checks"
+
+  # --- VPN ---------------------------------------------------------------------
+  - name: a two-minute tunnel gap (a reboot) does not fire; five minutes down does
+    interval: 1m
+    input_series:
+      - series: 'router_ipsec_up{job="router-node", instance="jd-router-01", conn="LINDS"}'
+        values: '1x4 0 0 1x13 0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RouterTunnelDown
+      - eval_time: 27m
+        alertname: RouterTunnelDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              conn: LINDS
+            exp_annotations:
+              summary: "jd-router-01: IPsec tunnel LINDS down for 5 minutes"
+
+  - name: a cluster peer that FRR forgot fires; the static peer is quiet while the tunnel is down
+    interval: 1m
+    input_series:
+      - series: 'router_bgp_peer_up{job="router-node", instance="jd-router-01", peer="10.0.53.200", kind="cluster"}'
+        values: '1x40'
+      # The session ends at 11m and FRR deletes the dynamic peer: no samples.
+      - series: 'router_bgp_peer_up{job="router-node", instance="jd-router-01", peer="10.0.53.201", kind="cluster"}'
+        values: '1x10 stale'
+      # The tunnel and the session over it both go down at 5m.
+      - series: 'router_bgp_peer_up{job="router-node", instance="jd-router-01", peer="10.255.0.2", kind="static"}'
+        values: '1x4 0x35'
+      - series: 'router_ipsec_up{job="router-node", instance="jd-router-01", conn="LINDS"}'
+        values: '1x4 0x35'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: RouterBGPPeerDown
+      - eval_time: 25m
+        alertname: RouterBGPPeerDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              peer: 10.0.53.201
+              kind: cluster
+            exp_annotations:
+              summary: "jd-router-01: BGP peer 10.0.53.201 (cluster) down for 10 minutes"
+
+  - name: the static peer down while the tunnel is up fires
+    interval: 1m
+    input_series:
+      - series: 'router_bgp_peer_up{job="router-node", instance="jd-router-01", peer="10.255.0.2", kind="static"}'
+        values: '1x4 0x30'
+      - series: 'router_ipsec_up{job="router-node", instance="jd-router-01", conn="LINDS"}'
+        values: '1x35'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RouterBGPPeerDown
+      - eval_time: 17m
+        alertname: RouterBGPPeerDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              peer: 10.255.0.2
+              kind: static
+            exp_annotations:
+              summary: "jd-router-01: BGP peer 10.255.0.2 (static) down for 10 minutes"
+
+  - name: a WireGuard peer that stops answering fires after 15 minutes; never (-1) does not
+    interval: 1m
+    input_series:
+      # Renewed every two minutes; the last handshake is at 9m.
+      - series: 'router_wireguard_handshake_age_seconds{job="router-node", instance="jd-router-01", iface="wg10"}'
+        values: '0 60 120 0 60 120 0 60 120 0 60+60x20'
+      - series: 'router_wireguard_handshake_age_seconds{job="router-node", instance="jd-router-01", iface="wg101"}'
+        values: '-1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RouterWireGuardStale
+      - eval_time: 26m
+        alertname: RouterWireGuardStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              iface: wg10
+            exp_annotations:
+              summary: "jd-router-01: no WireGuard handshake on wg10 for 17m 0s"
+
+  # --- LAN ---------------------------------------------------------------------
+  - name: a DHCP pool over 90% for 15 minutes fires; one at 50% does not
+    interval: 1m
+    input_series:
+      - series: 'router_dhcp_addresses_assigned{job="router-node", instance="jd-router-01", subnet="10.0.52.0/24", interface="lan0.52"}'
+        values: '100x5 190x30'
+      - series: 'router_dhcp_addresses_total{job="router-node", instance="jd-router-01", subnet="10.0.52.0/24", interface="lan0.52"}'
+        values: '198x35'
+      - series: 'router_dhcp_addresses_assigned{job="router-node", instance="jd-router-01", subnet="10.0.50.0/24", interface="lan0"}'
+        values: '99x35'
+      - series: 'router_dhcp_addresses_total{job="router-node", instance="jd-router-01", subnet="10.0.50.0/24", interface="lan0"}'
+        values: '198x35'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: RouterDHCPPoolNearlyFull
+      - eval_time: 23m
+        alertname: RouterDHCPPoolNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              subnet: 10.0.52.0/24
+              interface: lan0.52
+            exp_annotations:
+              summary: "jd-router-01: DHCP pool 10.0.52.0/24 (lan0.52) is 95.96% used"
+
+  - name: conntrack over 80% of the limit for 5 minutes fires
+    interval: 1m
+    input_series:
+      - series: 'node_nf_conntrack_entries{job="router-node", instance="jd-router-01"}'
+        values: '2960x5 450000x20'
+      - series: 'node_nf_conntrack_entries_limit{job="router-node", instance="jd-router-01"}'
+        values: '524288x25'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: RouterConntrackNearlyFull
+      - eval_time: 13m
+        alertname: RouterConntrackNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: conntrack table 85.83% full"
+
+  - name: failed units for 5 minutes fire
+    interval: 1m
+    input_series:
+      - series: 'router_failed_units{job="router-node", instance="jd-router-01"}'
+        values: '0x5 2x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: RouterServiceFailed
+      - eval_time: 13m
+        alertname: RouterServiceFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: failed systemd units: 2"
+
   # --- DNS ---------------------------------------------------------------------
   - name: SERVFAIL at 10% of a busy recursor fires; 2% does not
     interval: 1m

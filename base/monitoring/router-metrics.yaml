@@ -1,18 +1,77 @@
 # What the routers report to Prometheus, and the alerts on it.
 #
 # The routers are not in the cluster; their configuration is LINDS-Ansible,
-# roles/router. Two sources:
-# - PowerDNS Recursor serves /metrics on the cluster network (10.0.53.1:8082
-#   at JD; recursor.yml `webservice`, nftables input rule 16). Scraped here.
+# roles/router (README, Troubleshooting). Everything below listens on the
+# cluster network only (10.0.53.1 at JD; nftables input rule 16):
+# - node-exporter, :9100. With the router_* metrics that `router metrics`
+#   writes every 30 s (router-metrics.timer): which WAN is active, the
+#   tunnels, BGP, DHCP pools, failed units.
+# - The FRR exporter, :9342 (BGP sessions and prefixes).
+# - The smokeping prober, :9374: one ping a second to 1.1.1.1, 9.9.9.9, their
+#   IPv6 addresses and the other site's router over the tunnel.
+# - PowerDNS Recursor, :8082 (recursor.yml `webservice`).
 # - Suricata's EVE log reaches Loki through Alloy (applications/
 #   monitoring-loki.yaml), which also counts it into Prometheus counters:
 #   loki_process_custom_suricata_eve_lines_total (every line) and
 #   loki_process_custom_suricata_kernel_drops_total (from the stats event
 #   Suricata writes every minute). Alloy's own ServiceMonitor scrapes them.
-# They go to Discord by the default route in alertmanager-config.yaml.
+# The Router dashboard (router-dashboard.yaml) shows all of it. The alerts go
+# to Discord by the default route in alertmanager-config.yaml. The general
+# node alerts in alerts.yaml (memory, disk, CPU) apply to the router too,
+# through its node-exporter.
 #
-# linds-router-01 is not here yet: add its target (10.3.1.1:8082) after the
-# cutover, or PrometheusTargetDown fires for it.
+# linds-router-01 is not here yet: add its targets (10.3.1.1, same ports)
+# after the cutover, or PrometheusTargetDown fires for them.
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: router-node
+  namespace: monitoring
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: router-node
+  # About 740 series: the router turns off the collectors that nothing here
+  # uses (LINDS-Ansible, files/jd/etc/default/prometheus-node-exporter).
+  staticConfigs:
+    # instance is set so that alerts name the router, not an address.
+    - targets: ["10.0.53.1:9100"]
+      labels:
+        instance: jd-router-01
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: router-frr
+  namespace: monitoring
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: router-frr
+  staticConfigs:
+    # instance is set so that alerts name the router, not an address.
+    - targets: ["10.0.53.1:9342"]
+      labels:
+        instance: jd-router-01
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: router-smokeping
+  namespace: monitoring
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: router-smokeping
+  staticConfigs:
+    # instance is set so that alerts name the router, not an address.
+    - targets: ["10.0.53.1:9374"]
+      labels:
+        instance: jd-router-01
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
@@ -42,7 +101,152 @@ spec:
     # A router that does not answer the scrape at all is PrometheusTargetDown
     # (alerts.yaml). keep_firing_for covers single failed scrapes, which mark
     # every series stale for one evaluation. The summary is the only
-    # annotation Discord shows; the description says what to do.
+    # annotation Discord shows; the description says what to do. Where a
+    # condition has to last, the WAN and tunnel rules say so with a range
+    # (min_over_time and the like), which a single failed scrape does not
+    # interrupt; the others use "for", which it resets. The router is on the
+    # cluster's own site, so its scrapes seldom fail.
+    - name: router.reporting
+      rules:
+        # node-exporter answers, but without the router_* metrics: the file
+        # is missing or does not parse. The router_* rules below cannot fire
+        # while this is so.
+        - alert: RouterMetricsMissing
+          expr: up{job="router-node"} == 1 unless on (instance) router_failed_units
+          for: 10m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: node-exporter answers but serves no router_* metrics"
+            description: "`router metrics` does not write /var/lib/prometheus/node-exporter/router.prom, or node-exporter cannot parse it (node_textfile_scrape_error). On {{ $labels.instance }}: `systemctl status router-metrics.timer router-metrics.service`, then run `router metrics` by hand."
+
+        # The timer writes the file every 30 s; node-exporter goes on serving
+        # the last one for as long as it is there.
+        - alert: RouterMetricsStale
+          expr: time() - node_textfile_mtime_seconds{job="router-node", file="/var/lib/prometheus/node-exporter/router.prom"} > 300
+          for: 5m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: router metrics are {{ $value | humanizeDuration }} old"
+            description: "router-metrics.timer stopped writing router.prom, so the WAN, tunnel, BGP and DHCP alerts judge old data. On {{ $labels.instance }}: `systemctl status router-metrics.timer` and `journalctl -u router-metrics.service`."
+
+    - name: router.wan
+      rules:
+        # Short failovers are normal: the line drops for a few seconds many
+        # times a day, and wan-failover moves to the cellular modem and back
+        # (49 s and 33 s on 2026-10-20). Ten minutes on the backup is not one
+        # of those.
+        - alert: RouterOnBackupWAN
+          expr: min_over_time(router_wan_active{wan="backup"}[10m]) == 1
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: on the backup WAN ({{ $labels.dev }}) for 10 minutes or more"
+            description: "The primary WAN fails wan-failover's health checks. On {{ $labels.instance }}: `router wan` (the lease and the failover events) and `router logs wan`. The Router dashboard shows when the latency and loss changed."
+
+        # The backup cannot take over: wan-failover has taken its default
+        # route away because its health checks fail (the modem is off, or the
+        # SIM has no service).
+        - alert: RouterBackupWANDown
+          expr: max_over_time(router_wan_healthy{wan="backup"}[15m]) == 0
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the backup WAN ({{ $labels.dev }}) fails its health checks"
+            description: "If the primary WAN fails now, the site has no internet. On {{ $labels.instance }}: `router wan` and `router logs wan`; then the cellular modem itself (192.168.0.0/24 on {{ $labels.dev }})."
+
+    - name: router.vpn
+      rules:
+        # After a reboot the tunnel is back in about a minute (strongSwan
+        # xfrm_acq_expires 60, README); five minutes down is not that.
+        - alert: RouterTunnelDown
+          expr: max_over_time(router_ipsec_up[5m]) == 0
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: IPsec tunnel {{ $labels.conn }} down for 5 minutes"
+            description: "No installed CHILD_SA for {{ $labels.conn }}, so the other site and its cluster nodes cannot be reached. On {{ $labels.instance }}: `router vpn` and `router logs vpn`. To dial at once: `swanctl --initiate --child {{ $labels.conn }}`."
+
+        # A cluster peer is a Talos node (Cilium). The router accepts them
+        # from a listen range, and FRR forgets such a peer when its session
+        # ends, so the series ends too instead of going to 0. For those,
+        # "down" is a peer that was up in the last day and is not up now: a
+        # node that is gone for good stops this alert a day later. A node
+        # that reboots drops its session for a few minutes, and NodeNotReady
+        # reports the node itself.
+        # The static peer is the other site's router, over the tunnel: while
+        # the tunnel is down, RouterTunnelDown is the alert.
+        - alert: RouterBGPPeerDown
+          expr: |
+            (
+              max_over_time(router_bgp_peer_up{kind="cluster"}[1d]) == 1
+              unless on (instance, peer) router_bgp_peer_up == 1
+            )
+            or (
+              router_bgp_peer_up{kind="static"} == 0
+              unless on (instance) router_ipsec_up == 0
+            )
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: BGP peer {{ $labels.peer }} ({{ $labels.kind }}) down for 10 minutes"
+            description: "On {{ $labels.instance }}: `router bgp`. A cluster peer is a Talos node: is the node Ready, and is its cilium pod running? The static peer is the other site's router: `router vpn` first."
+
+        # Both WireGuard tunnels send a keepalive every 25 s, so a peer that
+        # answers renews the handshake every two minutes. wg10 is VLAN 58's
+        # way out (NordVPN US). -1 means no handshake ever: wg101 (VLAN 51,
+        # no hosts) has had none.
+        - alert: RouterWireGuardStale
+          expr: router_wireguard_handshake_age_seconds > 900
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: no WireGuard handshake on {{ $labels.iface }} for {{ $value | humanizeDuration }}"
+            description: "The peer does not answer, so the networks routed through {{ $labels.iface }} have no way out. NordVPN changes the keys of its servers (2026-10-17): compare the peer's public key in `wg show {{ $labels.iface }}` with NordVPN's server list. `router vpn` on {{ $labels.instance }}."
+
+    - name: router.lan
+      rules:
+        - alert: RouterDHCPPoolNearlyFull
+          expr: router_dhcp_addresses_assigned / router_dhcp_addresses_total > 0.9
+          for: 15m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: DHCP pool {{ $labels.subnet }} ({{ $labels.interface }}) is {{ $value | humanizePercentage }} used"
+            description: "When the pool is full, new devices on {{ $labels.interface }} get no address. `router leases` on {{ $labels.instance }} lists the leases; Kea releases those of devices that left when their lease time ends."
+
+        # At the limit the kernel drops the first packet of each new
+        # connection.
+        - alert: RouterConntrackNearlyFull
+          expr: node_nf_conntrack_entries{job="router-node"} / node_nf_conntrack_entries_limit{job="router-node"} > 0.8
+          for: 5m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: conntrack table {{ $value | humanizePercentage }} full"
+            description: "On {{ $labels.instance }}: `router` shows the count, and `conntrack -L | grep -o 'src=[^ ]*' | sort | uniq -c | sort -rn | head` the addresses with the most connections."
+
+        - alert: RouterServiceFailed
+          expr: router_failed_units > 0
+          for: 5m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: failed systemd units: {{ $value }}"
+            description: "On {{ $labels.instance }}: `systemctl --failed`, then `journalctl -b -u UNIT`. `router` lists them too. After a fix, `systemctl reset-failed UNIT` clears the alert."
+
     - name: router.dns
       rules:
         # The recursor checks Quad9's certificate on DNS over TLS: if that
