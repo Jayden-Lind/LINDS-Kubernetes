@@ -1,0 +1,93 @@
+# What the routers report to Prometheus, and the alerts on it.
+#
+# The routers are not in the cluster; their configuration is LINDS-Ansible,
+# roles/router. Two sources:
+# - PowerDNS Recursor serves /metrics on the cluster network (10.0.53.1:8082
+#   at JD; recursor.yml `webservice`, nftables input rule 16). Scraped here.
+# - Suricata's EVE log reaches Loki through Alloy (applications/
+#   monitoring-loki.yaml), which also counts it into Prometheus counters:
+#   loki_process_custom_suricata_eve_lines_total (every line) and
+#   loki_process_custom_suricata_kernel_drops_total (from the stats event
+#   Suricata writes every minute). Alloy's own ServiceMonitor scrapes them.
+# They go to Discord by the default route in alertmanager-config.yaml.
+#
+# linds-router-01 is not here yet: add its target (10.3.1.1:8082) after the
+# cutover, or PrometheusTargetDown fires for it.
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: router-recursor
+  namespace: monitoring
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: router-recursor
+  staticConfigs:
+    # instance is set so that alerts name the router, not an address.
+    - targets: ["10.0.53.1:8082"]
+      labels:
+        instance: jd-router-01
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: router-metrics
+  namespace: monitoring
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  groups:
+    # A router that does not answer the scrape at all is PrometheusTargetDown
+    # (alerts.yaml). keep_firing_for covers single failed scrapes, which mark
+    # every series stale for one evaluation. The summary is the only
+    # annotation Discord shows; the description says what to do.
+    - name: router.dns
+      rules:
+        # The recursor checks Quad9's certificate on DNS over TLS: if that
+        # check fails, every name that is not in the cache gets SERVFAIL. The
+        # second condition (at least one question every 20 s) keeps a quiet
+        # hour with a few failed lookups from firing.
+        - alert: RouterDNSServfailHigh
+          expr: |
+            sum by (instance) (rate(pdns_recursor_servfail_answers{job="router-recursor"}[10m]))
+              / sum by (instance) (rate(pdns_recursor_questions{job="router-recursor"}[10m])) > 0.05
+            and sum by (instance) (rate(pdns_recursor_questions{job="router-recursor"}[10m])) > 0.05
+          for: 10m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $value | humanizePercentage }} of DNS answers are SERVFAIL"
+            description: "Look for TLS or certificate errors in `journalctl -u pdns-recursor` on {{ $labels.instance }}: a failed certificate check on Quad9's DoT makes every uncached name fail. Then check that Quad9 (9.9.9.9:853) and the DCs answer from the router."
+
+    - name: router.suricata
+      rules:
+        # The network never goes quiet enough for 15 minutes without a DNS or
+        # TLS event, so no line at all means Suricata or the relay stopped.
+        # The second part covers a router whose series has gone after 24 h
+        # without a line (the counter's max_idle_duration in Alloy).
+        - alert: RouterSuricataNoLogs
+          expr: |
+            sum by (hostname) (increase(loki_process_custom_suricata_eve_lines_total[15m])) == 0
+            or absent_over_time(loki_process_custom_suricata_eve_lines_total{hostname="jd-router-01"}[1h])
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }}: no Suricata EVE lines in Loki for 15 minutes"
+            description: "Suricata stopped, or the relay to Loki did. On the router: `systemctl status suricata rsyslog`, then `ss -tn state established '( dport = :1515 )'` (two sessions to Alloy) and `/var/spool/rsyslog/imfile-state:*` (an offset just below the size of eve.json)."
+
+        # Packets the kernel dropped because Suricata did not read them in
+        # time (the af-packet ring was full): traffic the IDS never saw.
+        # Zero for days at a time since the capture filter went in
+        # (2026-10-18); 1000 in 15 minutes is well clear of a start-up blip.
+        - alert: RouterSuricataCaptureDrops
+          expr: sum by (hostname) (increase(loki_process_custom_suricata_kernel_drops_total[15m])) > 1000
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }}: Suricata missed {{ $value | humanize }} packets in 15 minutes"
+            description: "The kernel dropped packets before Suricata read them. On the router: the worker's CPU (`top -H -p $(pidof Suricata-Main)`), `suricatasc -c dump-counters` (capture.kernel_drops), and whether the capture filter still leaves out internal traffic (README, Suricata inspects WAN traffic and DNS only)."

@@ -7,6 +7,7 @@ resources:
   - monitoring/external-secret.yaml
   - monitoring/pushgateway.yaml
   - monitoring/proxmox-storage-health.yaml
+  - monitoring/router-metrics.yaml
   - monitoring/suricata-dashboard.yaml
   - monitoring/network-devices-dashboard.yaml
   - monitoring/logs-kubernetes-dashboard.yaml
