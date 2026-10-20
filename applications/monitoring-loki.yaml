@@ -492,11 +492,36 @@ spec:
                         http_hostname      = "http.hostname",
                         http_method        = "http.method",
                         http_status        = "http.status",
+                        // The stats event (once a minute): packets the kernel
+                        // dropped since the last one. Absent when zero.
+                        suricata_kernel_drops_delta = "stats.capture.kernel_drops_delta",
                       }
                     }
                     stage.labels {
                       values = {
                         event_type = "",
+                      }
+                    }
+                    // Prometheus counters for the router alerts in
+                    // base/monitoring/router-metrics.yaml (exposed by this Alloy
+                    // as loki_process_custom_*, scraped by its ServiceMonitor):
+                    // every EVE line, and the capture drops. 24 h idle time, so a
+                    // router that goes quiet keeps its series and shows a zero
+                    // rate instead of vanishing.
+                    stage.metrics {
+                      metric.counter {
+                        name              = "suricata_eve_lines_total"
+                        description       = "Suricata EVE lines received, any event type."
+                        match_all         = true
+                        action            = "inc"
+                        max_idle_duration = "24h"
+                      }
+                      metric.counter {
+                        name              = "suricata_kernel_drops_total"
+                        description       = "Packets the kernel dropped before Suricata saw them (sum of capture.kernel_drops_delta)."
+                        source            = "suricata_kernel_drops_delta"
+                        action            = "add"
+                        max_idle_duration = "24h"
                       }
                     }
                     stage.structured_metadata {

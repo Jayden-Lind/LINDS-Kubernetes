@@ -1,0 +1,107 @@
+# promtool unit tests for ../router-metrics.yaml. Not a manifest, and not in
+# the kustomization.
+#
+#   yq 'select(.kind == "PrometheusRule") | .spec | del(.groups[].rules[].annotations.description)' \
+#     base/monitoring/router-metrics.yaml > /tmp/router-metrics.rules.yaml
+#   promtool check rules /tmp/router-metrics.rules.yaml
+#   promtool test rules base/monitoring/tests/router-metrics.test.yaml
+#
+# Time starts at zero in each test, so timestamps below are small numbers.
+rule_files:
+  - /tmp/router-metrics.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- DNS ---------------------------------------------------------------------
+  - name: SERVFAIL at 10% of a busy recursor fires; 2% does not
+    interval: 1m
+    input_series:
+      - series: 'pdns_recursor_questions{job="router-recursor", instance="jd-router-01"}'
+        values: '0+100x60'
+      - series: 'pdns_recursor_servfail_answers{job="router-recursor", instance="jd-router-01"}'
+        values: '0+10x60'
+      - series: 'pdns_recursor_questions{job="router-recursor", instance="other"}'
+        values: '0+100x60'
+      - series: 'pdns_recursor_servfail_answers{job="router-recursor", instance="other"}'
+        values: '0+2x60'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: RouterDNSServfailHigh
+      - eval_time: 30m
+        alertname: RouterDNSServfailHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: 10% of DNS answers are SERVFAIL"
+
+  - name: a quiet recursor whose few answers all fail does not fire
+    interval: 1m
+    input_series:
+      # One question every 5 minutes, every one SERVFAIL.
+      - series: 'pdns_recursor_questions{job="router-recursor", instance="jd-router-01"}'
+        values: '0 0 0 0 0 1 1 1 1 1 2 2 2 2 2 3 3 3 3 3 4 4 4 4 4 5 5 5 5 5 6 6 6 6 6 7'
+      - series: 'pdns_recursor_servfail_answers{job="router-recursor", instance="jd-router-01"}'
+        values: '0 0 0 0 0 1 1 1 1 1 2 2 2 2 2 3 3 3 3 3 4 4 4 4 4 5 5 5 5 5 6 6 6 6 6 7'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: RouterDNSServfailHigh
+
+  # --- Suricata ----------------------------------------------------------------
+  - name: EVE lines stop and the alert fires once 15 minutes have nothing
+    interval: 1m
+    input_series:
+      # 50 lines a minute for 20 minutes, then none (the series stays: Alloy
+      # keeps it for 24 h).
+      - series: 'loki_process_custom_suricata_eve_lines_total{hostname="jd-router-01", job="integrations/alloy"}'
+        values: '0+50x20 1000x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RouterSuricataNoLogs
+      - eval_time: 30m
+        alertname: RouterSuricataNoLogs
+      - eval_time: 37m
+        alertname: RouterSuricataNoLogs
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              hostname: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: no Suricata EVE lines in Loki for 15 minutes"
+
+  - name: a series that has gone (Alloy restarted, or 24 h idle) fires an hour after its last sample
+    interval: 1m
+    input_series:
+      - series: 'loki_process_custom_suricata_eve_lines_total{hostname="jd-router-01", job="integrations/alloy"}'
+        values: '0+50x20 _x80'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: RouterSuricataNoLogs
+      - eval_time: 85m
+        alertname: RouterSuricataNoLogs
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              hostname: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: no Suricata EVE lines in Loki for 15 minutes"
+
+  - name: capture drops over 1000 in 15 minutes fire, a small blip does not
+    interval: 1m
+    input_series:
+      - series: 'loki_process_custom_suricata_kernel_drops_total{hostname="jd-router-01", job="integrations/alloy"}'
+        values: '0x10 300x20 5000x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RouterSuricataCaptureDrops
+      # The jump is 4700; increase() extrapolates to the edges of the window.
+      - eval_time: 33m
+        alertname: RouterSuricataCaptureDrops
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              hostname: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: Suricata missed 5k packets in 15 minutes"
