@@ -1,5 +1,5 @@
-# The world volume, mounted at /config (world, admin/banned/permitted lists,
-# backups).
+# The world volume, mounted at /config (world and admin/banned/permitted
+# lists).
 #
 # The name is a leftover: it was created to be adopted by the old chart's
 # volumeClaimTemplate, which derived it as saves-directory-<statefulset>-
@@ -31,8 +31,8 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      # Grown online from 5Gi on 2026-09-28, at 81% full. Most of it is the
-      # image's hourly world zips (BACKUPS_CRON, kept BACKUPS_MAX_AGE=7 days in
-      # statefulset.yaml): ~170 of them at ~26 MB, each growing with the world.
+      # Grown online from 5Gi on 2026-09-28, at 81% full, when most of it was
+      # the image's hourly world zips. Those are off since 2026-10-21 (BACKUPS
+      # in statefulset.yaml), so the world (~0.5 GB) alone uses this now.
       # A claim can only grow - the API rejects a smaller request.
       storage: 10Gi
