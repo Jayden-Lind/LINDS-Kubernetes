@@ -175,7 +175,7 @@ spec:
             # Listed in the Steam server browser and the in-game Community
             # list. Also load-bearing for the idle gates further down - see
             # CROSSPLAY - so flipping it to false would quietly change how
-            # UPDATE_IF_IDLE/RESTART_IF_IDLE/BACKUPS_IF_IDLE decide.
+            # UPDATE_IF_IDLE/RESTART_IF_IDLE decide.
             - name: SERVER_PUBLIC
               value: "true"
             # Steam matchmaking rather than PlayFab, since 2026-09-13. Every
@@ -192,8 +192,8 @@ spec:
             #     answers 0 players, so the image's server_is_idle() falls
             #     back to counting inbound UDP datagrams and calls >30 in a 3s
             #     window busy - mDNS and stray internet scans included. Every
-            #     UPDATE_IF_IDLE, RESTART_IF_IDLE and BACKUPS_IF_IDLE decision
-            #     hung off that heuristic. Non-crossplay with SERVER_PUBLIC
+            #     UPDATE_IF_IDLE and RESTART_IF_IDLE decision hung off that
+            #     heuristic. Non-crossplay with SERVER_PUBLIC
             #     true queries the real player count on the query port.
             #
             # In exchange the LB is now the only way in, so UDP 2456-2457 have
@@ -246,17 +246,13 @@ spec:
               value: "0 5 * * *"
             - name: RESTART_IF_IDLE
               value: "true"
-            # Replaces the chart's -backups/-backupshort/-backuplong flags.
-            # Hourly, zipped, 7 days kept, on the config volume - on top of
-            # the zvol's sanoid dailies.
+            # No world zips. The zvol's sanoid dailies (14 kept, see
+            # valheim/pvc.yaml) are the retention. The image's hourly zips
+            # sat on the same volume, so they did not survive anything the
+            # snapshots do not, and by 2026-10-21 they filled it: 108 zips,
+            # 8.9 GB of a 9.8 GB filesystem, against a 494 MB world.
             - name: BACKUPS
-              value: "true"
-            - name: BACKUPS_CRON
-              value: "5 * * * *"
-            - name: BACKUPS_MAX_AGE
-              value: "7"
-            - name: BACKUPS_MAX_COUNT
-              value: "0"
+              value: "false"
           ports:
             - name: server
               containerPort: 2456
@@ -295,7 +291,7 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
-            # World, admin/banned/permitted lists and backups.
+            # World and admin/banned/permitted lists.
             - name: config
               mountPath: /config
             # The SteamCMD-downloaded server (~2GB). Separate volume so a
