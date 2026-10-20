@@ -122,7 +122,7 @@ data:
           "gridPos": {
             "x": 0,
             "y": 0,
-            "w": 4,
+            "w": 3,
             "h": 4
           },
           "fieldConfig": {
@@ -174,6 +174,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -200,7 +203,7 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 4,
+            "x": 3,
             "y": 0,
             "w": 3,
             "h": 4
@@ -254,6 +257,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -280,7 +286,7 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 7,
+            "x": 6,
             "y": 0,
             "w": 3,
             "h": 4
@@ -334,6 +340,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -360,7 +369,7 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 10,
+            "x": 9,
             "y": 0,
             "w": 3,
             "h": 4
@@ -414,6 +423,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -440,7 +452,7 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 13,
+            "x": 12,
             "y": 0,
             "w": 3,
             "h": 4
@@ -493,6 +505,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -519,9 +534,9 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 16,
+            "x": 15,
             "y": 0,
-            "w": 3,
+            "w": 4,
             "h": 4
           },
           "fieldConfig": {
@@ -576,6 +591,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -604,7 +622,7 @@ data:
           "gridPos": {
             "x": 19,
             "y": 0,
-            "w": 2,
+            "w": 3,
             "h": 4
           },
           "fieldConfig": {
@@ -655,6 +673,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -681,9 +702,9 @@ data:
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 21,
+            "x": 22,
             "y": 0,
-            "w": 3,
+            "w": 2,
             "h": 4
           },
           "fieldConfig": {
@@ -719,6 +740,9 @@ data:
             "textMode": "auto",
             "orientation": "auto",
             "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
             "showPercentChange": false
           },
           "targets": [
@@ -978,6 +1002,7 @@ data:
                 "axisPlacement": "auto",
                 "axisLabel": "",
                 "axisBorderShow": false,
+                "axisSoftMax": 0.05,
                 "axisCenteredZero": false,
                 "barAlignment": 0,
                 "stacking": {
@@ -1350,7 +1375,8 @@ data:
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "thresholds"
+                "mode": "fixed",
+                "fixedColor": "text"
               },
               "mappings": [
                 {
@@ -1501,7 +1527,8 @@ data:
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "thresholds"
+                "mode": "fixed",
+                "fixedColor": "text"
               },
               "mappings": [
                 {
@@ -1877,7 +1904,8 @@ data:
                     "value": null
                   }
                 ]
-              }
+              },
+              "min": 0
             },
             "overrides": []
           },
@@ -3547,6 +3575,7 @@ data:
                 "axisPlacement": "auto",
                 "axisLabel": "",
                 "axisBorderShow": false,
+                "axisSoftMax": 10,
                 "axisCenteredZero": false,
                 "barAlignment": 0,
                 "stacking": {
