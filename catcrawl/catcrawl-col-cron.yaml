@@ -4,7 +4,25 @@ metadata:
   name: catcrawl-col-scheduler
   namespace: default
 spec:
-  schedule: "0 2 * * 3"            # Wednesdays at 02:00
+  # Wednesdays at 05:00 UTC: 16:00 in Sydney in summer, 15:00 in winter.
+  #
+  # It was 02:00 UTC, 13:00 in Sydney, until 2026-10-21. Since 2026-10-11 the
+  # crawler asks for every listing cheapest first (sortBy=priceAscending), an
+  # order that holds still where the site's default does not -- except, it
+  # turns out, early on a Wednesday afternoon. On 2026-10-14 and again on
+  # 2026-10-21 the listings walked between 13:00 and about 14:10 Sydney time
+  # showed fewer products than they claimed: Dairy 2,056 of 2,267 and Bonus
+  # Credit Products 1,319 of 1,456 on 10-21, Meat, Back to School and Deliver
+  # More Range short too. Those walked after about 14:15 were complete or
+  # within a few products. On 2026-10-07, in the default order, the same hour
+  # was clean, which points at the site still re-ordering its listings by price
+  # early on the day the week's specials begin, not at the crawler.
+  #
+  # So the crawl starts after that, with room for winter, when 05:00 UTC is
+  # 15:00 in Sydney. A walk takes about five and a half hours, so it ends about
+  # 21:30 in Sydney, well before the site's overnight maintenance. The vacuum
+  # moved with it; see catcrawl-vacuum-cron.yaml.
+  schedule: "0 5 * * 3"
   concurrencyPolicy: Forbid        # never overlap two crawls
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
