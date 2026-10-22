@@ -5,11 +5,11 @@
 # cluster network only (10.0.53.1 at JD; nftables input rule 16):
 # - node-exporter, :9100. With the router_* metrics that `router metrics`
 #   writes every 30 s (router-metrics.timer): which WAN is active, the
-#   tunnels, BGP, DHCP pools, failed units.
+#   tunnels, BGP, DHCP pools, failed units, and Unbound's DNS counters
+#   (router_dns_*, from `unbound-control stats_noreset`).
 # - The FRR exporter, :9342 (BGP sessions and prefixes).
 # - The smokeping prober, :9374: one ping a second to 1.1.1.1, 9.9.9.9, their
 #   IPv6 addresses and the other site's router over the tunnel.
-# - PowerDNS Recursor, :8082 (recursor.yml `webservice`).
 # - Suricata's EVE log reaches Loki through Alloy (applications/
 #   monitoring-loki.yaml), which also counts it into Prometheus counters:
 #   loki_process_custom_suricata_eve_lines_total (every line) and
@@ -70,22 +70,6 @@ spec:
   staticConfigs:
     # instance is set so that alerts name the router, not an address.
     - targets: ["10.0.53.1:9374"]
-      labels:
-        instance: jd-router-01
----
-apiVersion: monitoring.coreos.com/v1alpha1
-kind: ScrapeConfig
-metadata:
-  name: router-recursor
-  namespace: monitoring
-  labels:
-    # What the Prometheus resource selects scrape configs by.
-    release: monitoring-kube-prometheus-stack
-spec:
-  jobName: router-recursor
-  staticConfigs:
-    # instance is set so that alerts name the router, not an address.
-    - targets: ["10.0.53.1:8082"]
       labels:
         instance: jd-router-01
 ---
@@ -249,22 +233,37 @@ spec:
 
     - name: router.dns
       rules:
-        # The recursor checks Quad9's certificate on DNS over TLS: if that
-        # check fails, every name that is not in the cache gets SERVFAIL. The
-        # second condition (at least one question every 20 s) keeps a quiet
-        # hour with a few failed lookups from firing.
+        # Unbound (since 2026-10-22) checks Quad9's certificate on DNS over
+        # TLS: if that check fails, every name that is not in the cache gets
+        # SERVFAIL (expired ones are still answered for a day). The second
+        # condition (at least one question every 20 s) keeps a quiet hour
+        # with a few failed lookups from firing.
         - alert: RouterDNSServfailHigh
           expr: |
-            sum by (instance) (rate(pdns_recursor_servfail_answers{job="router-recursor"}[10m]))
-              / sum by (instance) (rate(pdns_recursor_questions{job="router-recursor"}[10m])) > 0.05
-            and sum by (instance) (rate(pdns_recursor_questions{job="router-recursor"}[10m])) > 0.05
+            sum by (instance) (rate(router_dns_answers_total{job="router-node", rcode="SERVFAIL"}[10m]))
+              / sum by (instance) (rate(router_dns_queries_total{job="router-node"}[10m])) > 0.05
+            and sum by (instance) (rate(router_dns_queries_total{job="router-node"}[10m])) > 0.05
           for: 10m
           keep_firing_for: 15m
           labels:
             severity: warning
           annotations:
             summary: "{{ $labels.instance }}: {{ $value | humanizePercentage }} of DNS answers are SERVFAIL"
-            description: "Look for TLS or certificate errors in `journalctl -u pdns-recursor` on {{ $labels.instance }}: a failed certificate check on Quad9's DoT makes every uncached name fail. Then check that Quad9 (9.9.9.9:853) and the DCs answer from the router."
+            description: "On {{ $labels.instance }}: `journalctl -u unbound` names each SERVFAIL's reason (log-servfail); \"certificate verify failed\" is Quad9's DoT certificate. Then `router dns NAME` compares this router, Quad9 and the DCs."
+
+        # Unbound does not answer on its control socket: the daemon is down,
+        # and the LAN, VLAN 52 and the cluster have no DNS. A crash is
+        # restarted by systemd (Restart=on-failure); this is for one that
+        # stays down.
+        - alert: RouterDNSDown
+          expr: router_dns_up{job="router-node"} == 0
+          for: 3m
+          keep_firing_for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: Unbound is not answering, the networks have no DNS"
+            description: "On {{ $labels.instance }}: `systemctl status unbound`, `journalctl -u unbound -b`, then `unbound-checkconf`. Clients on VLAN 51 and 52 use Quad9 directly and are not affected."
 
     - name: router.suricata
       rules:
