@@ -53,6 +53,10 @@ spec:
   # activeDeadlineSeconds below — Forbid alone would let one stuck run block
   # every week after it, which is what CatcrawlVacuumNotScheduled watches for.
   concurrencyPolicy: Forbid
+  # A slot missed by more than six hours is skipped, not run late, so that a
+  # change of schedule cannot start a run for a slot already past; see
+  # catcrawl-col-cron.yaml.
+  startingDeadlineSeconds: 21600
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
