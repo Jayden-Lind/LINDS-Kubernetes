@@ -79,6 +79,37 @@ spec:
             automation: !include automations.yaml
             script: !include scripts.yaml
             scene: !include scenes.yaml
+
+            # HomeKit Bridge: the Apple Home app and Siri control these
+            # entities ("Hey Siri, turn on the loungeroom aircon"). Siri
+            # uses the names below. Phones find the bridge by mDNS, which
+            # the JD router repeats from VLAN 53 to the other networks
+            # (LINDS-Ansible roles/router, avahi-daemon.conf). To pair, use
+            # the code in the "HomeKit Pairing" notification in Home
+            # Assistant. A heater_cooler shows as an air conditioner with
+            # an on/off control; on turns on the last mode that Home
+            # Assistant saw, or auto if it saw none since it started.
+            # CAUTION: The chart merges this block into the live
+            # configuration.yaml and keeps list items that are not here.
+            # To remove an entity, also remove it from that file.
+            homekit:
+              - name: Home Assistant Bridge
+                port: 21064
+                filter:
+                  include_entities:
+                    - climate.loungeroom
+                    - climate.auto_discovery
+                    - vacuum.vacuum_home
+                entity_config:
+                  climate.loungeroom:
+                    name: Loungeroom Aircon
+                    type: heater_cooler
+                  climate.auto_discovery:
+                    name: Bedroom Aircon
+                    type: heater_cooler
+                  # A switch: on starts cleaning, off sends it to the dock.
+                  vacuum.vacuum_home:
+                    name: Vacuum
   syncPolicy:
     automated:
       prune: true
