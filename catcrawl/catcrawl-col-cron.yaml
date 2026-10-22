@@ -24,6 +24,17 @@ spec:
   # moved with it; see catcrawl-vacuum-cron.yaml.
   schedule: "0 5 * * 3"
   concurrencyPolicy: Forbid        # never overlap two crawls
+  # A slot missed by more than six hours is skipped, not run late.
+  #
+  # Without a deadline the controller starts the most recent slot it has not
+  # run, however old, and changing the schedule creates one: on 2026-10-21,
+  # when the schedule moved from 02:00 to 05:00 the evening after that
+  # morning's crawl, the "missed" 05:00 slot ran at once -- a second full crawl
+  # of Coles fourteen hours after the first. The catcrawl-vacuum CronJob did
+  # the same. Six hours still covers a cluster or controller that was down when
+  # the slot came round; a run skipped for longer than that is what
+  # ColesCrawlNotScheduled reports, eight days on.
+  startingDeadlineSeconds: 21600
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:

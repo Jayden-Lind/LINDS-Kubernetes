@@ -17,6 +17,10 @@ spec:
   # weekly spike on the Postgres cluster rather than two at once.
   schedule: "0 4 * * 3"
   concurrencyPolicy: Forbid        # never overlap two crawls
+  # A slot missed by more than six hours is skipped, not run late, so that a
+  # change of schedule cannot start a run for a slot already past; see
+  # catcrawl-col-cron.yaml.
+  startingDeadlineSeconds: 21600
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
