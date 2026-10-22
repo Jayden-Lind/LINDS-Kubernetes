@@ -80,6 +80,28 @@ spec:
             script: !include scripts.yaml
             scene: !include scenes.yaml
 
+            # The loungeroom blinds are radio (433 MHz) blinds. The Athom
+            # remote sends their up and down codes, as two buttons. This
+            # cover joins the two buttons into one blind for the Home app
+            # and Siri. The blinds report no position, so the state is the
+            # last command (optimistic). Using the blinds' own remote makes
+            # it wrong until the next command.
+            template:
+              - cover:
+                  - name: Loungeroom Blinds
+                    unique_id: loungeroom_blinds
+                    default_entity_id: cover.loungeroom_blinds
+                    device_class: blind
+                    optimistic: true
+                    open_cover:
+                      - action: button.press
+                        target:
+                          entity_id: button.living_room_loungeroom_blinds_up
+                    close_cover:
+                      - action: button.press
+                        target:
+                          entity_id: button.living_room_loungeroom_blinds_down
+
             # HomeKit Bridge: the Apple Home app and Siri control these
             # entities ("Hey Siri, turn on the loungeroom aircon"). Siri
             # uses the names below. Phones find the bridge by mDNS, which
@@ -100,6 +122,7 @@ spec:
                     - climate.loungeroom
                     - climate.auto_discovery
                     - vacuum.vacuum_home
+                    - cover.loungeroom_blinds
                 entity_config:
                   climate.loungeroom:
                     name: Loungeroom Aircon
@@ -110,6 +133,22 @@ spec:
                   # A switch: on starts cleaning, off sends it to the dock.
                   vacuum.vacuum_home:
                     name: Vacuum
+                  # Open and close only (no position).
+                  cover.loungeroom_blinds:
+                    name: Loungeroom Blinds
+              # HomeKit takes a receiver only as an accessory of its own,
+              # not through a bridge. It has its own pairing code, in a
+              # second "HomeKit Pairing" notification. Power, input and
+              # volume (with the iPhone's remote).
+              - name: Denon Receiver
+                port: 21065
+                mode: accessory
+                filter:
+                  include_entities:
+                    - media_player.denon_avr_x1700h
+                entity_config:
+                  media_player.denon_avr_x1700h:
+                    name: Denon Receiver
   syncPolicy:
     automated:
       prune: true
