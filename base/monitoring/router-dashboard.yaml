@@ -3,9 +3,9 @@
 # Picked up by the kube-prometheus grafana dashboard sidecar via the
 # grafana_dashboard label; grafana_folder puts it in "Network".
 #
-# The data: the scrape jobs in router-metrics.yaml (router-node, router-frr,
-# router-smokeping, router-recursor), Alloy's Suricata counters, and the
-# router's syslog in Loki (the Logs row). The alerts in router-metrics.yaml
+# The data: the scrape jobs in router-metrics.yaml (router-node, with
+# Unbound's DNS counters, router-frr, router-smokeping), Alloy's Suricata
+# counters, and the router's syslog in Loki (the Logs row). The alerts in router-metrics.yaml
 # show as annotations. Status tiles use the status colours with a text label
 # (green "✓ Up", amber "⚠ Backup", red "✗ Down"); series use fixed colours
 # per thing (validated for colour-blind readers on Grafana's dark and light
@@ -29,7 +29,7 @@ data:
     {
       "uid": "router",
       "title": "Router",
-      "description": "jd-router-01 (and linds-router-01 after the cutover): WAN, tunnels, BGP, DHCP, DNS, IDS and health. Config: LINDS-Ansible roles/router (README, Troubleshooting); scrape jobs and alerts: LINDS-Kubernetes base/monitoring/router-metrics.yaml.",
+      "description": "jd-router-01 (and linds-router-01 after the cutover): WAN, tunnels, BGP, DHCP, DNS (Unbound), IDS and health. Config: LINDS-Ansible roles/router (README, Troubleshooting); scrape jobs and alerts: LINDS-Kubernetes base/monitoring/router-metrics.yaml.",
       "tags": [
         "router",
         "network"
@@ -2572,7 +2572,7 @@ data:
           "type": "timeseries",
           "id": 22,
           "title": "DNS answers",
-          "description": "Answers of the router's recursor to its clients, per second, by result. SERVFAIL for most names at once is RouterDNSServfailHigh: usually DoT to Quad9.",
+          "description": "Answers of the router's Unbound to its clients, per second, by result. SERVFAIL for most names at once is RouterDNSServfailHigh: usually DoT to Quad9.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2688,31 +2688,9 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(pdns_recursor_noerror_answers{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])",
-              "legendFormat": "NOERROR",
+              "expr": "sum by (rcode) (rate(router_dns_answers_total{instance=\"$router\", rcode=~\"NOERROR|NXDOMAIN|SERVFAIL\"}[$__rate_interval]))",
+              "legendFormat": "{{rcode}}",
               "refId": "A",
-              "instant": false,
-              "range": true
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "expr": "rate(pdns_recursor_nxdomain_answers{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])",
-              "legendFormat": "NXDOMAIN",
-              "refId": "B",
-              "instant": false,
-              "range": true
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "expr": "rate(pdns_recursor_servfail_answers{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])",
-              "legendFormat": "SERVFAIL",
-              "refId": "C",
               "instant": false,
               "range": true
             }
@@ -2721,8 +2699,8 @@ data:
         {
           "type": "timeseries",
           "id": 23,
-          "title": "DNS answer time",
-          "description": "Time from a client's question to the router's answer, cache hits included (pdns_recursor_cumul_clientanswers_seconds).",
+          "title": "DNS time to answer a cache miss",
+          "description": "Time from a client's question to Unbound's answer, for the questions that went to a forwarder (router_dns_lookup_seconds). Answers from the cache, expired ones included, take under 1 ms.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2823,7 +2801,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(pdns_recursor_cumul_clientanswers_seconds_bucket{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(router_dns_lookup_seconds_bucket{instance=\"$router\"}[$__rate_interval])))",
               "legendFormat": "Median",
               "refId": "A",
               "instant": false,
@@ -2834,7 +2812,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(pdns_recursor_cumul_clientanswers_seconds_bucket{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(router_dns_lookup_seconds_bucket{instance=\"$router\"}[$__rate_interval])))",
               "legendFormat": "95th percentile",
               "refId": "B",
               "instant": false,
@@ -2846,7 +2824,7 @@ data:
           "type": "timeseries",
           "id": 24,
           "title": "DNS questions answered from the cache",
-          "description": "Share of client questions that the packet cache answered, with no work for the recursor.",
+          "description": "Share of client questions that Unbound answered from its cache, and the part of those from expired records (answered at once, refreshed behind the client).",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2861,8 +2839,7 @@ data:
             "defaults": {
               "unit": "percentunit",
               "color": {
-                "mode": "fixed",
-                "fixedColor": "#3987e5"
+                "mode": "palette-classic"
               },
               "custom": {
                 "drawStyle": "line",
@@ -2898,7 +2875,38 @@ data:
               "min": 0,
               "max": 1
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "From the cache"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Of those, expired"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -2918,9 +2926,20 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(pdns_recursor_packetcache_hits{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval]) / rate(pdns_recursor_questions{instance=\"$router\", job=\"router-recursor\"}[$__rate_interval])",
-              "legendFormat": "From the packet cache",
+              "expr": "sum(rate(router_dns_cache_hits_total{instance=\"$router\"}[$__rate_interval])) / sum(rate(router_dns_queries_total{instance=\"$router\"}[$__rate_interval]))",
+              "legendFormat": "From the cache",
               "refId": "A",
+              "instant": false,
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(rate(router_dns_expired_total{instance=\"$router\"}[$__rate_interval])) / sum(rate(router_dns_queries_total{instance=\"$router\"}[$__rate_interval]))",
+              "legendFormat": "Of those, expired",
+              "refId": "B",
               "instant": false,
               "range": true
             }
@@ -2943,7 +2962,7 @@ data:
           "type": "timeseries",
           "id": 26,
           "title": "CPU",
-          "description": "Share of all cores, by kind of work. Forwarded packets are softirq; Suricata, the recursor and the exporters are programs.",
+          "description": "Share of all cores, by kind of work. Forwarded packets are softirq; Suricata, Unbound and the exporters are programs.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
