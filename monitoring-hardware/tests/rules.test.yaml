@@ -1,0 +1,323 @@
+# promtool unit tests for ../rules.yaml. Not a manifest, and not in the
+# kustomization.
+#
+#   yq '.spec' monitoring-hardware/rules.yaml > /tmp/hardware.rules.yaml
+#   promtool check rules /tmp/hardware.rules.yaml
+#   promtool test rules monitoring-hardware/tests/rules.test.yaml
+#
+# Time starts at zero in each test, so timestamps below are small numbers.
+rule_files:
+  - /tmp/hardware.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- BMC over IPMI -------------------------------------------------------------
+  - name: a discrete IPMI sensor in warning names its IPMI type as the kind
+    interval: 1m
+    input_series:
+      - series: 'ipmi_sensor_state{job="ipmi", instance="jd-proxmox-02", id="31", name="DIMM_3", type="Memory"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: HardwareSensorNotOk
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: ipmi
+              instance: jd-proxmox-02
+              id: "31"
+              name: DIMM_3
+              type: Memory
+              sensor: DIMM_3
+              kind: Memory
+            exp_annotations:
+              summary: "jd-proxmox-02: DIMM_3 is outside its normal range"
+              description: "The BMC puts DIMM_3 (Memory) past its warning threshold. The Hardware dashboard shows the reading; the BMC's event log usually has the entry too (`ipmitool sel elist | tail` on the host)."
+
+  - name: an IPMI sensor in critical fires after 10 minutes, a NaN one never
+    interval: 1m
+    input_series:
+      - series: 'ipmi_fan_speed_state{job="ipmi", instance="jd-proxmox-02", site="jd", device="bmc", id="68", name="FAN3_F_Speed"}'
+        values: '0x4 2x30'
+      - series: 'ipmi_sensor_state{job="ipmi", instance="jd-proxmox-02", site="jd", device="bmc", id="93", name="PSU1_Fan_Status", type="Fan"}'
+        values: 'NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HardwareSensorNotOk
+      - eval_time: 16m
+        alertname: HardwareSensorNotOk
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: ipmi
+              instance: jd-proxmox-02
+              site: jd
+              device: bmc
+              id: "68"
+              name: FAN3_F_Speed
+              sensor: FAN3_F_Speed
+              kind: fan_speed
+            exp_annotations:
+              summary: "jd-proxmox-02: FAN3_F_Speed is critical"
+              description: "The BMC puts FAN3_F_Speed (fan_speed) past its critical threshold. The Hardware dashboard shows the reading; the BMC's event log usually has the entry too (`ipmitool sel elist | tail` on the host)."
+
+  - name: a BMC that does not answer IPMI fires after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'ipmi_up{job="ipmi", instance="jd-proxmox-02", collector="ipmi"}'
+        values: '1x5 0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HardwareBmcUnreachable
+      - eval_time: 21m
+        alertname: HardwareBmcUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: ipmi
+              instance: jd-proxmox-02
+              collector: ipmi
+            exp_annotations:
+              summary: "jd-proxmox-02: the BMC does not answer IPMI"
+              description: "ipmi_exporter cannot read the sensors of jd-proxmox-02's BMC, so its sensor alerts cannot fire. On the host, `ipmitool sdr` reads the same sensors in-band. The exporter's log says why it failed: `kubectl -n monitoring logs deploy/ipmi-exporter`."
+
+  - name: a new event log entry is a notice for 15 minutes; clearing the log is not
+    interval: 1m
+    input_series:
+      # One entry at 20m, then the log is cleared at 50m.
+      - series: 'ipmi_sel_logs_count{job="ipmi", instance="jd-proxmox-02"}'
+        values: '208x19 209x30 0x20'
+    alert_rule_test:
+      - eval_time: 19m
+        alertname: HardwareEventLogged
+      - eval_time: 20m
+        alertname: HardwareEventLogged
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              job: ipmi
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: the BMC logged a new event"
+              description: "The BMC's event log (SEL) has more entries than 15 minutes ago. A restart logs a few; anything else (memory errors, PSU, fans, temperature, drive bays) is the BMC reporting hardware trouble. Read them in the BMC's web page (Events) or on the host: `ipmitool sel elist | tail`."
+      - eval_time: 35m
+        alertname: HardwareEventLogged
+      - eval_time: 55m
+        alertname: HardwareEventLogged
+
+  # --- iDRAC over SNMP -----------------------------------------------------------
+  - name: an iDRAC component that is non-critical fires as a warning; unknown does not
+    interval: 1m
+    input_series:
+      - series: 'coolingDeviceStatus{job="snmp", instance="linds-proxmox-01", site="linds", device="idrac", coolingDeviceIndex="3", coolingDevicechassisIndex="1", coolingDeviceLocationName="System Board Fan3"}'
+        values: '3x4 4x30'
+      - series: 'powerSupplyStatus{job="snmp", instance="linds-proxmox-01", site="linds", device="idrac", powerSupplyIndex="2", powerSupplychassisIndex="1", powerSupplyLocationName="PS2 Status"}'
+        values: '2x35'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: HardwareSensorNotOk
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: snmp
+              instance: linds-proxmox-01
+              site: linds
+              device: idrac
+              coolingDeviceIndex: "3"
+              coolingDevicechassisIndex: "1"
+              coolingDeviceLocationName: System Board Fan3
+              sensor: System Board Fan3
+              kind: coolingDevice
+            exp_annotations:
+              summary: "linds-proxmox-01: System Board Fan3 is non-critical"
+              description: "The iDRAC reports System Board Fan3 (coolingDevice) as non-critical. Its web page (Logs, then Lifecycle Log) says why; the Hardware dashboard shows the reading."
+
+  - name: a failed iDRAC power supply is critical
+    interval: 1m
+    input_series:
+      - series: 'powerSupplyStatus{job="snmp", instance="linds-proxmox-01", powerSupplyIndex="1", powerSupplychassisIndex="1", powerSupplyLocationName="PS1 Status"}'
+        values: '5x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: HardwareSensorNotOk
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: snmp
+              instance: linds-proxmox-01
+              powerSupplyIndex: "1"
+              powerSupplychassisIndex: "1"
+              powerSupplyLocationName: PS1 Status
+              sensor: PS1 Status
+              kind: powerSupply
+            exp_annotations:
+              summary: "linds-proxmox-01: PS1 Status is critical"
+              description: "The iDRAC reports PS1 Status (powerSupply) as critical. Its web page (Logs, then Lifecycle Log) says why; the Hardware dashboard shows the reading."
+
+  # --- Proxmox ---------------------------------------------------------------------
+  - name: a guest that stops is a notice from 5 minutes after the stop until 30 minutes after it
+    interval: 1m
+    input_series:
+      # Running until 40m, stopped from 41m.
+      - series: 'pve_up{job="pve", instance="jd-proxmox-02", site="jd", device="hypervisor", id="qemu/104"}'
+        values: '1x40 0x60'
+      - series: 'pve_guest_info{job="pve", instance="jd-proxmox-02", site="jd", device="hypervisor", id="qemu/104", name="JD-Torrent-01", node="jd-proxmox-02", tags="torrent", template="0", type="qemu"}'
+        values: '1x100'
+      # Never running (a template, or a guest kept off): never a notice.
+      - series: 'pve_up{job="pve", instance="jd-proxmox-02", site="jd", device="hypervisor", id="qemu/1103"}'
+        values: '0x100'
+      - series: 'pve_guest_info{job="pve", instance="jd-proxmox-02", site="jd", device="hypervisor", id="qemu/1103", name="JD-FS-01-old", node="jd-proxmox-02", tags="", template="0", type="qemu"}'
+        values: '1x100'
+    alert_rule_test:
+      - eval_time: 44m
+        alertname: ProxmoxGuestStopped
+      - eval_time: 46m
+        alertname: ProxmoxGuestStopped
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              job: pve
+              instance: jd-proxmox-02
+              site: jd
+              device: hypervisor
+              id: qemu/104
+              name: JD-Torrent-01
+            exp_annotations:
+              summary: "jd-proxmox-02: JD-Torrent-01 (qemu/104) stopped"
+              description: "JD-Torrent-01 was running 30 minutes ago. If nobody stopped it, its Task History in the Proxmox web UI says how it ended. This notice clears by itself 30 minutes after the stop."
+      - eval_time: 72m
+        alertname: ProxmoxGuestStopped
+
+  - name: a host that booted is a notice for its first 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'pve_uptime_seconds{job="pve", instance="linds-proxmox-01", id="node/linds-proxmox-01"}'
+        values: '60+60x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HardwareHostRestarted
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              job: pve
+              instance: linds-proxmox-01
+              id: node/linds-proxmox-01
+            exp_annotations:
+              summary: "linds-proxmox-01 started 6m 0s ago"
+              description: "The Proxmox host booted, and its guests with it. If nobody restarted it, `journalctl -b -1 -e` on the host shows how the last boot ended, and the BMC's event log shows a power loss or a crash."
+      - eval_time: 20m
+        alertname: HardwareHostRestarted
+
+  - name: a full directory storage fires; a full ZFS storage is left to storage health
+    interval: 1m
+    input_series:
+      - series: 'pve_disk_usage_bytes{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/local"}'
+        values: '95x40'
+      - series: 'pve_disk_size_bytes{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/local"}'
+        values: '100x40'
+      - series: 'pve_storage_info{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/local", node="jd-proxmox-02", storage="local", plugintype="dir", content="backup,iso"}'
+        values: '1x40'
+      - series: 'pve_disk_usage_bytes{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/ssd-mixed"}'
+        values: '95x40'
+      - series: 'pve_disk_size_bytes{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/ssd-mixed"}'
+        values: '100x40'
+      - series: 'pve_storage_info{job="pve", instance="jd-proxmox-02", id="storage/jd-proxmox-02/ssd-mixed", node="jd-proxmox-02", storage="ssd-mixed", plugintype="zfspool", content="images,rootdir"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: StorageProxmoxLocalNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: pve
+              instance: jd-proxmox-02
+              id: storage/jd-proxmox-02/local
+              storage: local
+            exp_annotations:
+              summary: "jd-proxmox-02: Proxmox storage local is 95% full"
+              description: "local is a directory on the host's root file system. When the root file system is full, logging, pmxcfs and guest starts fail. On the host, `du -xh -d1 / | sort -h` shows what is using it."
+
+  # --- Network ---------------------------------------------------------------------
+  - name: a port receiving damaged frames fires; one with a few does not
+    interval: 1m
+    input_series:
+      # 10 a minute is 600 an hour.
+      - series: 'ifInErrors{job="snmp", instance="linds-switch-01", ifIndex="8", ifName="8", ifDescr="8 Gigabit - Level"}'
+        values: '0+10x90'
+      # 1 a minute is 60 an hour.
+      - series: 'ifInErrors{job="snmp", instance="linds-switch-01", ifIndex="9", ifName="9", ifDescr="9 Gigabit - Level"}'
+        values: '0+1x90'
+      - series: 'ifType_info{job="snmp", instance="linds-switch-01", ifIndex="8", ifName="8", ifDescr="8 Gigabit - Level", ifType="ethernetCsmacd"}'
+        values: '1x90'
+      - series: 'ifType_info{job="snmp", instance="linds-switch-01", ifIndex="9", ifName="9", ifDescr="9 Gigabit - Level", ifType="ethernetCsmacd"}'
+        values: '1x90'
+      # A tunnel with many errors: not Ethernet, so never an alert.
+      - series: 'ifInErrors{job="snmp", instance="linds-vyos-01", ifIndex="12", ifName="vti0", ifDescr="vti0"}'
+        values: '0+50x90'
+      - series: 'ifType_info{job="snmp", instance="linds-vyos-01", ifIndex="12", ifName="vti0", ifDescr="vti0", ifType="other"}'
+        values: '1x90'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: NetworkInterfaceErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              direction: receive
+              job: snmp
+              instance: linds-switch-01
+              ifIndex: "8"
+              ifName: "8"
+              ifDescr: 8 Gigabit - Level
+            exp_annotations:
+              summary: "linds-switch-01: 8 received 300 damaged frames in an hour"
+              description: "8 on linds-switch-01 receives frames with bad checksums: usually the cable or its connectors, or a speed or duplex mismatch with the other end."
+
+  # --- TrueNAS ---------------------------------------------------------------------
+  - name: a degraded TrueNAS pool is critical
+    interval: 1m
+    input_series:
+      - series: 'zpoolHealth{job="snmp", instance="linds-truenas-01", zpoolIndex="1", zpoolName="NAS", zpoolHealth="DEGRADED"}'
+        values: '1x10'
+      - series: 'zpoolHealth{job="snmp", instance="linds-truenas-01", zpoolIndex="2", zpoolName="ZFS_NAS", zpoolHealth="ONLINE"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: StorageTrueNasPoolNotOnline
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: snmp
+              instance: linds-truenas-01
+              zpoolIndex: "1"
+              zpoolName: NAS
+              zpoolHealth: DEGRADED
+            exp_annotations:
+              summary: "linds-truenas-01: ZFS pool NAS is DEGRADED"
+              description: "TrueNAS reports NAS as DEGRADED. `zpool status -x NAS` on the NAS says which device and what to do; the TrueNAS Storage page shows the same."
+
+  - name: a nearly full TrueNAS pool fires on its root dataset, not on a child
+    interval: 1m
+    input_series:
+      - series: 'datasetUsedBytes{job="snmp", instance="linds-truenas-01", datasetIndex="1", datasetDescr="NAS"}'
+        values: '90x20'
+      - series: 'datasetAvailableBytes{job="snmp", instance="linds-truenas-01", datasetIndex="1", datasetDescr="NAS"}'
+        values: '10x20'
+      # A child dataset with a quota can be full without the pool being full.
+      - series: 'datasetUsedBytes{job="snmp", instance="linds-truenas-01", datasetIndex="2", datasetDescr="NAS/.system"}'
+        values: '99x20'
+      - series: 'datasetAvailableBytes{job="snmp", instance="linds-truenas-01", datasetIndex="2", datasetDescr="NAS/.system"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: StorageTrueNasPoolNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: snmp
+              instance: linds-truenas-01
+              datasetIndex: "1"
+              datasetDescr: NAS
+            exp_annotations:
+              summary: "linds-truenas-01: ZFS pool NAS is 90% full"
+              description: "ZFS slows down and fragments as a pool fills. Snapshots often hold the space: `zfs list -o space -r NAS` on the NAS shows where it is."

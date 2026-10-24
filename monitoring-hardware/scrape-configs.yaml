@@ -1,0 +1,127 @@
+# What Prometheus asks the three exporters for, one target per device.
+#
+# Each exporter is a proxy: Prometheus scrapes the exporter's Service and
+# names the device in ?target= (the relabelings below move the address there).
+# The labels on each target:
+#   instance  the machine, as the other jobs name it (proxmox-storage-health
+#             also says jd-proxmox-02 and linds-proxmox-01), so one host's
+#             panels and alerts line up across jobs
+#   site      jd or linds. alertmanager-config.yaml holds back the LINDS
+#             alerts while the tunnel to LINDS is down.
+#   device    what answers: the host's BMC, its Proxmox API, or the switch
+#   __param_module, __param_auth
+#             the snmp_exporter modules and community for that device
+#
+# A device that does not answer is up == 0, which PrometheusTargetDown
+# (base/monitoring/alerts.yaml) reports, except IPMI: ipmi_exporter answers
+# the scrape itself and reports the BMC in ipmi_up (HardwareBmcUnreachable).
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: snmp
+  labels:
+    # What the Prometheus resource selects scrape configs by.
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: snmp
+  metricsPath: /snmp
+  # The iDRAC answers one packet in about 200 ms, so dell_health takes ~5 s.
+  scrapeTimeout: 30s
+  staticConfigs:
+    - targets: ["192.168.6.240"]
+      labels:
+        instance: linds-proxmox-01
+        site: linds
+        device: idrac
+        __param_module: system,dell_health
+        __param_auth: public_v2
+    - targets: ["10.3.1.50"]
+      labels:
+        instance: linds-truenas-01
+        site: linds
+        device: nas
+        __param_module: system,if_mib,ucd_la_table,ucd_memory,truenas
+        __param_auth: public_v2
+    # An OfficeConnect 1920S. Zabbix polled it without GETBULK, but checked
+    # on 2026-10-24 GETBULK returns the same IF-MIB rows (0.9 s against 4.5 s
+    # with SNMPv1), and only v2c has the 64-bit ifHC* counters. Its own MIB
+    # has no fan or temperature readings, only one PSU state, so interfaces
+    # are all it gives.
+    - targets: ["192.168.6.210"]
+      labels:
+        instance: linds-switch-01
+        site: linds
+        device: switch
+        __param_module: system,if_mib
+        __param_auth: public_v2
+    # Until the cutover to linds-router-01, which has node-exporter like
+    # jd-router-01 (base/monitoring/router-metrics.yaml). Remove it then.
+    - targets: ["192.168.6.1"]
+      labels:
+        instance: linds-vyos-01
+        site: linds
+        device: router
+        __param_module: system,if_mib,ucd_la_table,ucd_memory
+        __param_auth: public_v2
+  relabelings:
+    - sourceLabels: [__address__]
+      targetLabel: __param_target
+    - targetLabel: __address__
+      replacement: snmp-exporter.monitoring.svc:9116
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: ipmi
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: ipmi
+  metricsPath: /ipmi
+  # A scrape is ~8 s: the exporter runs FreeIPMI once for each collector.
+  scrapeTimeout: 30s
+  staticConfigs:
+    - targets: ["10.0.50.240"]
+      labels:
+        instance: jd-proxmox-02
+        site: jd
+        device: bmc
+        __param_module: jd-proxmox-02
+  relabelings:
+    - sourceLabels: [__address__]
+      targetLabel: __param_target
+    - targetLabel: __address__
+      replacement: ipmi-exporter.monitoring.svc:9290
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: pve
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  jobName: pve
+  metricsPath: /pve
+  # cluster: guests and storage; node: the host's own figures.
+  params:
+    cluster: ["1"]
+    node: ["1"]
+  staticConfigs:
+    - targets: ["10.0.50.246"]
+      labels:
+        instance: jd-proxmox-02
+        site: jd
+        device: hypervisor
+        __param_module: jd-proxmox-02
+    - targets: ["192.168.6.205"]
+      labels:
+        instance: linds-proxmox-01
+        site: linds
+        device: hypervisor
+        __param_module: linds-proxmox-01
+  relabelings:
+    - sourceLabels: [__address__]
+      targetLabel: __param_target
+    - targetLabel: __address__
+      replacement: pve-exporter.monitoring.svc:9221

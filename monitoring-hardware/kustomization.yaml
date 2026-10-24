@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+
+resources:
+  - external-secrets.yaml
+  - snmp-exporter.yaml
+  - ipmi-exporter.yaml
+  - pve-exporter.yaml
+  - scrape-configs.yaml
+  - rules.yaml
+  - dashboard.yaml
+
+# The SNMP modules that the image does not ship (snmp/). The name gets a hash
+# of the content, so a change to a module restarts the exporter with it.
+configMapGenerator:
+  - name: snmp-exporter-modules
+    files:
+      - snmp/dell-health.yml
+      - snmp/truenas.yml

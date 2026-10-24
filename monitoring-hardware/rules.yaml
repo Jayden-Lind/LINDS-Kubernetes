@@ -1,0 +1,212 @@
+# Alerts on the hardware: the two hosts' BMCs, their Proxmox APIs, and the
+# LINDS NAS, switch and router. They go to Discord through
+# base/monitoring/alertmanager-config.yaml: Storage* by the daily storage
+# route, the three notices (HardwareEventLogged, HardwareHostRestarted,
+# ProxmoxGuestStopped) without a "resolved" message, everything else by the
+# default route. While the tunnel to LINDS is down, the site="linds" ones are
+# held back.
+#
+# What is not here, because something else already says it:
+# - a device that does not answer: PrometheusTargetDown (alerts.yaml)
+# - disks, ZFS pools, the PERC and LVM thin pools of both hosts:
+#   proxmox-storage-health.yaml (StorageSmart*, StorageZfs*, StorageRaid*,
+#   StorageThinPool*). The iDRAC's disk metrics are left out of dell_health
+#   for the same reason.
+# - Talos nodes: the node alerts in alerts.yaml.
+#
+# Tests: tests/rules.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hardware
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  groups:
+    - name: hardware.bmc
+      rules:
+        # ipmi_exporter answers the scrape even when the BMC does not, so
+        # PrometheusTargetDown cannot see this.
+        - alert: HardwareBmcUnreachable
+          expr: ipmi_up{job="ipmi", collector="ipmi"} == 0
+          for: 15m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the BMC does not answer IPMI"
+            description: "ipmi_exporter cannot read the sensors of {{ $labels.instance }}'s BMC, so its sensor alerts cannot fire. On the host, `ipmitool sdr` reads the same sensors in-band. The exporter's log says why it failed: `kubectl -n monitoring logs deploy/ipmi-exporter`."
+
+        # The BMC's own thresholds decide: 0 nominal, 1 warning, 2 critical.
+        # NaN (a discrete sensor with no reading) is not above 0. kind is the
+        # sensor class, or for a discrete sensor its IPMI type ("Memory",
+        # "Drive Slot", "Power Supply", ...).
+        - alert: HardwareSensorNotOk
+          expr: |
+            label_replace(
+              label_replace(
+                label_replace(
+                  {job="ipmi", __name__=~"ipmi_(sensor|temperature|fan_speed|voltage|current|power)_state"},
+                  "kind", "$1", "__name__", "ipmi_(.+)_state"
+                ),
+                "kind", "$1", "type", "(.+)"
+              ),
+              "sensor", "$1", "name", "(.+)"
+            ) > 0
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            severity: '{{ if eq $value 2.0 }}critical{{ else }}warning{{ end }}'
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.sensor }} is {{ if eq $value 2.0 }}critical{{ else }}outside its normal range{{ end }}"
+            description: "The BMC puts {{ $labels.sensor }} ({{ $labels.kind }}) past its {{ if eq $value 2.0 }}critical{{ else }}warning{{ end }} threshold. The Hardware dashboard shows the reading; the BMC's event log usually has the entry too (`ipmitool sel elist | tail` on the host)."
+
+        # The iDRAC over SNMP: Dell's status is 3 ok, 4 non-critical,
+        # 5 critical, 6 non-recoverable (1 other and 2 unknown are no
+        # verdict). Minus 3 gives 1, 2 and 3. Every table names its component
+        # in a different column; label_join copies whichever one the series
+        # has into "sensor".
+        - alert: HardwareSensorNotOk
+          expr: |
+            label_replace(
+              label_join(
+                {job="snmp", __name__=~"(powerSupply|amperageProbe|coolingDevice|temperatureProbe|voltageProbe|memoryDevice|processorDevice|systemBattery|intrusion)Status"},
+                "sensor", "",
+                "powerSupplyLocationName", "amperageProbeLocationName", "coolingDeviceLocationName",
+                "temperatureProbeLocationName", "voltageProbeLocationName", "memoryDeviceLocationName",
+                "processorDeviceFQDD", "systemBatteryLocationName", "intrusionLocationName"
+              ),
+              "kind", "$1", "__name__", "(.+)Status"
+            ) - 3 > 0
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            severity: '{{ if ge $value 2.0 }}critical{{ else }}warning{{ end }}'
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.sensor }} is {{ if ge $value 2.0 }}critical{{ else }}non-critical{{ end }}"
+            description: "The iDRAC reports {{ $labels.sensor }} ({{ $labels.kind }}) as {{ if ge $value 3.0 }}non-recoverable{{ else if ge $value 2.0 }}critical{{ else }}non-critical{{ end }}. Its web page (Logs, then Lifecycle Log) says why; the Hardware dashboard shows the reading."
+
+        # A notice: it fires for 15 minutes after the count goes up. offset
+        # rather than increase(): clearing the log makes the count fall, which
+        # increase() would read as a counter reset full of new entries.
+        - alert: HardwareEventLogged
+          expr: ipmi_sel_logs_count{job="ipmi"} > ipmi_sel_logs_count{job="ipmi"} offset 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.instance }}: the BMC logged a new event"
+            description: "The BMC's event log (SEL) has more entries than 15 minutes ago. A restart logs a few; anything else (memory errors, PSU, fans, temperature, drive bays) is the BMC reporting hardware trouble. Read them in the BMC's web page (Events) or on the host: `ipmitool sel elist | tail`."
+
+        # 16 bytes an entry, so 1 KiB is 64 entries.
+        - alert: HardwareEventLogNearlyFull
+          expr: ipmi_sel_free_space_bytes{job="ipmi"} < 1024
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the BMC event log has {{ $value | humanize1024 }}B left"
+            description: "A full SEL stops logging, and then hardware events are lost. Save and clear it on the host: `ipmitool sel save /root/sel-$(date +%F).txt && ipmitool sel clear`, or Clear in the BMC's web page."
+
+    - name: hardware.proxmox
+      rules:
+        # A notice: it fires for the first 15 minutes after a boot.
+        - alert: HardwareHostRestarted
+          expr: pve_uptime_seconds{job="pve", id=~"node/.+"} < 900
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.instance }} started {{ $value | humanizeDuration }} ago"
+            description: "The Proxmox host booted, and its guests with it. If nobody restarted it, `journalctl -b -1 -e` on the host shows how the last boot ended, and the BMC's event log shows a power loss or a crash."
+
+        # A notice, not a state. The guest was running 30 minutes ago and is
+        # stopped now; it clears 30 minutes after the stop, whether the guest
+        # is back or not. "Should this guest be running" is the onboot flag,
+        # which the exporter cannot read (--no-collector.config in
+        # pve-exporter.yaml). for: 5m leaves out a stop and start, such as a
+        # Terraform change.
+        - alert: ProxmoxGuestStopped
+          expr: |
+            (
+                pve_up{job="pve", id=~"(qemu|lxc)/.+"} == 0
+              and
+                pve_up{job="pve", id=~"(qemu|lxc)/.+"} offset 30m == 1
+            )
+            * on (instance, id) group_left (name) pve_guest_info{job="pve"}
+          for: 5m
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.name }} ({{ $labels.id }}) stopped"
+            description: "{{ $labels.name }} was running 30 minutes ago. If nobody stopped it, its Task History in the Proxmox web UI says how it ended. This notice clears by itself 30 minutes after the stop."
+
+        # Only directory storages ("local" is /var/lib/vz, on the host's root
+        # file system). The ZFS pools and LVM thin pools behind the other
+        # storages have their own alerts in proxmox-storage-health.yaml.
+        - alert: StorageProxmoxLocalNearlyFull
+          expr: |
+            (pve_disk_usage_bytes{job="pve"} / pve_disk_size_bytes{job="pve"} > 0.9)
+            * on (instance, id) group_left (storage) pve_storage_info{job="pve", plugintype="dir"}
+          for: 30m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: Proxmox storage {{ $labels.storage }} is {{ $value | humanizePercentage }} full"
+            description: "{{ $labels.storage }} is a directory on the host's root file system. When the root file system is full, logging, pmxcfs and guest starts fail. On the host, `du -xh -d1 / | sort -h` shows what is using it."
+
+    - name: hardware.network
+      rules:
+        # Damaged frames, not drops: a bad cable or connector, a dirty fibre,
+        # or a speed or duplex mismatch. The other end of the link is the
+        # second place to look. Ethernet interfaces only: a tunnel counts
+        # what it could not encapsulate as errors (linds-vyos-01's vti0 had
+        # 586,000 after 14 days), which no cable explains.
+        - alert: NetworkInterfaceErrors
+          expr: |
+            increase(ifInErrors{job="snmp"}[1h]) > 100
+              and on (instance, ifIndex) ifType_info{job="snmp", ifType="ethernetCsmacd"}
+          for: 15m
+          labels:
+            severity: warning
+            direction: receive
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.ifName }} received {{ $value | humanize }} damaged frames in an hour"
+            description: "{{ $labels.ifName }}{{ with $labels.ifAlias }} ({{ . }}){{ end }} on {{ $labels.instance }} receives frames with bad checksums: usually the cable or its connectors, or a speed or duplex mismatch with the other end."
+        - alert: NetworkInterfaceErrors
+          expr: |
+            increase(ifOutErrors{job="snmp"}[1h]) > 100
+              and on (instance, ifIndex) ifType_info{job="snmp", ifType="ethernetCsmacd"}
+          for: 15m
+          labels:
+            severity: warning
+            direction: transmit
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $labels.ifName }} failed to send {{ $value | humanize }} frames in an hour"
+            description: "{{ $labels.ifName }}{{ with $labels.ifAlias }} ({{ . }}){{ end }} on {{ $labels.instance }} has transmit errors: usually a duplex mismatch with the other end, or a failing port."
+
+    - name: hardware.truenas
+      rules:
+        - alert: StorageTrueNasPoolNotOnline
+          expr: zpoolHealth{job="snmp", zpoolHealth!="ONLINE"}
+          for: 5m
+          keep_firing_for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.zpoolName }} is {{ $labels.zpoolHealth }}"
+            description: "TrueNAS reports {{ $labels.zpoolName }} as {{ $labels.zpoolHealth }}. `zpool status -x {{ $labels.zpoolName }}` on the NAS says which device and what to do; the TrueNAS Storage page shows the same."
+
+        # A pool's root dataset: its used and available add up to what the
+        # pool can hold. The same threshold as StorageZfsPoolNearlyFull.
+        - alert: StorageTrueNasPoolNearlyFull
+          expr: |
+            datasetUsedBytes{job="snmp", datasetDescr!~".+/.+"}
+              / (datasetUsedBytes{job="snmp", datasetDescr!~".+/.+"} + datasetAvailableBytes{job="snmp", datasetDescr!~".+/.+"})
+            > 0.85
+          for: 15m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: ZFS pool {{ $labels.datasetDescr }} is {{ $value | humanizePercentage }} full"
+            description: "ZFS slows down and fragments as a pool fills. Snapshots often hold the space: `zfs list -o space -r {{ $labels.datasetDescr }}` on the NAS shows where it is."

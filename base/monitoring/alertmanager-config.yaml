@@ -52,8 +52,32 @@ spec:
           - instance
           - severity
         repeatInterval: 24h
+      # The hardware notices (monitoring-hardware/rules.yaml). Each says that
+      # something happened - the BMC logged an event, a host booted, a guest
+      # stopped - and clears by itself after a while, whatever the state is
+      # then. A "resolved" message would read as the thing being put right, so
+      # they go to a receiver that sends none.
+      - receiver: discord-notices
+        matchers:
+          - name: alertname
+            matchType: "=~"
+            value: "HardwareEventLogged|HardwareHostRestarted|ProxmoxGuestStopped"
+        groupBy:
+          - alertname
+          - instance
   receivers:
     - name: "null"
+    - name: discord-notices
+      discordConfigs:
+        - apiURL:
+            name: alertmanager-discord-secret
+            key: discord_webhook_url
+          sendResolved: false
+          title: 'ℹ️ NOTICE: {{ .GroupLabels.alertname }}'
+          message: |-
+            {{ range .Alerts -}}
+            > {{ .Annotations.summary }}
+            {{ end }}
     - name: discord
       discordConfigs:
         - apiURL:
@@ -158,3 +182,19 @@ spec:
       equal:
         - node
         - condition
+    # While the tunnel to LINDS is down, Prometheus (at JD) can scrape nothing
+    # there, and every LINDS device would report down at once. That is one
+    # cause, and RouterTunnelDown says it. Held back: the alerts on targets
+    # labelled site="linds" (monitoring-hardware/scrape-configs.yaml),
+    # PrometheusTargetDown for them included.
+    - sourceMatch:
+        - name: alertname
+          value: RouterTunnelDown
+          matchType: "="
+        - name: conn
+          value: LINDS
+          matchType: "="
+      targetMatch:
+        - name: site
+          value: linds
+          matchType: "="

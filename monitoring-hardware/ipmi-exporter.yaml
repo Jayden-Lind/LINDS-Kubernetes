@@ -1,0 +1,103 @@
+# ipmi_exporter: jd-proxmox-02's BMC (Lenovo XCC, 10.0.50.240) over IPMI.
+#
+# Sensors (temperatures, fans, voltages, power, and the discrete ones such as
+# drive bays, DIMMs and the PSU), DCMI power, chassis state and the event log
+# (SEL). The XCC also speaks SNMPv3, but IPMI needs nothing beyond the login
+# Zabbix used, and gives the same sensors the XCC's own web page shows.
+#
+# The login is in the ipmi-exporter-config Secret (external-secrets.yaml).
+# Each BMC is a module there, named after its host; Prometheus asks for one
+# with &module= (scrape-configs.yaml).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ipmi-exporter
+  labels:
+    app.kubernetes.io/name: ipmi-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ipmi-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ipmi-exporter
+    spec:
+      # Beside the BMC it reads.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: datacenter
+                    operator: In
+                    values: ["jd"]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ipmi-exporter
+          image: quay.io/prometheuscommunity/ipmi-exporter:v1.10.1
+          args:
+            - --config.file=/etc/ipmi-exporter/ipmi.yml
+          ports:
+            - name: http
+              containerPort: 9290
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ipmi-exporter
+              readOnly: true
+            # For each call the exporter gives FreeIPMI the login through a
+            # named pipe it makes here, so the password is never on a command
+            # line or on disk. Without a writable /tmp every collector fails.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          secret:
+            secretName: ipmi-exporter-config
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipmi-exporter
+  labels:
+    app.kubernetes.io/name: ipmi-exporter
+spec:
+  selector:
+    app.kubernetes.io/name: ipmi-exporter
+  ports:
+    - name: http
+      port: 9290
+      targetPort: http
