@@ -66,8 +66,25 @@ each client, and Cilium advertises the Service only from the nodes that run
 its pods. With `Cluster`, a connection that arrives on another node is
 source-NATed to that node's address.
 
-Give the pods a network policy that stops them from reaching the LAN and the
-rest of the cluster.
+Give the pods a network policy. Copy `valheim/network-policy.yaml` and change
+the ports. It lets in the clients (`world`) on the Service's ports, and lets
+out only the cluster DNS and the internet on the ports that the application
+needs. A pod that is taken over then cannot reach the LAN, the other site, the
+other pods, the nodes, the API server, or the router's own services. Before you
+enforce it, read what it would drop:
+
+1. Find the pod's endpoint ID on its node:
+   `kubectl -n kube-system exec CILIUM_POD -c cilium-agent -- cilium-dbg endpoint list`.
+2. Put the endpoint in audit mode:
+   `cilium-dbg endpoint config ID PolicyAuditMode=Enabled`.
+3. Apply the policy. Use the application for a while.
+4. Read what the policy would drop:
+   `hubble observe --namespace NS --verdict AUDIT` (in a cilium-agent pod, with
+   `--server` set to the hubble-relay Service's ClusterIP and port 80).
+5. Correct the policy. Then set `PolicyAuditMode=Disabled`.
+
+CAUTION: audit mode belongs to the endpoint, not the policy. A pod that
+restarts gets a new endpoint, and the policy is enforced at once.
 
 ## Publish a web application
 

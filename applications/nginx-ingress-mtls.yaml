@@ -54,6 +54,11 @@ spec:
               resolver:
                 ipv6: false
             enableLatencyMetrics: true
+            # No product telemetry to F5. The network policy
+            # (nginx-ingress-mtls/network-policy.yaml) gives this controller no
+            # internet, so the daily report would only fail.
+            telemetryReporting:
+              enable: false
             ingressClass:
               name: nginx-mtls
               create: true

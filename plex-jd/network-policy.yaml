@@ -1,0 +1,74 @@
+# Plex is open to the internet (jd-router-01 forwards 32400/tcp here, see
+# applications/plex.yaml). If the server is taken over, this policy keeps it
+# away from everything else: no LAN, no cluster pod, node or API server. It
+# may only serve clients, ask the cluster DNS, reach the internet on the web
+# ports and 32400, and talk to the LINDS Plex server.
+#
+# Seen with Hubble and the Cilium connection table, 2026-10-24: clients in
+# on 32400; out to plex.tv and metadata on 443, other Plex servers on 32400,
+# and one long-lived connection to linds-plex-01 (10.3.1.20:32400). Dropped
+# on purpose: SSDP (239.255.255.250:1900) and NAT-PMP to the node (5351);
+# Plex uses the manual port mapping, so neither is needed.
+#
+# The media is on SMB volumes. The kubelet mounts them, not the pod, so they
+# need no rule here.
+#
+# To see what it drops: hubble observe --namespace plex-jd --verdict DROPPED
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: plex
+spec:
+  description: "Plex: clients in, cluster DNS, web ports and other Plex servers out, nothing else"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: plex-jd
+      app.kubernetes.io/instance: plex-jd
+  ingress:
+    # Clients from the internet and the LAN, on the LoadBalancer address
+    # (externalTrafficPolicy Local keeps their own addresses).
+    - fromEntities: [world]
+      toPorts:
+        - ports:
+            - port: "32400"
+              protocol: TCP
+    # plex.linds.com.au, through the internal ingress.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: nginx-ingress
+            app.kubernetes.io/instance: nginx-ingress
+      toPorts:
+        - ports:
+            - port: "32400"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # The internet, on named ports only: jd-router-01's public address is
+    # "internet" too, and the router answers SSH, DNS, SNMP and BGP to the
+    # cluster VLAN.
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+            - port: "32400"
+              protocol: TCP
+    # linds-plex-01, the other Plex server on the account.
+    - toCIDR: [10.3.1.20/32]
+      toPorts:
+        - ports:
+            - port: "32400"
+              protocol: TCP
