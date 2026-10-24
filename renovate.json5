@@ -29,6 +29,9 @@
       // rarely and never needs to be urgent.
       "/^valheim/statefulset\\.yaml$/",
       "/^zabbix/config-job\\.yaml$/",
+      // snmp_exporter, ipmi_exporter and pve-exporter. After a snmp_exporter
+      // bump, regenerate monitoring-hardware/snmp/dell-health.yml (README).
+      "/^monitoring-hardware/[^/]+-exporter\\.yaml$/",
     ],
   },
 

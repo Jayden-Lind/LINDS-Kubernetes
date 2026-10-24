@@ -1,0 +1,3504 @@
+---
+# Grafana dashboard "Hardware": both hosts' BMCs and Proxmox, and the LINDS
+# NAS, switch and router. Picked up by the kube-prometheus grafana dashboard
+# sidecar via the grafana_dashboard label; grafana_folder puts it in
+# "Hardware".
+#
+# The data: the snmp, ipmi and pve jobs (scrape-configs.yaml). The alerts in
+# rules.yaml show as annotations. Like the Router dashboard: status tiles use
+# the status colours with a text label (green "✓ OK", amber "⚠ Warning", red
+# "✗ Critical"), and series use the same fixed colours in the same order, so
+# jd-proxmox-02 is blue and linds-proxmox-01 orange wherever both are drawn.
+# Disks, pools and RAID are not here: storage health has them
+# (base/monitoring/proxmox-storage-health.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hardware-dashboard
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Hardware
+data:
+  hardware.json: |
+    {
+      "uid": "hardware",
+      "title": "Hardware",
+      "description": "Both hosts' BMCs and Proxmox, and the LINDS NAS, switch and router. Exporters, scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). Disks, pools and RAID: storage health (base/monitoring/proxmox-storage-health.yaml).",
+      "tags": [
+        "hardware",
+        "proxmox"
+      ],
+      "timezone": "browser",
+      "editable": true,
+      "graphTooltip": 1,
+      "schemaVersion": 39,
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "refresh": "1m",
+      "templating": {
+        "list": []
+      },
+      "annotations": {
+        "list": [
+          {
+            "name": "Hardware alerts",
+            "enable": true,
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "ALERTS{alertname=~\"Hardware.*|ProxmoxGuestStopped|NetworkInterfaceErrors|StorageTrueNas.*|StorageProxmoxLocalNearlyFull\", alertstate=\"firing\"}",
+            "step": "60s",
+            "titleFormat": "{{alertname}}",
+            "textFormat": "{{instance}} {{sensor}}{{name}}",
+            "iconColor": "#d03b3b",
+            "useValueForTime": false
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "id": 1,
+          "title": "jd-proxmox-02",
+          "description": "Worst state of any sensor on the XCC (IPMI): temperatures, fans, voltages, power, memory, processors, drive bays, PCIe errors, cables, intrusion. The row below breaks it down.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max(max by (component) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace({job=\"ipmi\", instance=\"jd-proxmox-02\", __name__=~\"ipmi_(temperature|fan_speed|voltage|current|power)_state\"}, \"component\", \"$1\", \"__name__\", \"ipmi_(.+)_state\") or label_replace(ipmi_sensor_state{job=\"ipmi\", instance=\"jd-proxmox-02\", type=~\"Processor|Memory|Power Supply|Drive Slot|Critical Interrupt|Cable/Interconnect|Physical Security\"}, \"component\", \"$1\", \"type\", \"(.+)\"), \"component\", \"Temperatures\", \"component\", \"temperature\"), \"component\", \"Fans\", \"component\", \"fan_speed\"), \"component\", \"Voltages\", \"component\", \"voltage\"), \"component\", \"Power\", \"component\", \"current|power|Power Supply\"), \"component\", \"Processors\", \"component\", \"Processor\"), \"component\", \"Drive bays\", \"component\", \"Drive Slot\"), \"component\", \"PCIe errors\", \"component\", \"Critical Interrupt\"), \"component\", \"Cables\", \"component\", \"Cable/Interconnect\"), \"component\", \"Intrusion\", \"component\", \"Physical Security\")))",
+              "legendFormat": "",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ OK",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "⚠ Warning",
+                      "color": "#fab219",
+                      "index": 1
+                    },
+                    "2": {
+                      "text": "✗ Critical",
+                      "color": "#d03b3b",
+                      "index": 2
+                    },
+                    "3": {
+                      "text": "✗ Failed",
+                      "color": "#d03b3b",
+                      "index": 3
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": -2,
+                    "to": -1,
+                    "result": {
+                      "text": "? Unknown",
+                      "color": "text",
+                      "index": 4
+                    }
+                  }
+                },
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "nan",
+                    "result": {
+                      "text": "– No reading",
+                      "color": "text",
+                      "index": 5
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "✗ No reading"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "stat",
+          "id": 2,
+          "title": "linds-proxmox-01",
+          "description": "Worst state of any component the iDRAC reports over SNMP, disks and RAID left out (those are storage health's). The row below breaks it down.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max(max by (component) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace({job=\"snmp\", instance=\"linds-proxmox-01\", __name__=~\"(powerSupply|amperageProbe|coolingDevice|temperatureProbe|voltageProbe|memoryDevice|processorDevice|systemBattery|intrusion)Status\"}, \"component\", \"$1\", \"__name__\", \"(.+)Status\"), \"component\", \"Power\", \"component\", \"powerSupply|amperageProbe\"), \"component\", \"Fans\", \"component\", \"coolingDevice\"), \"component\", \"Temperatures\", \"component\", \"temperatureProbe\"), \"component\", \"Voltages\", \"component\", \"voltageProbe\"), \"component\", \"Memory\", \"component\", \"memoryDevice\"), \"component\", \"Processors\", \"component\", \"processorDevice\"), \"component\", \"Batteries\", \"component\", \"systemBattery\"), \"component\", \"Intrusion\", \"component\", \"intrusion\") - 3))",
+              "legendFormat": "",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ OK",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "⚠ Warning",
+                      "color": "#fab219",
+                      "index": 1
+                    },
+                    "2": {
+                      "text": "✗ Critical",
+                      "color": "#d03b3b",
+                      "index": 2
+                    },
+                    "3": {
+                      "text": "✗ Failed",
+                      "color": "#d03b3b",
+                      "index": 3
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": -2,
+                    "to": -1,
+                    "result": {
+                      "text": "? Unknown",
+                      "color": "text",
+                      "index": 4
+                    }
+                  }
+                },
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "nan",
+                    "result": {
+                      "text": "– No reading",
+                      "color": "text",
+                      "index": 5
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "✗ No reading"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "stat",
+          "id": 3,
+          "title": "Power draw",
+          "description": "What each server draws from the wall: DCMI on the XCC, the system board power probe on the iDRAC.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "ipmi_dcmi_power_consumption_watts{job=\"ipmi\", instance=\"jd-proxmox-02\"}",
+              "legendFormat": "jd-proxmox-02",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "amperageProbeReading{job=\"snmp\", instance=\"linds-proxmox-01\", amperageProbeLocationName=\"System Board Pwr Consumption\"}",
+              "legendFormat": "linds-proxmox-01",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-proxmox-02"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-proxmox-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 20
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "stat",
+          "id": 4,
+          "title": "Inlet temperature",
+          "description": "The air going into each server, which is the room's temperature.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=\"Inlet_Temp\"}",
+              "legendFormat": "jd-proxmox-02",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "temperatureProbeReading{job=\"snmp\", instance=\"linds-proxmox-01\", temperatureProbeLocationName=\"System Board Inlet Temp\"}",
+              "legendFormat": "linds-proxmox-01",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-proxmox-02"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-proxmox-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 20
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "stat",
+          "id": 5,
+          "title": "Guests running",
+          "description": "Virtual machines and containers that Proxmox reports as running, per host.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "count by (instance) (pve_up{job=\"pve\", id=~\"(qemu|lxc)/.+\"} == 1)",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 20
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "stat",
+          "id": 6,
+          "title": "Devices not answering",
+          "description": "Hardware targets (BMCs, Proxmox APIs, SNMP devices) that Prometheus could not read on its last scrape. PrometheusTargetDown names them.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "count(up{job=~\"snmp|ipmi|pve\"} == 0) or vector(0)",
+              "legendFormat": "",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ None",
+                      "color": "#0ca30c",
+                      "index": 0
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": 1,
+                    "to": 1000,
+                    "result": {
+                      "text": "✗ ${__value.raw}",
+                      "color": "#d03b3b",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "row",
+          "id": 7,
+          "title": "jd-proxmox-02 · Lenovo SR655 · XCC over IPMI",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "id": 8,
+          "title": "Health by component",
+          "description": "The worst state among the sensors of each kind, by the XCC's own thresholds. HardwareSensorNotOk names the sensor.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 6,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max by (component) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace({job=\"ipmi\", instance=\"jd-proxmox-02\", __name__=~\"ipmi_(temperature|fan_speed|voltage|current|power)_state\"}, \"component\", \"$1\", \"__name__\", \"ipmi_(.+)_state\") or label_replace(ipmi_sensor_state{job=\"ipmi\", instance=\"jd-proxmox-02\", type=~\"Processor|Memory|Power Supply|Drive Slot|Critical Interrupt|Cable/Interconnect|Physical Security\"}, \"component\", \"$1\", \"type\", \"(.+)\"), \"component\", \"Temperatures\", \"component\", \"temperature\"), \"component\", \"Fans\", \"component\", \"fan_speed\"), \"component\", \"Voltages\", \"component\", \"voltage\"), \"component\", \"Power\", \"component\", \"current|power|Power Supply\"), \"component\", \"Processors\", \"component\", \"Processor\"), \"component\", \"Drive bays\", \"component\", \"Drive Slot\"), \"component\", \"PCIe errors\", \"component\", \"Critical Interrupt\"), \"component\", \"Cables\", \"component\", \"Cable/Interconnect\"), \"component\", \"Intrusion\", \"component\", \"Physical Security\"))",
+              "legendFormat": "{{component}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ OK",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "⚠ Warning",
+                      "color": "#fab219",
+                      "index": 1
+                    },
+                    "2": {
+                      "text": "✗ Critical",
+                      "color": "#d03b3b",
+                      "index": 2
+                    },
+                    "3": {
+                      "text": "✗ Failed",
+                      "color": "#d03b3b",
+                      "index": 3
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": -2,
+                    "to": -1,
+                    "result": {
+                      "text": "? Unknown",
+                      "color": "text",
+                      "index": 4
+                    }
+                  }
+                },
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "nan",
+                    "result": {
+                      "text": "– No reading",
+                      "color": "text",
+                      "index": 5
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 16
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 9,
+          "title": "Temperatures",
+          "description": "The CPU, the air in and out, and the hottest DIMM and PCIe slot (each the warmest of its sensors).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 5,
+            "w": 9,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=\"CPU_Temp\"}",
+              "legendFormat": "CPU",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=\"Outlet_Temp\"}",
+              "legendFormat": "Outlet",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "C",
+              "expr": "ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=\"Inlet_Temp\"}",
+              "legendFormat": "Inlet",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "D",
+              "expr": "max(ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=~\"DIMM.+_Temp\"})",
+              "legendFormat": "Hottest DIMM",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "E",
+              "expr": "max(ipmi_temperature_celsius{job=\"ipmi\", instance=\"jd-proxmox-02\", name=~\"PCIe.+_Temp\"})",
+              "legendFormat": "Hottest PCIe slot",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Outlet"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Inlet"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Hottest DIMM"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Hottest PCIe slot"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 10,
+          "title": "Power draw",
+          "description": "From the wall, as DCMI reports it.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 15,
+            "y": 5,
+            "w": 9,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "ipmi_dcmi_power_consumption_watts{job=\"ipmi\", instance=\"jd-proxmox-02\"}",
+              "legendFormat": "Power",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 11,
+          "title": "Fan speed",
+          "description": "The slowest and the fastest of the six fans. fan-control.service sets one duty for all, so a fan that stops or slows pulls the slowest line away from the fastest.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 9,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "min(ipmi_fan_speed_rpm{job=\"ipmi\", instance=\"jd-proxmox-02\"})",
+              "legendFormat": "Slowest fan",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "max(ipmi_fan_speed_rpm{job=\"ipmi\", instance=\"jd-proxmox-02\"})",
+              "legendFormat": "Fastest fan",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rotrpm",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Slowest fan"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fastest fan"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "bargauge",
+          "id": 12,
+          "title": "Fans now",
+          "description": "Each fan's speed at the last scrape.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 9,
+            "y": 14,
+            "w": 9,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "label_replace(ipmi_fan_speed_rpm{job=\"ipmi\", instance=\"jd-proxmox-02\"}, \"fan\", \"Fan $1\", \"name\", \"FAN([0-9]+)_F_Speed\")",
+              "legendFormat": "{{fan}}",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rotrpm",
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#3987e5",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "manual",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "id": 13,
+          "title": "Event log",
+          "description": "Entries in the BMC's event log (SEL), and the space left. HardwareEventLogged tells Discord when one is added; read them in the XCC (Events) or with `ipmitool sel elist` on the host.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 14,
+            "w": 6,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "ipmi_sel_logs_count{job=\"ipmi\", instance=\"jd-proxmox-02\"}",
+              "legendFormat": "Entries",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "ipmi_sel_free_space_bytes{job=\"ipmi\", instance=\"jd-proxmox-02\"}",
+              "legendFormat": "Free space",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Free space"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 24
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "row",
+          "id": 14,
+          "title": "linds-proxmox-01 · Dell T630 · iDRAC8 over SNMP",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "id": 15,
+          "title": "Health by component",
+          "description": "The worst state among the components of each kind, as the iDRAC judges them. Disks and the PERC are left to storage health. HardwareSensorNotOk names the component.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 23,
+            "w": 6,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max by (component) (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace({job=\"snmp\", instance=\"linds-proxmox-01\", __name__=~\"(powerSupply|amperageProbe|coolingDevice|temperatureProbe|voltageProbe|memoryDevice|processorDevice|systemBattery|intrusion)Status\"}, \"component\", \"$1\", \"__name__\", \"(.+)Status\"), \"component\", \"Power\", \"component\", \"powerSupply|amperageProbe\"), \"component\", \"Fans\", \"component\", \"coolingDevice\"), \"component\", \"Temperatures\", \"component\", \"temperatureProbe\"), \"component\", \"Voltages\", \"component\", \"voltageProbe\"), \"component\", \"Memory\", \"component\", \"memoryDevice\"), \"component\", \"Processors\", \"component\", \"processorDevice\"), \"component\", \"Batteries\", \"component\", \"systemBattery\"), \"component\", \"Intrusion\", \"component\", \"intrusion\") - 3)",
+              "legendFormat": "{{component}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ OK",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "⚠ Warning",
+                      "color": "#fab219",
+                      "index": 1
+                    },
+                    "2": {
+                      "text": "✗ Critical",
+                      "color": "#d03b3b",
+                      "index": 2
+                    },
+                    "3": {
+                      "text": "✗ Failed",
+                      "color": "#d03b3b",
+                      "index": 3
+                    }
+                  }
+                },
+                {
+                  "type": "range",
+                  "options": {
+                    "from": -2,
+                    "to": -1,
+                    "result": {
+                      "text": "? Unknown",
+                      "color": "text",
+                      "index": 4
+                    }
+                  }
+                },
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "nan",
+                    "result": {
+                      "text": "– No reading",
+                      "color": "text",
+                      "index": 5
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 16
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 16,
+          "title": "Temperatures",
+          "description": "Both CPUs and the air coming in.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 23,
+            "w": 9,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "temperatureProbeReading{job=\"snmp\", instance=\"linds-proxmox-01\"}",
+              "legendFormat": "{{temperatureProbeLocationName}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU1 Temp"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "CPU 1"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU2 Temp"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "CPU 2"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "System Board Inlet Temp"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Inlet"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 17,
+          "title": "Power draw",
+          "description": "From the wall: the iDRAC's system board power probe.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 15,
+            "y": 23,
+            "w": 9,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "amperageProbeReading{job=\"snmp\", instance=\"linds-proxmox-01\", amperageProbeLocationName=\"System Board Pwr Consumption\"}",
+              "legendFormat": "Power",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 18,
+          "title": "Fan speed",
+          "description": "The slowest and the fastest of the six fans. The iDRAC runs them in two groups, so the two lines differ; a fan that stops pulls the slowest line down.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "min(coolingDeviceReading{job=\"snmp\", instance=\"linds-proxmox-01\"})",
+              "legendFormat": "Slowest fan",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "max(coolingDeviceReading{job=\"snmp\", instance=\"linds-proxmox-01\"})",
+              "legendFormat": "Fastest fan",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rotrpm",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Slowest fan"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fastest fan"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "bargauge",
+          "id": 19,
+          "title": "Fans now",
+          "description": "Each fan's speed at the last scrape.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "label_replace(coolingDeviceReading{job=\"snmp\", instance=\"linds-proxmox-01\"}, \"fan\", \"Fan $1\", \"coolingDeviceLocationName\", \"System Board Fan([0-9]+)\")",
+              "legendFormat": "{{fan}}",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rotrpm",
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#3987e5",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "manual",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "type": "row",
+          "id": 20,
+          "title": "Proxmox",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 40,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 21,
+          "title": "Guests",
+          "description": "Every virtual machine and container on both hosts, templates left out. CPU is the share of the guest's own cores. A QEMU guest's memory comes from its balloon driver, which can read above its size.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 41,
+            "w": 24,
+            "h": 11
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max by (instance, id, name, type) (pve_up{job=\"pve\", id=~\"(qemu|lxc)/.+\"} * on (instance, id) group_left (name, type) pve_guest_info{job=\"pve\", template=\"0\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "max by (instance, id) (pve_cpu_usage_ratio{job=\"pve\", id=~\"(qemu|lxc)/.+\"} and on (instance, id) pve_guest_info{job=\"pve\", template=\"0\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "C",
+              "expr": "max by (instance, id) (pve_memory_usage_bytes{job=\"pve\", id=~\"(qemu|lxc)/.+\"} and on (instance, id) pve_guest_info{job=\"pve\", template=\"0\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "D",
+              "expr": "max by (instance, id) (pve_memory_size_bytes{job=\"pve\", id=~\"(qemu|lxc)/.+\"} and on (instance, id) pve_guest_info{job=\"pve\", template=\"0\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "E",
+              "expr": "max by (instance, id) (pve_uptime_seconds{job=\"pve\", id=~\"(qemu|lxc)/.+\"} and on (instance, id) pve_guest_info{job=\"pve\", template=\"0\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "instance": 0,
+                  "name": 1,
+                  "id": 2,
+                  "type": 3,
+                  "Value #A": 4,
+                  "Value #B": 5,
+                  "Value #C": 6,
+                  "Value #D": 7,
+                  "Value #E": 8
+                },
+                "renameByName": {
+                  "instance": "Host",
+                  "name": "Guest",
+                  "id": "ID",
+                  "type": "Type",
+                  "Value #A": "State",
+                  "Value #B": "CPU",
+                  "Value #C": "Memory used",
+                  "Value #D": "Memory",
+                  "Value #E": "Up for"
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "State"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "✓ Running",
+                            "color": "#0ca30c",
+                            "index": 0
+                          },
+                          "0": {
+                            "text": "○ Stopped",
+                            "color": "text",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CPU"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percentunit"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Memory used"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Memory"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Up for"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dtdurations"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "–",
+                            "index": 0
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "fields": ""
+            },
+            "sortBy": [
+              {
+                "displayName": "Guest",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 22,
+          "title": "Host CPU",
+          "description": "Each host's CPU use, as Proxmox reports it.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 52,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "pve_cpu_usage_ratio{job=\"pve\", id=~\"node/.+\"}",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-proxmox-02"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-proxmox-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 23,
+          "title": "Host memory",
+          "description": "Memory in use as Proxmox counts it, the ZFS ARC included on jd-proxmox-02, so a high figure there is the cache doing its job.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 52,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "pve_memory_usage_bytes{job=\"pve\", id=~\"node/.+\"} / pve_memory_size_bytes{job=\"pve\", id=~\"node/.+\"}",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-proxmox-02"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-proxmox-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "bargauge",
+          "id": 24,
+          "title": "Storage used",
+          "description": "Every Proxmox storage. local is the host's root file system (StorageProxmoxLocalNearlyFull); the ZFS pools and thin pools have storage health's alerts.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 52,
+            "w": 8,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "(pve_disk_usage_bytes{job=\"pve\"} / pve_disk_size_bytes{job=\"pve\"}) * on (instance, id) group_left (storage) pve_storage_info{job=\"pve\"}",
+              "legendFormat": "{{instance}} · {{storage}}",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#3987e5",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "manual",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "type": "row",
+          "id": 25,
+          "title": "LINDS · TrueNAS, switch and router over SNMP",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 60,
+            "w": 24,
+            "h": 1
+          },
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "id": 26,
+          "title": "NAS pools",
+          "description": "Each ZFS pool on linds-truenas-01. StorageTrueNasPoolNotOnline says which state it is in.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 61,
+            "w": 6,
+            "h": 7
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "(zpoolHealth{job=\"snmp\", instance=\"linds-truenas-01\", zpoolHealth=\"ONLINE\"} * 0) or (zpoolHealth{job=\"snmp\", instance=\"linds-truenas-01\", zpoolHealth!=\"ONLINE\"} * 2)",
+              "legendFormat": "{{zpoolName}}",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "✓ Online",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "2": {
+                      "text": "✗ Not online",
+                      "color": "#d03b3b",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "– No reading"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 16
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "bargauge",
+          "id": 27,
+          "title": "NAS pool space",
+          "description": "Used over used plus available, for each pool's root dataset.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 61,
+            "w": 6,
+            "h": 7
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "datasetUsedBytes{job=\"snmp\", instance=\"linds-truenas-01\", datasetDescr!~\".+/.+\"} / (datasetUsedBytes{job=\"snmp\", instance=\"linds-truenas-01\", datasetDescr!~\".+/.+\"} + datasetAvailableBytes{job=\"snmp\", instance=\"linds-truenas-01\", datasetDescr!~\".+/.+\"})",
+              "legendFormat": "{{datasetDescr}}",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#3987e5",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0,
+              "max": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "manual",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 28,
+          "title": "NAS throughput",
+          "description": "Read and written, all pools together.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 61,
+            "w": 6,
+            "h": 7
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "sum(rate(zpoolReadBytes{job=\"snmp\", instance=\"linds-truenas-01\"}[5m]))",
+              "legendFormat": "Read",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "sum(rate(zpoolWriteBytes{job=\"snmp\", instance=\"linds-truenas-01\"}[5m]))",
+              "legendFormat": "Written",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Read"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Written"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 29,
+          "title": "NAS ARC",
+          "description": "The ZFS read cache in RAM, and the size ZFS is aiming for.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 61,
+            "w": 6,
+            "h": 7
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "zfsArcSize{job=\"snmp\", instance=\"linds-truenas-01\"}",
+              "legendFormat": "Size",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "zfsArcC{job=\"snmp\", instance=\"linds-truenas-01\"}",
+              "legendFormat": "Target",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Size"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Target"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "id": 30,
+          "title": "Switch",
+          "description": "linds-switch-01 (OfficeConnect 1920S): ports with a link, and how long since it started.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 68,
+            "w": 4,
+            "h": 10
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "count(ifOperStatus{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"} == 1)",
+              "legendFormat": "Ports up",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "sysUpTime{job=\"snmp\", instance=\"linds-switch-01\"} / 100",
+              "legendFormat": "Up for",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Up for"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dtdurations"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 24
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "table",
+          "id": 31,
+          "title": "Switch ports",
+          "description": "Every port of linds-switch-01: link (ifOperStatus), speed, traffic in and out together, and damaged frames in the last hour.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 68,
+            "w": 12,
+            "h": 10
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max by (ifName) (ifOperStatus{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "max by (ifName) (ifHighSpeed{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "C",
+              "expr": "sum by (ifName) (rate(ifHCInOctets{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}[5m]) + rate(ifHCOutOctets{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}[5m])) * 8",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "D",
+              "expr": "sum by (ifName) (increase(ifInErrors{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}[1h]) + increase(ifOutErrors{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}[1h]))",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "targetField": "ifName",
+                    "destinationType": "number"
+                  }
+                ],
+                "fields": {}
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "ifName": 0,
+                  "Value #A": 1,
+                  "Value #B": 2,
+                  "Value #C": 3,
+                  "Value #D": 4
+                },
+                "renameByName": {
+                  "ifName": "Port",
+                  "Value #A": "Link",
+                  "Value #B": "Speed",
+                  "Value #C": "Traffic",
+                  "Value #D": "Errors, 1 h"
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Link"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "✓ Up",
+                            "color": "#0ca30c",
+                            "index": 0
+                          },
+                          "2": {
+                            "text": "○ Down",
+                            "color": "text",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Speed"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "Mbits"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "–",
+                            "index": 0
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Traffic"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bps"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "max",
+                    "value": 1000000000.0
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Errors, 1 h"
+                },
+                "properties": [
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "fields": ""
+            },
+            "sortBy": [
+              {
+                "displayName": "Port",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "type": "bargauge",
+          "id": 32,
+          "title": "Damaged frames in the last hour",
+          "description": "Ethernet interfaces on the SNMP devices with receive or transmit errors in the last hour. NetworkInterfaceErrors fires above 100.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 68,
+            "w": 8,
+            "h": 10
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "sort_desc(((increase(ifInErrors{job=\"snmp\"}[1h]) + increase(ifOutErrors{job=\"snmp\"}[1h])) > 0) and on (instance, ifIndex) ifType_info{job=\"snmp\", ifType=\"ethernetCsmacd\"})",
+              "legendFormat": "{{instance}} · {{ifName}}",
+              "range": false,
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "mappings": [],
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#3987e5",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0,
+              "noValue": "✓ None"
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "basic",
+            "valueMode": "color",
+            "namePlacement": "left",
+            "showUnfilled": true,
+            "sizing": "manual",
+            "minVizHeight": 16,
+            "minVizWidth": 8,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 33,
+          "title": "linds-vyos-01: internet and tunnel",
+          "description": "The LINDS router's WAN (eth1) and the tunnel to JD (vti0). Until the cutover to linds-router-01, which the Router dashboard shows.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 78,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "rate(ifHCInOctets{job=\"snmp\", instance=\"linds-vyos-01\", ifName=~\"eth1|vti0\"}[5m]) * 8",
+              "legendFormat": "{{ifName}} in",
+              "range": true,
+              "instant": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "rate(ifHCOutOctets{job=\"snmp\", instance=\"linds-vyos-01\", ifName=~\"eth1|vti0\"}[5m]) * 8",
+              "legendFormat": "{{ifName}} out",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bps",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "lineInterpolation": "linear",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "pointSize": 4,
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "barAlignment": 0,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "min": 0
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "eth1 in"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Internet in"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "eth1 out"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Internet out"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "vti0 in"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Tunnel in"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "vti0 out"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Tunnel out"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          }
+        }
+      ]
+    }

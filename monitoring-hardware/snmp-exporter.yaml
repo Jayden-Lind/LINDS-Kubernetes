@@ -1,0 +1,99 @@
+# snmp_exporter: the LINDS iDRAC, TrueNAS, switch and router over SNMP.
+#
+# One exporter for every device. Prometheus names the device and the modules
+# in each scrape (/snmp?target=...&module=...&auth=..., scrape-configs.yaml),
+# so a new device is a new target there, not a change here.
+#
+# Modules: the image's own snmp.yml (if_mib, system, ucd_*, and the auths
+# public_v1 and public_v2), plus the two in snmp/, which kustomization.yaml
+# turns into the snmp-exporter-modules ConfigMap: dell_health (generated, see
+# snmp/build-dell-health.py) and truenas. The community is "public" on every
+# device, which is not a secret, so there is no Secret here.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snmp-exporter
+  labels:
+    app.kubernetes.io/name: snmp-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: snmp-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: snmp-exporter
+    spec:
+      # Every SNMP device is at LINDS. A walk is one round trip per packet:
+      # from there it takes 0.4 ms, from JD 13 ms over the tunnel, and a
+      # scrape is tens of packets. Preferred, not required: at JD it still
+      # works, only slower.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: datacenter
+                    operator: In
+                    values: ["linds"]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: snmp-exporter
+          image: quay.io/prometheus/snmp-exporter:v0.30.1
+          args:
+            - --config.file=/etc/snmp_exporter/snmp.yml
+            - --config.file=/etc/snmp-exporter/dell-health.yml
+            - --config.file=/etc/snmp-exporter/truenas.yml
+          ports:
+            - name: http
+              containerPort: 9116
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: modules
+              mountPath: /etc/snmp-exporter
+      volumes:
+        - name: modules
+          configMap:
+            name: snmp-exporter-modules
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: snmp-exporter
+  labels:
+    app.kubernetes.io/name: snmp-exporter
+spec:
+  selector:
+    app.kubernetes.io/name: snmp-exporter
+  ports:
+    - name: http
+      port: 9116
+      targetPort: http

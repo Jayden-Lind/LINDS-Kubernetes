@@ -1,0 +1,104 @@
+# prometheus-pve-exporter: both Proxmox hosts through their API.
+#
+# The node, every guest (up, CPU, memory, disk and network I/O) and every
+# storage. It logs in as prometheus@pve, which has only PVEAuditor on "/"
+# (README.md, "Proxmox"), with one API token per host in the
+# pve-exporter-config Secret (external-secrets.yaml). Each host is a module
+# there, named after the host.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pve-exporter
+  labels:
+    app.kubernetes.io/name: pve-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pve-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pve-exporter
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: datacenter
+                    operator: In
+                    values: ["jd"]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: pve-exporter
+          image: docker.io/prompve/prometheus-pve-exporter:3.10.1
+          args:
+            - --config.file=/etc/pve-exporter/pve.yml
+            # The config collector reads every guest's configuration for its
+            # onboot flag (pve_onboot_status). On Proxmox 9.2 an auditor
+            # cannot read the configuration of a container that has
+            # environment variables (jd-s3-01): the API answers 403 instead
+            # of leaving them out, and one 403 fails the whole jd-proxmox-02
+            # scrape. README.md, "Proxmox", has the details.
+            - --no-collector.config
+          ports:
+            - name: http
+              containerPort: 9221
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pve-exporter
+              readOnly: true
+            # Python will not start without a writable temporary directory.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          secret:
+            secretName: pve-exporter-config
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pve-exporter
+  labels:
+    app.kubernetes.io/name: pve-exporter
+spec:
+  selector:
+    app.kubernetes.io/name: pve-exporter
+  ports:
+    - name: http
+      port: 9221
+      targetPort: http
