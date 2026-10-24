@@ -184,20 +184,6 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: linds-postgres-zabbix
-  namespace: postgresql-linds
-spec:
-  cluster:
-    name: linds-postgres
-  name: zabbix
-  owner: postgres
-  extensions:
-    - name: pg_stat_statements
-      ensure: present
----
-apiVersion: postgresql.cnpg.io/v1
-kind: Database
-metadata:
   name: linds-postgres-catcrawl
   namespace: postgresql-linds
 spec:

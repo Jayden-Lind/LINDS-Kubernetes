@@ -89,7 +89,6 @@ spec:
                 secretKeyRef:
                   name: keycloak-client-secrets
                   key: vault
-            # zabbix is SAML - no client secret, so nothing to inject here.
           volumeMounts:
             - name: realm
               mountPath: /config
