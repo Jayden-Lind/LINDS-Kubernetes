@@ -17,5 +17,7 @@ resources:
   - nginx/pdf.yml
   - nginx/argocd.yml
 
+  - router/port-forward-reader.yaml
+
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml

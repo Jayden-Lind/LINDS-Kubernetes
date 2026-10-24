@@ -35,6 +35,18 @@ spec:
             configStorage: 50Gi
           service:
             type: LoadBalancer
+            # Local: Plex sees each client's own address. With Cluster, a
+            # connection that reached another node was source-NATed to that
+            # node's address (10.0.53.x), so Plex could not tell LAN from
+            # internet: LAN clients missed allowedNetworks and
+            # LanNetworksBandwidth, and Tautulli logged node addresses. It also
+            # makes Cilium advertise the address only from Plex's node.
+            externalTrafficPolicy: Local
+            annotations:
+              # The router forwards WAN port 32400 here
+              # (docs/publish-a-service.md). No public name: clients find the
+              # server through plex.tv.
+              public.linds.com.au/ports: "32400/tcp"
           nodeSelector:
             datacenter: jd
           # Never on the control plane: transcodes and the scheduled analysis

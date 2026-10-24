@@ -1,0 +1,54 @@
+# Read-only access for jd-router-01's k8s-port-forward daemon
+# (LINDS-Ansible roles/router/files/usr/local/sbin/k8s-port-forward).
+#
+# The daemon lists the LoadBalancer Services every 20 s. A Service with the
+# annotation public.linds.com.au/ports gets those WAN ports forwarded to its
+# LoadBalancer address. See docs/publish-a-service.md.
+#
+# The router keeps this token in its vault (k8s_port_forward_token in
+# LINDS-Ansible inventory/router.yml). The token can only read Services: it
+# cannot read Secrets, change anything, or exec into a pod.
+#
+# To rotate the token: delete the Secret below, let Argo CD create it again,
+# then put the new token in the vault and push it to the router:
+#   kubectl -n kube-system get secret router-port-forward-token \
+#     -o jsonpath='{.data.token}' | base64 -d
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: router-port-forward
+  namespace: kube-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: router-port-forward
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: router-port-forward
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: router-port-forward
+subjects:
+  - kind: ServiceAccount
+    name: router-port-forward
+    namespace: kube-system
+---
+# A long-lived token: the router is outside the cluster and cannot ask for
+# short-lived ones. The token controller fills in the data.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: router-port-forward-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: router-port-forward
+type: kubernetes.io/service-account-token
