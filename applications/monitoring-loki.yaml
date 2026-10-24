@@ -253,6 +253,11 @@ spec:
                 port: 514
                 targetPort: 514
                 protocol: "UDP"
+              # Loki push API for the Windows servers (loki.source.api below).
+              - name: "loki-push"
+                port: 3100
+                targetPort: 3100
+                protocol: "TCP"
 
             configMap:
               content: |
@@ -567,6 +572,70 @@ spec:
                         http_status        = "",
                       }
                     }
+                  }
+                }
+
+                // --- Windows event logs ---
+                // Grafana Alloy on each Windows server (LINDS-Ansible role
+                // windows_logs) reads the event logs and pushes them here with
+                // the Loki push API. Each line is the JSON event of
+                // loki.source.windowsevent (event_id, level, source, message,
+                // event_data ...). The servers set the labels job="windows",
+                // hostname and channel.
+                loki.source.api "windows" {
+                  http {
+                    listen_address = "0.0.0.0"
+                    listen_port    = 3100
+                  }
+                  // Keep the time of the event. Without this every line gets
+                  // the time it arrived, and a backlog that a server sends
+                  // after an outage lands at one moment.
+                  use_incoming_timestamp = true
+                  forward_to             = [loki.process.windows.receiver]
+                }
+
+                loki.process "windows" {
+                  forward_to = [loki.write.default.receiver]
+
+                  stage.json {
+                    expressions = {
+                      level_number = "level",
+                      source       = "source",
+                      event_id     = "event_id",
+                    }
+                  }
+                  // The level by number, because the text (levelText) is
+                  // missing when the event's provider has no message file.
+                  // 1 critical, 2 error, 3 warning, 5 verbose; 4 and 0 are
+                  // information (0 is every Security audit event, and JSON
+                  // leaves it out). Grafana colours these names.
+                  // The chart renders this file with Helm's tpl, so the Go
+                  // template is a Helm raw string (backticks inside double
+                  // braces), which Helm prints as it is.
+                  stage.template {
+                    source   = "level"
+                    template = {{`"{{ if eq .level_number \"1\" }}critical{{ else if eq .level_number \"2\" }}error{{ else if eq .level_number \"3\" }}warning{{ else if eq .level_number \"5\" }}debug{{ else }}info{{ end }}"`}}
+                  }
+                  stage.labels {
+                    values = {
+                      level = "",
+                    }
+                  }
+                  // Dozens of providers and hundreds of event IDs per server:
+                  // as labels they would split every stream. As structured
+                  // metadata they still filter and group, for example
+                  // `| source="Microsoft-Windows-DNS-Client"` or
+                  // `sum by (source, event_id) (...)`.
+                  stage.structured_metadata {
+                    values = {
+                      source   = "",
+                      event_id = "",
+                    }
+                  }
+                  // loki.source.windowsevent adds the computer name (the FQDN
+                  // in capitals); hostname says the same.
+                  stage.label_drop {
+                    values = ["computer"]
                   }
                 }
 
