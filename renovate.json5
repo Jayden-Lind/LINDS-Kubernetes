@@ -28,7 +28,6 @@
       // version - the game is pulled from Steam at runtime - so this moves
       // rarely and never needs to be urgent.
       "/^valheim/statefulset\\.yaml$/",
-      "/^zabbix/config-job\\.yaml$/",
       // snmp_exporter, ipmi_exporter and pve-exporter. After a snmp_exporter
       // bump, regenerate monitoring-hardware/snmp/dell-health.yml (README).
       "/^monitoring-hardware/[^/]+-exporter\\.yaml$/",
@@ -100,21 +99,6 @@
       ],
       datasourceTemplate: "docker",
     },
-    {
-      // The community.zabbix collection is pinned in two places that must
-      // agree: the config Job installs it, CI caches and syntax-checks it.
-      customType: "regex",
-      managerFilePatterns: [
-        "/^zabbix/config-job\\.yaml$/",
-        "/^\\.github/workflows/validate\\.yaml$/",
-      ],
-      matchStrings: [
-        "community\\.zabbix:==(?<currentValue>[0-9.]+)",
-        "ZABBIX_COLLECTION_VERSION: (?<currentValue>[0-9.]+)",
-      ],
-      depNameTemplate: "community.zabbix",
-      datasourceTemplate: "galaxy-collection",
-    },
   ],
 
   // Container image tags are argocd-image-updater's job (image-updates/).
@@ -160,12 +144,6 @@
       // (catcrawl/catcrawl-vacuum-cron.yaml) move in one PR.
       matchPackageNames: ["ghcr.io/cloudnative-pg/postgresql"],
       groupName: "postgresql",
-    },
-    {
-      // Both pins of the Ansible collection move in one PR (see the regex
-      // manager above).
-      matchPackageNames: ["community.zabbix"],
-      groupName: "community.zabbix",
     },
     // loki and alloy (both in monitoring-loki.yaml) are deliberately NOT
     // grouped - they are versioned independently upstream, so grouping
