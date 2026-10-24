@@ -65,6 +65,11 @@ spec:
               # (default 5000, mirrored by the datasource maxLines).
               max_query_series: 2000
               max_entries_limit_per_query: 20000
+            # What Grafana's Logs Drilldown reads for its Patterns tab
+            # (/loki/api/v1/patterns). Off, every visit to it logged a 404
+            # from the Loki datasource.
+            pattern_ingester:
+              enabled: true
             compactor:
               working_directory: /var/loki/compactor
               retention_enabled: true
@@ -319,7 +324,24 @@ spec:
 
                 loki.source.kubernetes "pods" {
                   targets    = discovery.relabel.pods.output
+                  forward_to = [loki.process.pods.receiver]
+                }
+
+                // A new Alloy pod reads every container's log from the start:
+                // the read positions are in the pod's own storage. Loki takes
+                // nothing older than a week (reject_old_samples_max_age, 168h),
+                // and on 2026-10-24, after the chart 1.14.3 upgrade, it refused 423
+                // batches of 7-day-old lines from quiet containers (CSI
+                // registrars, node-exporter), each one an error here and in
+                // Loki. Lines that old are dropped before they are sent; the
+                // newer ones Loki already has and ignores as duplicates.
+                loki.process "pods" {
                   forward_to = [loki.write.default.receiver]
+
+                  stage.drop {
+                    older_than          = "167h"
+                    drop_counter_reason = "older_than_loki_accepts"
+                  }
                 }
 
                 // --- Syslog: three listeners -> relabel -> process -> Loki ---

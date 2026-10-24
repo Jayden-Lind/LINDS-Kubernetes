@@ -51,13 +51,16 @@ spec:
           ports:
             - name: http
               containerPort: 9290
+          # / and not /metrics: /metrics also reads the local machine's
+          # BMC, which a pod does not have, so every probe logged four
+          # "permission denied" errors (38,000 a day).
           livenessProbe:
             httpGet:
-              path: /metrics
+              path: /
               port: http
           readinessProbe:
             httpGet:
-              path: /metrics
+              path: /
               port: http
           resources:
             requests:
