@@ -10,9 +10,11 @@ internet through jd-router-01, with a public DNS name in Cloudflare.
 2. `k8s-port-forward` on jd-router-01 reads the annotation
    `public.linds.com.au/ports`. In 20 seconds it forwards those WAN ports to
    the Service's address (LINDS-Ansible `roles/router`, "Port forwards").
-3. `external-dns-public` writes the name in `public.linds.com.au/hostname` to
+3. If the Service has `public.linds.com.au/publish: "true"`,
+   `external-dns-public` writes the name in `public.linds.com.au/hostname` to
    Cloudflare, as a CNAME to `jd.linds.com.au`. This takes 1 minute
-   (`applications/external-dns-public.yaml`).
+   (`applications/external-dns-public.yaml`). Nothing without that annotation
+   gets a public name.
 4. `ddclient` on jd-router-01 keeps `jd.linds.com.au` on the WAN address. It
    has an A record only, so an IPv6 client does not try an address that goes
    nowhere.
@@ -32,7 +34,8 @@ metadata:
   annotations:
     # The WAN ports that the router forwards to this Service.
     public.linds.com.au/ports: "2456-2457/udp"
-    # The public name. Leave out both lines for no public name.
+    # The public name. Leave out these three lines for no public name.
+    public.linds.com.au/publish: "true"
     public.linds.com.au/hostname: game.linds.com.au
     public.linds.com.au/target: jd.linds.com.au
     # The same name in the internal DNS, with the Service's own address.
@@ -91,14 +94,24 @@ restarts gets a new endpoint, and the policy is enforced at once.
 Do not forward a port for a web application. Put it behind the mTLS ingress:
 
 1. Give its Ingress the label or annotation `linds.com.au/mtls-mirror: "true"`.
-2. Kyverno makes a copy of the Ingress on the class `nginx-mtls`
+   Kyverno makes a copy of the Ingress on the class `nginx-mtls`
    (`kyverno/mirror-mtls-ingress.yaml`).
-3. The router forwards WAN port 443 to the mTLS ingress (172.16.1.12).
-4. `external-dns-public` writes each host of the copy to Cloudflare as a
-   CNAME to `jd.linds.com.au`.
+2. Give its Ingress the annotation `public.linds.com.au/publish: "true"`.
+   Kyverno copies it to the copy, and `external-dns-public` writes each host
+   to Cloudflare as a CNAME to `jd.linds.com.au`.
+3. Add the application's pods to the egress rules of
+   `nginx-ingress-mtls/network-policy.yaml`, on the backend port.
 
-A client must have a client certificate from `linds-ca`
-(`nginx-ingress-mtls/README.md`).
+The router has one forward for all web applications: WAN port 443 to the
+mTLS ingress (172.16.1.12). The ingress chooses the application by the host
+name that the client sends. A client must have a client certificate from
+`linds-ca` (`nginx-ingress-mtls/README.md`).
+
+CAUTION: the copy is what makes an application reachable from the internet,
+not the DNS record. A client with a certificate reaches every host on
+`nginx-mtls` through the WAN address, with or without a public name. To
+keep an application private, do not give its Ingress
+`linds.com.au/mtls-mirror`.
 
 ## Check a published service
 
@@ -115,6 +128,8 @@ A client must have a client certificate from `linds-ca`
 
 Remove the annotations, or delete the Service. The router removes the
 forward in 20 seconds. `external-dns-public` deletes the record in 1 minute.
+For a web application, remove `linds.com.au/mtls-mirror`: Kyverno deletes the
+copy, and with it the record.
 
 ## Limits
 

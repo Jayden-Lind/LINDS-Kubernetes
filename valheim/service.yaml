@@ -26,6 +26,7 @@ metadata:
     # Internet: the router forwards these WAN ports here, and Cloudflare
     # gets valheim.linds.com.au as a CNAME to jd.linds.com.au.
     public.linds.com.au/ports: "2456-2457/udp"
+    public.linds.com.au/publish: "true"
     public.linds.com.au/hostname: valheim.linds.com.au
     public.linds.com.au/target: jd.linds.com.au
 spec:

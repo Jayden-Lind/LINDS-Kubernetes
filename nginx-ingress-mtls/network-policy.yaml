@@ -4,7 +4,8 @@
 # the nginx-mtls Ingresses, on their ports. No internet, no LAN, no other pod.
 #
 # CAUTION: when you mirror a new Ingress onto nginx-mtls, add its backend
-# below. Until then the new host answers 502.
+# below. Until then the new host answers 502. The backends today: Home
+# Assistant, Immich, Radarr, Sonarr.
 #
 # The controller's service account can still read every Secret in the cluster
 # (the chart's ClusterRole), and it needs the API server. This policy cannot
@@ -66,14 +67,6 @@ spec:
               protocol: TCP
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: keycloak
-            app: keycloak
-      toPorts:
-        - ports:
-            - port: "8080"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
             k8s:io.kubernetes.pod.namespace: arr
             app: radarr
       toPorts:
@@ -87,14 +80,6 @@ spec:
       toPorts:
         - ports:
             - port: "8989"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: claude-code
-            app.kubernetes.io/name: claude-code
-      toPorts:
-        - ports:
-            - port: "7681"
               protocol: TCP
     # Home Assistant runs on the node network (hostNetwork), so it is a
     # node, not a pod, to Cilium: whichever node it is on.
