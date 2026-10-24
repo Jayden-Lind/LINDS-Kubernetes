@@ -8,11 +8,15 @@
 # the WAN address. So every public name follows a new WAN address within
 # ddclient's 5 minutes, and none of them gets an AAAA that leads nowhere.
 #
-# What it publishes (docs/publish-a-service.md):
-#   * a LoadBalancer Service with public.linds.com.au/hostname and
+# It publishes only what says so: the annotation
+#   public.linds.com.au/publish: "true"
+# (annotationFilter below). Nothing else is published. With it
+# (docs/publish-a-service.md):
+#   * a LoadBalancer Service gets public.linds.com.au/hostname, as a CNAME to
 #     public.linds.com.au/target;
-#   * every Ingress of class nginx-mtls (the mTLS mirrors). The mTLS
-#     controller reports jd.linds.com.au as their address
+#   * an Ingress of class nginx-mtls (an mTLS mirror) gets its hosts. Kyverno
+#     copies the annotation from the source Ingress to the mirror. The mTLS
+#     controller reports jd.linds.com.au as the address of its Ingresses
 #     (external-status-address in applications/nginx-ingress-mtls.yaml), so
 #     that is the target.
 # A private address is never written (--exclude-target-net): a Service with a
@@ -56,6 +60,7 @@ spec:
           domainFilters:
             - linds.com.au
           annotationPrefix: public.linds.com.au/
+          annotationFilter: public.linds.com.au/publish=true
           registry: txt
           txtOwnerId: k8s-public
           policy: sync

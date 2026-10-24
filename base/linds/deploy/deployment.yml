@@ -255,6 +255,7 @@ metadata:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.org/websocket-services: "radarr"
     linds.com.au/mtls-mirror: "true"
+    public.linds.com.au/publish: "true"
 spec:
   ingressClassName: nginx
   rules:
@@ -356,6 +357,7 @@ metadata:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.org/websocket-services: "sonarr"
     linds.com.au/mtls-mirror: "true"
+    public.linds.com.au/publish: "true"
 spec:
   ingressClassName: nginx
   rules:

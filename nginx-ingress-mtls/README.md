@@ -38,7 +38,8 @@ Copy the `Certificate` block in [pki.yaml](pki.yaml) with a new name
 Add a second Ingress for the service with `ingressClassName: nginx-mtls` and a
 distinct `<name>-mtls.linds.com.au` host — see
 [base/home-assistant/mtls.yml](../base/home-assistant/mtls.yml) for the template.
-external-dns-public writes each host of the `nginx-mtls` Ingress to Cloudflare as
-a CNAME to `jd.linds.com.au`, and jd-router-01 forwards WAN port 443 to this
-controller (see [docs/publish-a-service.md](../docs/publish-a-service.md)). The
-internal (non-mTLS) Ingress on the `nginx` class is unaffected.
+jd-router-01 forwards WAN port 443 to this controller. For a public DNS name,
+also give the Ingress `public.linds.com.au/publish: "true"`: external-dns-public
+then writes each host to Cloudflare as a CNAME to `jd.linds.com.au` (see
+[docs/publish-a-service.md](../docs/publish-a-service.md)). The internal
+(non-mTLS) Ingress on the `nginx` class is unaffected.

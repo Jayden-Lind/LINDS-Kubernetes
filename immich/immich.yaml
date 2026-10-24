@@ -546,6 +546,9 @@ metadata:
     linds.com.au/mtls-mirror: "true"
   annotations:
     cert-manager.io/cluster-issuer: linds-ca
+    # Publish the mirror's host in Cloudflare (external-dns-public). Kyverno
+    # copies it onto immich-server-mtls.
+    public.linds.com.au/publish: "true"
     # NOTE: this cluster runs the F5/NGINX Inc controller (nginx/nginx-ingress),
     # which only reads nginx.org/* annotations. Upload size (client-max-body-size: 0)
     # and proxy-read/send-timeout (3600) are set globally on the controller

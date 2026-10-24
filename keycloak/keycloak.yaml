@@ -45,10 +45,9 @@ spec:
     tlsSecret: keycloak-linds-tls
     annotations:
       cert-manager.io/cluster-issuer: linds-ca
-    labels:
-      # Kyverno mirrors this onto the nginx-mtls class (kyverno/), so external
-      # Immich OIDC redirects can still reach Keycloak behind a client cert.
-      linds.com.au/mtls-mirror: "true"
+    # Not mirrored onto the mTLS ingress: Keycloak is not reachable from the
+    # internet. Away from home, sign in to the apps that use it (Immich's
+    # OAuth button, Grafana, Argo CD) over the VPN.
 
   # linds-CA issued both the cluster certificates and the domain controllers'
   # LDAPS certificates, so this one CA is all Keycloak needs to validate LDAPS
