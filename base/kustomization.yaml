@@ -21,3 +21,12 @@ resources:
 
   - linds/deploy/deployment.yml
   - linds/deploy/pdf.yml
+  - linds/deploy/qbit-manage.yml
+
+# qbit_manage's config (linds/deploy/qbit-manage.yml). The name gets a hash of
+# the content, so a change restarts the Deployment with it.
+configMapGenerator:
+  - name: qbit-manage-config
+    namespace: arr
+    files:
+      - config.yml=linds/deploy/qbit-manage-config.yml
