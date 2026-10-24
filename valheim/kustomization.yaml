@@ -9,3 +9,4 @@ resources:
   - password.yaml
   - service.yaml
   - statefulset.yaml
+  - network-policy.yaml

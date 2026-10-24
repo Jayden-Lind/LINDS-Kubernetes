@@ -1,0 +1,69 @@
+# Valheim is open to the internet (jd-router-01 forwards UDP 2456-2457 here,
+# see service.yaml). If the server is taken over, this policy keeps it away
+# from everything else: no LAN, no other site, no cluster pod, node or API
+# server. It may only answer players, ask the cluster DNS, and reach the
+# internet on the ports Steam and SteamCMD use.
+#
+# Seen with Hubble and the Cilium connection table, 2026-10-24: players and
+# Steam server-browser queries in on 2456-2457/udp; out to Steam on 443/tcp,
+# 27018/tcp and 27015-27060/udp; the install-mods init container fetches its
+# DLL from GitHub over 443. 80/tcp is for SteamCMD's content servers when the
+# server updates at its daily restart.
+#
+# The internet rule names ports instead of allowing all of them. jd-router-01's
+# public address is "internet" too, and the router answers SSH, DNS, SNMP and
+# BGP to any source on the cluster VLAN, which is where this pod's packets
+# come from after Cilium's masquerade.
+#
+# To see what it drops: hubble observe --namespace valheim --verdict DROPPED
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: valheim-server
+spec:
+  description: "Valheim: players in, cluster DNS and Steam out, nothing else"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: valheim
+      app.kubernetes.io/instance: valheim
+  ingress:
+    # Players and server-browser queries, from the internet and the LAN
+    # (externalTrafficPolicy Local keeps their own addresses).
+    - fromEntities: [world]
+      toPorts:
+        - ports:
+            - port: "2456"
+              endPort: 2457
+              protocol: UDP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+            - port: "27000"
+              endPort: 27100
+              protocol: TCP
+            - port: "27000"
+              endPort: 27100
+              protocol: UDP
+            # Steam networking (STUN and relays).
+            - port: "3478"
+              protocol: UDP
+            - port: "4379"
+              endPort: 4380
+              protocol: UDP

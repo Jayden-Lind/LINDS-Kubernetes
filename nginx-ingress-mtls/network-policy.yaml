@@ -1,0 +1,105 @@
+# The mTLS ingress is open to the internet (jd-router-01 forwards 443/tcp
+# here). If the controller is taken over, this policy limits it to its job:
+# it may take HTTPS from anyone, and send requests only to the backends of
+# the nginx-mtls Ingresses, on their ports. No internet, no LAN, no other pod.
+#
+# CAUTION: when you mirror a new Ingress onto nginx-mtls, add its backend
+# below. Until then the new host answers 502.
+#
+# The controller's service account can still read every Secret in the cluster
+# (the chart's ClusterRole), and it needs the API server. This policy cannot
+# take that away.
+#
+# To see what it drops: hubble observe --namespace nginx-ingress-mtls --verdict DROPPED
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: nginx-ingress-mtls
+  namespace: nginx-ingress-mtls
+spec:
+  description: "mTLS ingress: HTTPS in, the mirrored backends and the API server out, nothing else"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: nginx-ingress
+      app.kubernetes.io/instance: nginx-ingress-mtls
+  ingress:
+    - fromEntities: [world]
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "9113"
+              protocol: TCP
+  egress:
+    # Ingresses, Services, EndpointSlices, Secrets, leader election.
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # The backends of the nginx-mtls Ingresses
+    # (kubectl get ingress -A | grep nginx-mtls).
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: immich
+            app.kubernetes.io/name: server
+            app.kubernetes.io/instance: immich
+      toPorts:
+        - ports:
+            - port: "2283"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: keycloak
+            app: keycloak
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: arr
+            app: radarr
+      toPorts:
+        - ports:
+            - port: "7878"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: arr
+            app: sonarr
+      toPorts:
+        - ports:
+            - port: "8989"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: claude-code
+            app.kubernetes.io/name: claude-code
+      toPorts:
+        - ports:
+            - port: "7681"
+              protocol: TCP
+    # Home Assistant runs on the node network (hostNetwork), so it is a
+    # node, not a pod, to Cilium: whichever node it is on.
+    - toEntities: [host, remote-node]
+      toPorts:
+        - ports:
+            - port: "8123"
+              protocol: TCP
