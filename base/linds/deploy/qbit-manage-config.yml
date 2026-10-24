@@ -1,0 +1,97 @@
+# qbit_manage config (https://github.com/StuffAnThings/qbit_manage), for the
+# qbit-manage Deployment in qbit-manage.yml. base/kustomization.yaml makes it
+# a ConfigMap whose name has a hash, so a change here restarts the pod.
+#
+# It removes a torrent and its data once no library uses the data any more.
+# Downloads save to /mnt/nas/downloads/<category> and Radarr and Sonarr
+# hardlink them into the libraries, so a file in a library and its torrent are
+# two links to one file. When Maintainerr (through Plex or an *arr), Plex,
+# Radarr or Sonarr deletes the library file, the torrent's file is left with
+# one link and still uses the space. Every 30 minutes:
+#
+# 1. tag_nohardlinks tags each completed radarr or tv-sonarr torrent whose
+#    files have no link outside /mnt/nas/downloads with noHL.
+# 2. share_limits removes a noHL torrent and its data at ratio 1 or after 14
+#    days of seeding, but never before 7 days of seeding. A download that was
+#    never imported is noHL too: the 7 days are the time to import it by hand.
+#    The data goes to /mnt/nas/downloads/.RecycleBin, emptied after 7 days.
+#
+# CAUTION: a torrent whose files are IN a library (old downloads saved into
+# Movies or TVShows) also has no second link. Such torrents carry the tag
+# in-library, and both steps skip that tag. Give it to any torrent you save
+# into a library by hand.
+#
+# Maintainerr itself also removes the torrents of a title that it deletes
+# through Radarr or Sonarr (Settings > Download client). This file catches the
+# rest: titles that it deletes through Plex, and torrents that were still
+# seeding when it deleted the title.
+
+commands:
+  dry_run: false
+  recheck: false
+  cat_update: false
+  tag_update: false
+  rem_unregistered: false
+  tag_tracker_error: false
+  rem_orphaned: false
+  tag_nohardlinks: true
+  share_limits: true
+  skip_qb_version_check: false
+  skip_cleanup: false
+
+qbt:
+  # LINDS-Torrent-02. No login: its web UI trusts 10.0.0.0/8, pods included.
+  host: "10.0.36.2:8080"
+  user: ""
+  pass: ""
+
+settings:
+  nohardlinks_tag: noHL
+  share_limits_tag: ~share_limit
+  share_limits_filter_completed: true
+  tag_nohardlinks_filter_completed: true
+  # Leave qBittorrent's own limit (ratio 1, then stop) on every torrent that
+  # is not in the noHL group below.
+  disable_qbt_default_share_limits: false
+  tag_stalled_torrents: false
+
+directory:
+  # The share is at /mnt/nas here and on the torrent host, so the paths are
+  # the same and there is no remote_dir.
+  root_dir: /mnt/nas/downloads/
+  recycle_bin: /mnt/nas/downloads/.RecycleBin
+
+cat:
+  radarr: /mnt/nas/downloads/radarr
+  tv-sonarr: /mnt/nas/downloads/tv-sonarr
+
+nohardlinks:
+  global_options:
+    exclude_tags:
+      - in-library
+    ignore_root_dir: true
+  radarr:
+  tv-sonarr:
+
+share_limits:
+  noHL:
+    priority: 1
+    include_all_tags:
+      - noHL
+    exclude_any_tags:
+      - in-library
+    categories:
+      - radarr
+      - tv-sonarr
+    max_ratio: 1.0
+    max_seeding_time: 14d
+    min_seeding_time: 7d
+    cleanup: true
+    share_limit_action: Default
+    add_group_to_tag: true
+
+recyclebin:
+  enabled: true
+  empty_after_x_days: 7
+  save_torrents: false
+  split_by_category: false

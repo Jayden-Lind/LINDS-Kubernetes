@@ -31,6 +31,8 @@
       // snmp_exporter, ipmi_exporter and pve-exporter. After a snmp_exporter
       // bump, regenerate monitoring-hardware/snmp/dell-health.yml (README).
       "/^monitoring-hardware/[^/]+-exporter\\.yaml$/",
+      // qbit_manage. Read its release notes for config changes first.
+      "/^base/linds/deploy/qbit-manage\\.yml$/",
     ],
   },
 

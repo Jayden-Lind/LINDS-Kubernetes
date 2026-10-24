@@ -1,0 +1,81 @@
+---
+# qbit_manage: removes a torrent and its data once no library uses the data
+# any more. What it does and why: qbit-manage-config.yml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbit-manage
+  namespace: arr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qbit-manage
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: qbit-manage
+    spec:
+      # Near the NAS and the torrent host.
+      nodeSelector:
+        datacenter: linds
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+      # qbit_manage writes missing defaults back into config.yml, so it gets a
+      # writable copy of the ConfigMap on each start.
+      initContainers:
+        - name: config
+          image: ghcr.io/stuffanthings/qbit_manage:v4.14.0
+          command: ["sh", "-c", "cp /config-src/config.yml /config/config.yml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: config-src
+              mountPath: /config-src
+      containers:
+        - name: qbit-manage
+          image: ghcr.io/stuffanthings/qbit_manage:v4.14.0
+          env:
+            - name: QBT_CONFIG_DIR
+              value: /config
+            # Minutes between runs. It also runs once at start.
+            - name: QBT_SCHEDULE
+              value: "30"
+            - name: QBT_WEB_SERVER
+              value: "false"
+            - name: TZ
+              value: Australia/Melbourne
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            # The same path as on the torrent host (LINDS-Ansible
+            # inventory/torrent.yml), so the torrent paths resolve here.
+            - name: linds-nfs-nas
+              mountPath: /mnt/nas
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: config-src
+          configMap:
+            name: qbit-manage-config
+        - name: linds-nfs-nas
+          persistentVolumeClaim:
+            claimName: linds-nfs-nas-pvc
