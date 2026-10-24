@@ -214,12 +214,13 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
+            # The whole share, once, at the path qBittorrent uses
+            # (LINDS-Ansible inventory/torrent.yml): downloads/ and Movies/
+            # must be on one mount for imports to be hardlinks. Two subPath
+            # mounts of the same share are two mounts, and link() across them
+            # fails with EXDEV, so Radarr copies instead.
             - name: linds-nfs-nas
-              mountPath: /mnt/nas/torrent
-              subPath: torrent
-            - name: linds-nfs-nas
-              mountPath: /mnt/nas/Movies
-              subPath: Movies
+              mountPath: /mnt/nas
           ports:
             - containerPort: 7878
       restartPolicy: Always
@@ -313,15 +314,10 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
+            # See radarr above. The root folders are /mnt/nas/TVShows and
+            # /mnt/nas/torrent.
             - name: linds-nfs-nas
-              mountPath: /mnt/torrent
-              subPath: torrent
-            - name: linds-nfs-nas
-              mountPath: /mnt/TVShows
-              subPath: TVShows
-            - name: linds-nfs-nas
-              mountPath: /mnt/Movies
-              subPath: Movies
+              mountPath: /mnt/nas
           ports:
             - containerPort: 8989
       restartPolicy: Always
@@ -410,15 +406,9 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: arr-config
+            # The same paths as Radarr and Sonarr, so no path mappings.
             - name: linds-nfs-nas
-              mountPath: /mnt/TVShows
-              subPath: TVShows
-            - name: linds-nfs-nas
-              mountPath: /mnt/Movies
-              subPath: Movies
-            - name: linds-nfs-nas
-              mountPath: /mnt/torrent
-              subPath: torrent
+              mountPath: /mnt/nas
           ports:
             - containerPort: 6767
       restartPolicy: Always
