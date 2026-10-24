@@ -64,10 +64,14 @@ spec:
         device: router
         __param_module: system,if_mib,ucd_la_table,ucd_memory
         __param_auth: public_v2
+  # action: replace is the default, written out so that ArgoCD's diff
+  # matches what the API server stores.
   relabelings:
-    - sourceLabels: [__address__]
+    - action: replace
+      sourceLabels: [__address__]
       targetLabel: __param_target
-    - targetLabel: __address__
+    - action: replace
+      targetLabel: __address__
       replacement: snmp-exporter.monitoring.svc:9116
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
@@ -88,10 +92,14 @@ spec:
         site: jd
         device: bmc
         __param_module: jd-proxmox-02
+  # action: replace is the default, written out so that ArgoCD's diff
+  # matches what the API server stores.
   relabelings:
-    - sourceLabels: [__address__]
+    - action: replace
+      sourceLabels: [__address__]
       targetLabel: __param_target
-    - targetLabel: __address__
+    - action: replace
+      targetLabel: __address__
       replacement: ipmi-exporter.monitoring.svc:9290
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
@@ -120,8 +128,12 @@ spec:
         site: linds
         device: hypervisor
         __param_module: linds-proxmox-01
+  # action: replace is the default, written out so that ArgoCD's diff
+  # matches what the API server stores.
   relabelings:
-    - sourceLabels: [__address__]
+    - action: replace
+      sourceLabels: [__address__]
       targetLabel: __param_target
-    - targetLabel: __address__
+    - action: replace
+      targetLabel: __address__
       replacement: pve-exporter.monitoring.svc:9221
