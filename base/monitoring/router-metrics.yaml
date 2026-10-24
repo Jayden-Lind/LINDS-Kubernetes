@@ -231,6 +231,48 @@ spec:
             summary: "{{ $labels.instance }}: failed systemd units: {{ $value }}"
             description: "On {{ $labels.instance }}: `systemctl --failed`, then `journalctl -b -u UNIT`. `router` lists them too. After a fix, `systemctl reset-failed UNIT` clears the alert."
 
+    - name: router.forwards
+      rules:
+        # k8s-port-forward (LINDS-Ansible roles/router) lists the
+        # LoadBalancer Services every 20 s and forwards the WAN ports their
+        # public.linds.com.au/ports annotation asks for. If it cannot reach
+        # the API it keeps the forwards it has, so nothing breaks at once:
+        # only a new or changed Service waits.
+        - alert: RouterPortForwardAPIDown
+          expr: router_port_forward_api_up{job="router-node"} == 0
+          for: 15m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: k8s-port-forward cannot list Services, the port forwards are frozen"
+            description: "The forwards that exist stay; a new or changed public.linds.com.au/ports annotation is not applied. On {{ $labels.instance }}: `router logs forwards`. A 401 means the token in /etc/k8s-port-forward/token no longer works (kube-system/router-port-forward-token, LINDS-Kubernetes base/router/port-forward-reader.yaml)."
+
+        # A Service asks for a port the router does not forward: the port is
+        # reserved or taken, the Service lacks it, or it has no address.
+        - alert: RouterPortForwardRefused
+          expr: router_port_forward_rejected{job="router-node"} == 1
+          for: 15m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.service }}: {{ $labels.request }} is not forwarded: {{ $labels.reason }}"
+            description: "Fix the public.linds.com.au/ports annotation on the Service, or the Service itself. `router forwards` on {{ $labels.instance }} lists every forward and every refused request. How the annotation works: LINDS-Kubernetes docs/publish-a-service.md."
+
+        # The daemon writes its textfile every round; an old file means it
+        # stopped or hangs, and the two rules above judge old data. A daemon
+        # that crashes for good is RouterServiceFailed.
+        - alert: RouterPortForwardStale
+          expr: time() - node_textfile_mtime_seconds{job="router-node", file="/var/lib/prometheus/node-exporter/k8s_port_forward.prom"} > 300
+          for: 5m
+          keep_firing_for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: k8s-port-forward has not run for {{ $value | humanizeDuration }}"
+            description: "Port forwards are not updated. On {{ $labels.instance }}: `systemctl status k8s-port-forward` and `router logs forwards`."
+
     - name: router.dns
       rules:
         # Unbound (since 2026-10-22) checks Quad9's certificate on DNS over

@@ -258,6 +258,67 @@ tests:
             exp_annotations:
               summary: "jd-router-01: failed systemd units: 2"
 
+  # --- Port forwards ------------------------------------------------------------
+  - name: the forward daemon losing the API fires after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'router_port_forward_api_up{job="router-node", instance="jd-router-01"}'
+        values: '1x5 0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RouterPortForwardAPIDown
+      - eval_time: 22m
+        alertname: RouterPortForwardAPIDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: k8s-port-forward cannot list Services, the port forwards are frozen"
+
+  - name: a refused request fires after 15 minutes and names the Service
+    interval: 1m
+    input_series:
+      - series: 'router_port_forward_rejected{job="router-node", instance="jd-router-01", namespace="games", service="mc", request="500/udp", reason="WAN port 500/udp is reserved for the router"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RouterPortForwardRefused
+      - eval_time: 16m
+        alertname: RouterPortForwardRefused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              namespace: games
+              service: mc
+              request: 500/udp
+              reason: WAN port 500/udp is reserved for the router
+            exp_annotations:
+              summary: "games/mc: 500/udp is not forwarded: WAN port 500/udp is reserved for the router"
+
+  - name: a textfile that stops changing fires; one written every round does not
+    interval: 1m
+    input_series:
+      # Written every minute for 10 minutes, then never again.
+      - series: 'node_textfile_mtime_seconds{job="router-node", instance="jd-router-01", file="/var/lib/prometheus/node-exporter/k8s_port_forward.prom"}'
+        values: '0+60x10 600x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RouterPortForwardStale
+      - eval_time: 21m
+        alertname: RouterPortForwardStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+              file: /var/lib/prometheus/node-exporter/k8s_port_forward.prom
+            exp_annotations:
+              summary: "jd-router-01: k8s-port-forward has not run for 11m 0s"
+
   # --- DNS ---------------------------------------------------------------------
   - name: SERVFAIL at 10% of a busy router fires; 2% does not
     interval: 1m

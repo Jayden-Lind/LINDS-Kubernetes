@@ -1,0 +1,93 @@
+# Public DNS in Cloudflare for what the router publishes to the internet.
+#
+# A second external-dns, beside the internal one (external-dns.yaml, which
+# writes LoadBalancer addresses into the AD zone on 10.0.50.200). This one
+# reads only annotations with its own prefix, public.linds.com.au/, so the two
+# never act on each other's settings. It writes a CNAME to the target, which
+# is jd.linds.com.au: the A-only name that ddclient on jd-router-01 keeps on
+# the WAN address. So every public name follows a new WAN address within
+# ddclient's 5 minutes, and none of them gets an AAAA that leads nowhere.
+#
+# What it publishes (docs/publish-a-service.md):
+#   * a LoadBalancer Service with public.linds.com.au/hostname and
+#     public.linds.com.au/target;
+#   * every Ingress of class nginx-mtls (the mTLS mirrors). The mTLS
+#     controller reports jd.linds.com.au as their address
+#     (external-status-address in applications/nginx-ingress-mtls.yaml), so
+#     that is the target.
+# A private address is never written (--exclude-target-net): a Service with a
+# hostname but no target gets no record.
+#
+# policy sync: a record goes when its Service or Ingress goes. It removes only
+# records it owns (TXT owner k8s-public); records made by hand in Cloudflare
+# stay. A hand-made record with the same name blocks the one this instance
+# wants: delete the hand-made record first.
+#
+# Token: Cloudflare API token with Zone.DNS edit on linds.com.au, in Vault at
+# linds-keyvault/external-dns-cloudflare (property api-token).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns-public
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns-public
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/external-dns/
+      chart: external-dns
+      targetRevision: 1.23.0
+      helm:
+        releaseName: external-dns-public
+        valuesObject:
+          provider:
+            name: cloudflare
+          env:
+            - name: CF_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: external-dns-cloudflare
+                  key: api-token
+          sources:
+            - service
+            - ingress
+          domainFilters:
+            - linds.com.au
+          annotationPrefix: public.linds.com.au/
+          registry: txt
+          txtOwnerId: k8s-public
+          policy: sync
+          logLevel: info
+          interval: 1m
+          extraArgs:
+            # Only the mTLS mirrors among the Ingresses: an Ingress on the
+            # internal class pointed at the WAN would reach nothing.
+            - --ingress-class=nginx-mtls
+            - --service-type-filter=LoadBalancer
+            # Never put a LAN or LoadBalancer address in public DNS, even if
+            # a target is missing or wrong.
+            - --exclude-target-net=10.0.0.0/8
+            - --exclude-target-net=172.16.0.0/12
+            - --exclude-target-net=192.168.0.0/16
+            - --exclude-target-net=100.64.0.0/10
+          serviceMonitor:
+            enabled: true
+    - repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+      targetRevision: HEAD
+      path: external-dns-public/
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

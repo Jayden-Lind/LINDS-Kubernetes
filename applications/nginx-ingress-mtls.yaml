@@ -43,6 +43,10 @@ spec:
               annotations:
                 # Dedicated VIP for the mTLS-only endpoint.
                 lbipam.cilium.io/ips: "172.16.1.12"
+                # The router forwards WAN port 443 here
+                # (docs/publish-a-service.md). The names come from the mirror
+                # Ingresses, which external-dns-public publishes.
+                public.linds.com.au/ports: "443/tcp"
               # mTLS-only endpoint: do not expose plain HTTP at all.
               httpPort:
                 enable: false
@@ -63,6 +67,11 @@ spec:
                 http2: "true"
                 keepalive: "32"
                 server-tokens: "false"
+                # The address in the status of every nginx-mtls Ingress. It is
+                # the public name of this endpoint (jd.linds.com.au follows the
+                # WAN address), so external-dns-public publishes each host as a
+                # CNAME to it. The internal external-dns skips the mirrors.
+                external-status-address: jd.linds.com.au
                 hsts: "true"
                 hsts-max-age: "31536000"
                 # This is what makes the class mTLS-only: every server block
