@@ -32,7 +32,7 @@ spec:
             #
             # coredns/coredns-topology.yaml spreads four replicas over
             # `datacenter` as a preference (ScheduleAnyway, so a dead site
-            # never blocks scheduling), and kube-dns is PreferClose so each
+            # never blocks scheduling), and kube-dns is PreferSameZone so each
             # site answers its own lookups. The scheduler only applies that
             # when it places a pod. After the full restart on 2026-10-04 all
             # four were placed in the same second, on talos-cp, and stayed
