@@ -153,6 +153,16 @@ spec:
                   media_player.denon_avr_x1700h:
                     name: Denon Receiver
   syncPolicy:
+    # Home Assistant needs hostNetwork and a hostPort (HomeKit, mDNS). The
+    # cluster warns and audits at the baseline level (LINDS-Terraform
+    # proxmox/talos.tf) to show which workloads would fail if baseline were
+    # enforced, and every sync of this app logged "would violate PodSecurity
+    # baseline: host namespaces". Mark the namespace privileged on purpose.
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/warn: privileged
+        pod-security.kubernetes.io/audit: privileged
     automated:
       prune: true
       selfHeal: true

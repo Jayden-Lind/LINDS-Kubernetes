@@ -69,6 +69,9 @@ spec:
                 # Long timeouts so Home Assistant websockets survive.
                 proxy-read-timeout: "3600"
                 proxy-send-timeout: "3600"
+                # Stream large responses instead of spooling them to disk
+                # (same as applications/nginx-ingress.yaml).
+                proxy-max-temp-file-size: "0"
                 http2: "true"
                 keepalive: "32"
                 server-tokens: "false"

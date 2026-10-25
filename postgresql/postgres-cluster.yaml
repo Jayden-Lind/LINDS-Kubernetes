@@ -64,8 +64,8 @@ spec:
       cpu: "500m"
     limits:
       memory: "8Gi"
-  monitoring:
-    enablePodMonitor: true
+  # Metrics: the PodMonitor after this Cluster scrapes the instances.
+  # spec.monitoring.enablePodMonitor is deprecated in CNPG.
   postgresql:
     shared_preload_libraries:
       - pg_prewarm # autoprewarm reloads the buffer cache after restarts/switchovers
@@ -152,6 +152,23 @@ spec:
       parameters:
         barmanObjectName: minio-store # read from this object store
         serverName: linds-postgres-restored-4
+---
+# Replaces the PodMonitor that spec.monitoring.enablePodMonitor made. It has
+# the same name, so the job label stays postgresql-linds/linds-postgres (the
+# base backup alert in base/monitoring/alerts.yaml prints it). CNPG deletes
+# only a PodMonitor that the Cluster owns, so it leaves this one alone.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: linds-postgres
+  namespace: postgresql-linds
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: linds-postgres
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
