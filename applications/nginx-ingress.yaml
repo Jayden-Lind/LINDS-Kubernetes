@@ -37,6 +37,11 @@ spec:
               client-max-body-size: "0"
               proxy-read-timeout: "3600"
               proxy-send-timeout: "3600"
+              # Do not spool large upstream responses to a temporary file on
+              # the node's disk (Grafana's JS bundles logged "an upstream
+              # response is buffered to a temporary file" a few times a day).
+              # Large responses then stream through the proxy buffers.
+              proxy-max-temp-file-size: "0"
               # Enable HTTP/2 for all TLS servers on this controller.
               # This controller defaults http2 to false; there is no per-Ingress
               # toggle, so it must be set here on the ConfigMap.
