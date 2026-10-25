@@ -56,12 +56,32 @@ settings:
   # is not in the noHL group below.
   disable_qbt_default_share_limits: false
   tag_stalled_torrents: false
+  # qbit_manage's own defaults, written out: it logs a "Config Warning ...
+  # not found" at every start for each setting that is missing. Most of them
+  # belong to commands that are off above.
+  force_auto_tmm: false
+  force_auto_tmm_ignore_tags: []
+  tracker_error_tag: issue
+  stalled_tag: stalledDL
+  private_tag:
+  share_limits_min_seeding_time_tag: MinSeedTimeNotReached
+  share_limits_min_num_seeds_tag: MinSeedsNotMet
+  share_limits_last_active_tag: LastActiveLimitNotReached
+  cat_filter_completed: true
+  cat_update_all: true
+  rem_unregistered_filter_completed: false
+  rem_unregistered_ignore_list: []
+  rem_unregistered_grace_minutes: 10
+  rem_unregistered_max_torrents: 10
 
 directory:
   # The share is at /mnt/nas here and on the torrent host, so the paths are
   # the same and there is no remote_dir.
   root_dir: /mnt/nas/downloads/
   recycle_bin: /mnt/nas/downloads/.RecycleBin
+  # Only used with recyclebin.save_torrents, which is off. Empty, not missing
+  # (see settings above).
+  torrents_dir:
 
 cat:
   legacy: /mnt/nas/downloads/legacy
