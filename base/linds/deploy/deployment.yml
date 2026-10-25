@@ -211,6 +211,15 @@ spec:
             # resolve to their public address and get the login.
             - name: RADARR__SERVER__TRUSTEDNETWORKS
               value: 10.244.0.0/16
+            # The host names Radarr answers to; any other Host header gets a
+            # 400. They are the ingress host (both classes) and the Service
+            # names that clients in the cluster use (Maintainerr uses
+            # radarr.arr.svc.k8s.linds.com.au). localhost and the pod's own
+            # name are always allowed, the pod IP is not. While this is unset
+            # and logins are off for local addresses, Radarr shows the health
+            # warning "Allowed Hosts is not configured".
+            - name: RADARR__SERVER__ALLOWEDHOSTS
+              value: radarr.linds.com.au,radarr.arr.svc.k8s.linds.com.au,radarr.arr.svc.cluster.local,radarr.arr.svc,radarr.arr,radarr
           volumeMounts:
             - mountPath: /config
               name: arr-config
@@ -311,6 +320,8 @@ spec:
             # See radarr above.
             - name: SONARR__SERVER__TRUSTEDNETWORKS
               value: 10.244.0.0/16
+            - name: SONARR__SERVER__ALLOWEDHOSTS
+              value: sonarr.linds.com.au,sonarr.arr.svc.k8s.linds.com.au,sonarr.arr.svc.cluster.local,sonarr.arr.svc,sonarr.arr,sonarr
           volumeMounts:
             - mountPath: /config
               name: arr-config
