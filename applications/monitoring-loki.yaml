@@ -38,6 +38,15 @@ spec:
               chunk_encoding: zstd
             tracing:
               enabled: false
+            server:
+              # gRPC messages are limited to 4 MiB by default. A log query
+              # with a bigger result (a few thousand lines, about 5 MB) failed
+              # with "received message larger than max" when the querier sent
+              # it back to the frontend, and so did the pattern ingester's
+              # copy of large pushes. 64 MiB is above a 20,000-line result at
+              # normal line sizes. The chart's other server keys are kept.
+              grpc_server_max_recv_msg_size: 67108864
+              grpc_server_max_send_msg_size: 67108864
             querier:
               # Concurrent sub-queries per querier. Was 2, which serialised
               # every wide-range dashboard; the SingleBinary pod has a 3-CPU
@@ -212,12 +221,28 @@ spec:
         releaseName: alloy-podlogs
         values: |
           controller:
-            type: deployment
+            # A StatefulSet so that the read positions of
+            # loki.source.kubernetes (positions.yml under alloy.storagePath)
+            # survive a restart. As a Deployment with /tmp storage, every new
+            # pod read every container's log from the start, and Loki refused
+            # the old part of each stream ("entry too far behind", about 130
+            # errors in Loki per restart on 2026-10-25).
+            type: statefulset
             replicas: 1
             # Same-site as Loki: syslog ingest (incl. the vyos suricata feed)
             # shouldn't detour via the linds site.
             nodeSelector:
               datacenter: jd
+            volumeClaimTemplates:
+              - metadata:
+                  name: data
+                spec:
+                  # nfs-csi, so the pod can move to any node at once.
+                  storageClassName: nfs-csi
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 100Mi
 
           service:
             enabled: true
@@ -234,6 +259,12 @@ spec:
               release: monitoring-kube-prometheus-stack
 
           alloy:
+            # On the volume from controller.volumeClaimTemplates.
+            storagePath: /var/lib/alloy/data
+            mounts:
+              extra:
+                - name: data
+                  mountPath: /var/lib/alloy/data
             # Steady state is ~130Mi; the chart default (10m/50Mi) under-books it.
             resources:
               requests:
@@ -332,14 +363,14 @@ spec:
                   forward_to = [loki.process.pods.receiver]
                 }
 
-                // A new Alloy pod reads every container's log from the start:
-                // the read positions are in the pod's own storage. Loki takes
-                // nothing older than a week (reject_old_samples_max_age, 168h),
-                // and on 2026-10-24, after the chart 1.14.3 upgrade, it refused 423
-                // batches of 7-day-old lines from quiet containers (CSI
-                // registrars, node-exporter), each one an error here and in
-                // Loki. Lines that old are dropped before they are sent; the
-                // newer ones Loki already has and ignores as duplicates.
+                // Without saved read positions (a new volume, or a lost
+                // positions.yml), Alloy reads every container's log from the
+                // start. Loki takes nothing older than a week
+                // (reject_old_samples_max_age, 168h), and on 2026-10-24, after
+                // the chart 1.14.3 upgrade, it refused 423 batches of
+                // 7-day-old lines from quiet containers (CSI registrars,
+                // node-exporter), each one an error here and in Loki. Lines
+                // that old are dropped before they are sent.
                 loki.process "pods" {
                   forward_to = [loki.write.default.receiver]
 
