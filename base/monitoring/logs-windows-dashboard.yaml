@@ -1,0 +1,696 @@
+---
+# Grafana dashboard: Windows event logs (Grafana Alloy on each server -> Alloy
+# LoadBalancer 172.16.1.23:3100 -> Loki). Sidecar-discovered (grafana_dashboard
+# label), "Logs" folder (grafana_folder).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logs-windows-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Logs
+data:
+  logs-windows.json: |
+    {
+      "uid": "logs-windows",
+      "title": "Logs / Windows",
+      "description": "Windows event logs. Grafana Alloy on each server (LINDS-Ansible role windows_logs) sends them to the Alloy LoadBalancer 172.16.1.23:3100, which sends them to Loki.",
+      "tags": [
+        "logs",
+        "loki",
+        "windows"
+      ],
+      "timezone": "browser",
+      "editable": true,
+      "graphTooltip": 1,
+      "schemaVersion": 39,
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "hostname",
+            "label": "Server",
+            "type": "query",
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "query": {
+              "label": "hostname",
+              "refId": "LokiVariableQueryEditor-VariableQuery",
+              "stream": "{job=\"windows\"}",
+              "type": 1
+            },
+            "definition": "label_values({job=\"windows\"}, hostname)",
+            "refresh": 2,
+            "sort": 1,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".+",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "channel",
+            "label": "Log",
+            "type": "query",
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "query": {
+              "label": "channel",
+              "refId": "LokiVariableQueryEditor-VariableQuery",
+              "stream": "{job=\"windows\", hostname=~\"$hostname\"}",
+              "type": 1
+            },
+            "definition": "label_values({job=\"windows\", hostname=~\"$hostname\"}, channel)",
+            "refresh": 2,
+            "sort": 1,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".+",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "level",
+            "label": "Level",
+            "type": "custom",
+            "query": "critical,error,warning,info,debug",
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "search",
+            "label": "Search (regex)",
+            "type": "textbox",
+            "query": "",
+            "current": {
+              "text": "",
+              "value": ""
+            },
+            "options": []
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Events",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 0
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" [$__range]))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "text"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Errors and critical",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 0
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" | level=~\"critical|error\" [$__range]))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "red"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Warnings",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 0
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" | level=\"warning\" [$__range]))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "orange"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Servers reporting",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 0
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "count(sum by (hostname) (count_over_time({job=\"windows\", hostname=~\"$hostname\"} [$__range])))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "text"
+              }
+            },
+            "overrides": []
+          },
+          "description": "Servers that sent at least one event in the time range. A quiet server sends few events: look at a range of a few hours or more."
+        },
+        {
+          "type": "timeseries",
+          "title": "Events by server",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (hostname) (count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" [$__auto]))",
+              "legendFormat": "{{hostname}}",
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMin": 0
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Events by level",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (level) (count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" [$__auto]))",
+              "legendFormat": "{{level}}",
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMin": 0
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "critical"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "dark-red"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "error"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "warning"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "orange"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "info"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "debug"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "blue"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "title": "Most frequent errors",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 12
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(20, sum by (hostname, channel, source, event_id) (count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" | level=~\"critical|error\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "errors"
+                },
+                "indexByName": {
+                  "hostname": 0,
+                  "channel": 1,
+                  "source": 2,
+                  "event_id": 3,
+                  "Value #A": 4
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "errors",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "errors"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "title": "Most frequent warnings",
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 12
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "topk(20, sum by (hostname, channel, source, event_id) (count_over_time({job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\"} |~ \"(?i)$search\" | level=~\"warning\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value #A": "warnings"
+                },
+                "indexByName": {
+                  "hostname": 0,
+                  "channel": 1,
+                  "source": 2,
+                  "event_id": 3,
+                  "Value #A": 4
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "warnings",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "warnings"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "logs",
+          "title": "Events",
+          "gridPos": {
+            "h": 16,
+            "w": 24,
+            "x": 0,
+            "y": 21
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{job=\"windows\", hostname=~\"$hostname\", channel=~\"$channel\", level=~\"$level\"} |~ \"(?i)$search\" | json message=\"message\" | line_format \"{{.hostname}} | {{.channel}} | {{.source}} {{.event_id}} | {{.message}}\"",
+              "queryType": "range",
+              "maxLines": 2000
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none",
+            "prettifyLogMessage": false,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "enableInfiniteScrolling": true
+          },
+          "description": "Each line: server | log | provider and event ID | message. The whole event (event_data, user, process) is the JSON line: in Explore, query {job=\"windows\"} without line_format. source and event_id are structured metadata: `| event_id=\"4625\"`."
+        }
+      ],
+      "annotations": {
+        "list": []
+      },
+      "links": []
+    }
