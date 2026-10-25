@@ -9,8 +9,10 @@
 # Radarr or Sonarr deletes the library file, the torrent's file is left with
 # one link and still uses the space. Every 30 minutes:
 #
-# 1. tag_nohardlinks tags each completed radarr or tv-sonarr torrent whose
-#    files have no link outside /mnt/nas/downloads with noHL.
+# 1. tag_nohardlinks tags each completed radarr, tv-sonarr or legacy torrent
+#    whose files have no link outside /mnt/nas/downloads with noHL. legacy
+#    holds old torrents that Radarr and Sonarr did not import (spare copies
+#    and other releases of titles they manage from another file).
 # 2. share_limits removes a noHL torrent and its data at ratio 1 or after 14
 #    days of seeding, but never before 7 days of seeding. A download that was
 #    never imported is noHL too: the 7 days are the time to import it by hand.
@@ -62,6 +64,7 @@ directory:
   recycle_bin: /mnt/nas/downloads/.RecycleBin
 
 cat:
+  legacy: /mnt/nas/downloads/legacy
   radarr: /mnt/nas/downloads/radarr
   tv-sonarr: /mnt/nas/downloads/tv-sonarr
 
@@ -70,6 +73,7 @@ nohardlinks:
     exclude_tags:
       - in-library
     ignore_root_dir: true
+  legacy:
   radarr:
   tv-sonarr:
 
@@ -81,6 +85,7 @@ share_limits:
     exclude_any_tags:
       - in-library
     categories:
+      - legacy
       - radarr
       - tv-sonarr
     max_ratio: 1.0
