@@ -185,6 +185,9 @@ spec:
                 # See docs/produce-pricing.md in the catcrawl repo for which
                 # departments vary: produce most, then drinks and meat.
                 #
+                # Turn COLES_REGION_STORES in catcrawl-viewer.yaml back on with
+                # these, so the viewer shows the stores it crawls.
+                #
                 # - name: CAT_EXTRA_STORES
                 #   value: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
                 # - name: CAT_EXTRA_CATEGORIES
