@@ -92,6 +92,15 @@ spec:
     server: https://kubernetes.default.svc
     namespace: democratic-csi
   syncPolicy:
+    # The iSCSI node plugin is privileged (host namespaces, hostPath, mounts
+    # on the host). Mark the namespace privileged on purpose, so the
+    # cluster's baseline warnings (LINDS-Terraform proxmox/talos.tf) do not
+    # flag it on every upgrade. Same as applications/home-assistant.yaml.
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/warn: privileged
+        pod-security.kubernetes.io/audit: privileged
     automated:
       prune: true
       selfHeal: true
