@@ -85,7 +85,13 @@ data:
   # and must stay identical to them: a store listed here but not crawled shows
   # as a region with no prices, and one crawled but not listed is never shown.
   HOME_REGION_LABEL: Melbourne
-  COLES_REGION_STORES: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
+  # Off while the Coles crawl has its regional stores off (since 2026-10-03,
+  # see CAT_EXTRA_STORES in catcrawl-col-cron.yaml): listed, they had no
+  # current prices, and the viewer logged "a region's store has no current
+  # prices" for each of the sixteen every hour. The regions now carry
+  # Woolworths only. Turn this back on together with the crawler's list.
+  # The ConfigMap is read at start: restart the Deployment after a change.
+  # COLES_REGION_STORES: "710=Sydney CBD,4960=Broken Hill,7842=Melbourne CBD,594=Mildura,4461=Brisbane CBD,4536=Cairns,4487=Mount Isa,357=Perth CBD,324=Broome,4964=Adelaide CBD,456=Port Augusta,7505=Hobart,7562=Launceston,460=Darwin,418=Alice Springs,4787=Canberra"
   WOW_REGION_STORES: "1248=Sydney CBD,5662=Broken Hill,3304=Melbourne CBD,5674=Mildura,2596=Brisbane CBD,2537=Cairns,2539=Mount Isa,4365=Perth CBD,4304=Broome,5317=Adelaide CBD,5601=Port Augusta,7012=Hobart,7220=Launceston,5652=Darwin,5604=Alice Springs,1073=Canberra"
   # The index holds both catalogues in memory. The crawls are weekly, so this
   # exists to pick up a manually triggered crawl without a restart, not to keep
