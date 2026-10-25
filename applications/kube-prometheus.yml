@@ -273,6 +273,14 @@ spec:
                 # Loki's max_entries_limit_per_query is 20000; the browser is
                 # the practical ceiling for a single logs panel.
                 maxLines: 10000
+                # Loki runs with auth_enabled: false, but its
+                # /loki/api/v1/drilldown-limits endpoint still asks for a
+                # tenant: without this header every Logs Drilldown page load
+                # logged a 401 in Grafana. "fake" is the tenant Loki uses
+                # when auth is off.
+                httpHeaderName1: X-Scope-OrgID
+              secureJsonData:
+                httpHeaderValue1: fake
           ingress:
             annotations:
               cert-manager.io/cluster-issuer: linds-ca
@@ -298,6 +306,11 @@ spec:
             # Grafana datasource timeInterval so $__rate_interval stays correct.
             scrapeInterval: 60s
             evaluationInterval: 60s
+            # Discover ServiceMonitor targets from EndpointSlices. v1
+            # Endpoints is deprecated since Kubernetes 1.33. None of the
+            # ServiceMonitors here relabel on __meta_kubernetes_endpoint*
+            # labels, which are the only labels that change.
+            serviceDiscoveryRole: EndpointSlice
             # TSDB lives on JD-side iSCSI now; keep the pod next to it.
             nodeSelector:
               datacenter: jd
@@ -382,6 +395,14 @@ spec:
           # it only produced a permanent KubeProxyDown false positive.
           enabled: false
         prometheusOperator:
+          # Publish the kubelet targets as an EndpointSlice only. Writing the
+          # v1 Endpoints object logged "v1 Endpoints is deprecated" about 40
+          # times an hour. Prometheus reads the slice (serviceDiscoveryRole
+          # above). The operator never deletes the Endpoints object it wrote
+          # before; that object and the slice mirrored from it were removed
+          # by hand on 2026-10-25.
+          kubeletEndpointsEnabled: false
+          kubeletEndpointSliceEnabled: true
           prometheusConfigReloader:
             # The default limit OOM-killed the reloader on 2026-07-13.
             resources:
