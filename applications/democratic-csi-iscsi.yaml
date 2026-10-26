@@ -55,24 +55,42 @@ spec:
           # each; see csi-smb.yaml for why that matters here. Renewed every
           # 15s instead, at the cost that a controller killed without
           # releasing its lease is replaced after up to 60s rather than 15s.
-          # The attacher is deliberately left at its defaults: this driver has
-          # attachRequired=true, so a slow attacher takeover would hold up
-          # every pod that needs a volume attached, Postgres failover included.
+          # The attacher deliberately keeps the default lease timings: this
+          # driver has attachRequired=true, so a slow attacher takeover would
+          # hold up every pod that needs a volume attached, Postgres failover
+          # included.
+          #
+          # Logging: the chart runs every CSI sidecar at klog --v=5, which
+          # logs each lease renewal and whole PersistentVolume objects; 2 is
+          # the usual production level and still logs every volume operation.
+          # The driver logged each gRPC call (volume stats every minute per
+          # volume) at info; warn keeps its warnings and errors. Together
+          # they were ~70 MB a day in Loki (2026-10-26). The driver's
+          # "executing mount command: findmnt" lines are a plain console.log
+          # that no level silences: alloy-podlogs drops them
+          # (applications/monitoring-loki.yaml).
+          externalAttacher:
+            verbosityLevel: 2
           externalProvisioner:
+            verbosityLevel: 2
             extraArgs:
               - --leader-election-lease-duration=60s
               - --leader-election-renew-deadline=40s
               - --leader-election-retry-period=15s
           externalResizer:
+            verbosityLevel: 2
             extraArgs:
               - --leader-election-lease-duration=60s
               - --leader-election-renew-deadline=40s
               - --leader-election-retry-period=15s
           driver:
-            logLevel: info
+            logLevel: warn
         node:
           hostPID: true
+          driverRegistrar:
+            verbosityLevel: 2
           driver:
+            logLevel: warn
             # Talos: iscsiadm lives in the iscsi-tools system extension,
             # reachable from the host namespace via nsenter
             extraEnv:

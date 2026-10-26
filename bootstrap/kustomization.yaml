@@ -11,6 +11,16 @@ resources:
 patches:
   # TLS terminates at the nginx ingress (base/nginx/argocd.yml), so the
   # server runs plaintext HTTP behind it.
+  #
+  # Log levels: at info the repo server logs two lines for every gRPC call
+  # (each manifest generation and health check), and the notifications
+  # controller logs "Start processing"/"Processing completed" for every app
+  # on every pass, though no notification is configured. That was 25 MB a
+  # day of the 39 MB Argo CD sent to Loki (2026-10-26). warn keeps their
+  # warnings and errors. The application controller stays at info: its sync
+  # and apply messages are the useful history, and alloy-podlogs drops its
+  # routine reconcile lines (applications/monitoring-loki.yaml).
+  # The pods read these at start: restart them after a change.
   - patch: |-
       apiVersion: v1
       kind: ConfigMap
@@ -18,6 +28,8 @@ patches:
         name: argocd-cmd-params-cm
       data:
         server.insecure: "true"
+        reposerver.log.level: warn
+        notificationscontroller.log.level: warn
   # Poll GitHub every 5 minutes (jitter 1m): a merged Renovate PR deploys
   # within minutes instead of up to an hour. Argo CD cannot receive GitHub
   # webhooks here because the UI only exists on the LAN ingress class.
