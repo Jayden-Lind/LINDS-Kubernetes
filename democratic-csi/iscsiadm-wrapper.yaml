@@ -1,0 +1,133 @@
+# iscsiadm for the democratic-csi node plugin
+# (applications/democratic-csi-iscsi.yaml mounts it over the image's
+# /usr/local/sbin/iscsiadm).
+#
+# It is the image's own wrapper (docker/iscsiadm in democratic-csi: run the
+# host's iscsiadm in iscsid's namespaces), with one step added before a
+# logout: wait until no filesystem on the session's disks is still mounted
+# anywhere on the node.
+#
+# Why: when a pod with a zfs-iscsi volume stops, democratic-csi unmounts the
+# staging path and then logs the iSCSI session out at once. If a process of
+# the old container has not exited yet, the filesystem is still mounted in
+# that container's mount namespace, so the unmount does not shut it down.
+# The logout then removes the disk under it: its last writes fail ("device
+# offline error", "potential data loss", aborted journal), and the
+# filesystem records errors. Seen on Plex, Jackett, Postgres and Loki
+# volumes between 2026-10-20 and 2026-10-26.
+#
+# The kernel removes /sys/fs/ext4/<disk> (or /sys/fs/xfs/<disk>) only when
+# the last mount is gone and the filesystem has written everything back. The
+# logout waits for that, so it always follows a clean unmount.
+#
+# The wait is limited to ISCSIADM_LOGOUT_WAIT seconds (default 45). After
+# that the node syncs and logs out anyway, as before but without dirty data.
+# democratic-csi stops an iscsiadm call after ISCSI_DEFAULT_TIMEOUT (90 s,
+# set in the Application). If it stops one during the wait, no logout has
+# happened yet, and kubelet retries the unstage.
+#
+# A change here reaches the node pods only when they restart:
+#   kubectl -n democratic-csi rollout restart ds/democratic-csi-iscsi-node
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: democratic-csi-iscsiadm
+  namespace: democratic-csi
+data:
+  iscsiadm: |
+    #!/usr/bin/env bash
+
+    : "${ISCSIADM_HOST_STRATEGY:=chroot}"
+    : "${ISCSIADM_HOST_PATH:=iscsiadm}"
+    : "${ISCSIADM_LOGOUT_WAIT:=45}"
+
+    echoerr() { printf "%s\n" "$*" >&2; }
+
+    # The node plugin's own log (democratic-csi is the parent process).
+    # With hostPID, /proc/1 is the host's init, not the container's.
+    log() { printf "iscsiadm wrapper: %s\n" "$*" > "/proc/${PPID}/fd/2" 2>/dev/null; }
+
+    # Wait until no ext4/xfs filesystem on the disks of target $1 is active.
+    wait_for_release() {
+      local target="$1" s d busy waited=0
+      local disks=()
+      for s in /sys/class/iscsi_session/session*; do
+        [[ -r "${s}/targetname" && "$(cat "${s}/targetname")" == "${target}" ]] || continue
+        for d in "${s}"/device/target*/*/block/*; do
+          [[ -e "${d}" ]] && disks+=("$(basename "${d}")")
+        done
+      done
+      ((${#disks[@]})) || return 0
+      while :; do
+        busy=""
+        for d in "${disks[@]}"; do
+          [[ -e "/sys/fs/ext4/${d}" || -e "/sys/fs/xfs/${d}" ]] && busy="${busy} ${d}"
+        done
+        if [[ -z "${busy}" ]]; then
+          ((waited)) && log "${target}: waited ${waited}s for the filesystem on ${disks[*]} to be released before logout"
+          return 0
+        fi
+        if ((waited >= ISCSIADM_LOGOUT_WAIT)); then
+          log "${target}: filesystem on${busy} still mounted after ${waited}s; syncing and logging out anyway"
+          sync
+          return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+      done
+    }
+
+    # democratic-csi logs out with: iscsiadm -m node -T <iqn> -p <portal> -u
+    logout=0
+    target=""
+    args=("$@")
+    for ((i = 0; i < ${#args[@]}; i++)); do
+      case "${args[i]}" in
+        -u | --logout) logout=1 ;;
+        -T | --targetname) target="${args[i + 1]}" ;;
+        --targetname=*) target="${args[i]#--targetname=}" ;;
+      esac
+    done
+    if ((logout)) && [[ -n "${target}" ]]; then
+      wait_for_release "${target}"
+    fi
+
+    # From here on: the image's wrapper, unchanged.
+    P="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin"
+
+    case ${ISCSIADM_HOST_STRATEGY} in
+      chroot)
+        # https://www.docker.com/blog/road-to-containing-iscsi/
+
+        if [[ "${ISCSIADM_HOST_PATH}" =~ ^\/ && -f "/host${ISCSIADM_HOST_PATH}" ]]; then
+          chroot /host "${ISCSIADM_HOST_PATH}" "${@:1}"
+          exit $?
+        fi
+
+        for p in $(echo $P | cut -d ":" -f 1- --output-delimiter=" "); do
+          if [[ -f "/host${p}/iscsiadm" ]]; then
+            chroot /host "${p}/iscsiadm" "${@:1}"
+            exit $?
+          fi
+        done
+
+        chroot /host /usr/bin/env -i PATH="${P}" ${ISCSIADM_HOST_PATH} "${@:1}"
+        exit $?
+        ;;
+
+      nsenter)
+        # https://github.com/siderolabs/extensions/issues/38#issuecomment-1125403043
+        iscsid_pid=$(pgrep --exact --oldest iscsid)
+        if [[ "${iscsid_pid}x" == "x" ]]; then
+          echoerr "failed to find iscsid pid for nsenter"
+          exit 1
+        fi
+        nsenter --mount="/proc/${iscsid_pid}/ns/mnt" --net="/proc/${iscsid_pid}/ns/net" -- ${ISCSIADM_HOST_PATH} "${@:1}"
+        exit $?
+        ;;
+
+      *)
+        echoerr "invalid ISCSIADM_HOST_STRATEGY: ${ISCSIADM_HOST_STRATEGY}"
+        exit 1
+        ;;
+    esac
