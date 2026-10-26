@@ -1,5 +1,5 @@
 # iscsiadm for the democratic-csi node plugin
-# (applications/democratic-csi-iscsi.yaml mounts it over the image's
+# (values.yaml in this directory mounts it over the image's
 # /usr/local/sbin/iscsiadm).
 #
 # It is the image's own wrapper (docker/iscsiadm in democratic-csi: run the
