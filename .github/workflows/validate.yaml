@@ -54,7 +54,8 @@ jobs:
           set -euo pipefail
           for dir in $(git ls-files '*kustomization.yaml' | xargs -n1 dirname); do
             echo "--- ${dir}"
-            kubectl kustomize "${dir}" | kubeconform ${KUBECONFORM_ARGS}
+            # --enable-helm: democratic-csi/ renders its chart with helmCharts.
+            kubectl kustomize --enable-helm "${dir}" | kubeconform ${KUBECONFORM_ARGS}
           done
 
       - name: Validate Argo CD Applications
