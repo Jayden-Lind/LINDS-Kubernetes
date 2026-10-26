@@ -4,3 +4,5 @@ linds-secret.yml
 .venv
 crd-schemas/
 openapi2jsonschema.py
+# Chart cache of `kustomize build --enable-helm` (democratic-csi/).
+/democratic-csi/charts/
