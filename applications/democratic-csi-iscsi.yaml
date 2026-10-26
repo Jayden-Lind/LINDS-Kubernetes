@@ -5,8 +5,12 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: "https://democratic-csi.github.io/charts/"
+  sources:
+  # democratic-csi/: the iscsiadm wrapper the node plugin mounts (below).
+  - repoURL: https://github.com/Jayden-Lind/LINDS-Kubernetes
+    targetRevision: master
+    path: democratic-csi
+  - repoURL: "https://democratic-csi.github.io/charts/"
     chart: democratic-csi
     targetRevision: 0.15.1
     helm:
@@ -98,6 +102,19 @@ spec:
                 value: nsenter
               - name: ISCSIADM_HOST_PATH
                 value: /usr/local/sbin/iscsiadm
+              # democratic-csi stops an iscsiadm call after this many ms
+              # (default 30000). The wrapper below may wait up to 45 s
+              # before a logout.
+              - name: ISCSI_DEFAULT_TIMEOUT
+                value: "90000"
+            # A logout waits until the session's filesystem is gone from
+            # every mount namespace: democratic-csi/iscsiadm-wrapper.yaml
+            # has the script and the reason (lost writes at pod restarts).
+            extraVolumeMounts:
+              - name: iscsiadm
+                mountPath: /usr/local/sbin/iscsiadm
+                subPath: iscsiadm
+                readOnly: true
             # The chart's built-in iscsi-info volume already exposes the host's
             # /var/lib/iscsi (the path that matters on Talos, where iscsiadm
             # runs via nsenter anyway). iscsi-dir must still point somewhere:
@@ -106,6 +123,11 @@ spec:
             # park it on a harmless auto-created path.
             iscsiDirHostPath: /var/lib/iscsi-cfg
             iscsiDirHostPathType: ""
+          extraVolumes:
+            - name: iscsiadm
+              configMap:
+                name: democratic-csi-iscsiadm
+                defaultMode: 0755
   destination:
     server: https://kubernetes.default.svc
     namespace: democratic-csi
