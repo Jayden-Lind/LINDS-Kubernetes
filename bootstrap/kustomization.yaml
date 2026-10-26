@@ -44,12 +44,17 @@ patches:
   # "certificate signed by unknown authority". This is a CA *public*
   # certificate, presented in every TLS handshake to keycloak.linds.com.au,
   # so it is not secret; only the private key in Vault is.
+  #
+  # kustomize.buildOptions --enable-helm lets a kustomization render a Helm
+  # chart (helmCharts:) and patch its output. democratic-csi/ needs it: the
+  # chart gives two containers no mount propagation for hostPath mounts.
   - patch: |-
       apiVersion: v1
       kind: ConfigMap
       metadata:
         name: argocd-cm
       data:
+        kustomize.buildOptions: --enable-helm
         timeout.reconciliation: 300s
         timeout.reconciliation.jitter: 60s
         resource.compareoptions: |
