@@ -20,11 +20,16 @@
 # the last mount is gone and the filesystem has written everything back. The
 # logout waits for that, so it always follows a clean unmount.
 #
-# The wait is limited to ISCSIADM_LOGOUT_WAIT seconds (default 45). After
+# The wait is limited to ISCSIADM_LOGOUT_WAIT seconds (default 25). After
 # that the node syncs and logs out anyway, as before but without dirty data.
-# democratic-csi stops an iscsiadm call after ISCSI_DEFAULT_TIMEOUT (90 s,
-# set in the Application). If it stops one during the wait, no logout has
-# happened yet, and kubelet retries the unstage.
+# democratic-csi stops an iscsiadm call after 30 s; the wait stays below
+# that. If it ever stops one during the wait, no logout has happened yet,
+# and kubelet retries the unstage.
+#
+# CAUTION: do not set ISCSI_DEFAULT_TIMEOUT to make the limit longer.
+# democratic-csi passes it to Node as a string, and every iscsiadm call
+# then fails with ERR_OUT_OF_RANGE: no iSCSI volume mounts or unmounts
+# (2026-10-26, about 5 minutes).
 #
 # A change here reaches the node pods only when they restart:
 #   kubectl -n democratic-csi rollout restart ds/democratic-csi-iscsi-node
@@ -39,7 +44,7 @@ data:
 
     : "${ISCSIADM_HOST_STRATEGY:=chroot}"
     : "${ISCSIADM_HOST_PATH:=iscsiadm}"
-    : "${ISCSIADM_LOGOUT_WAIT:=45}"
+    : "${ISCSIADM_LOGOUT_WAIT:=25}"
 
     echoerr() { printf "%s\n" "$*" >&2; }
 

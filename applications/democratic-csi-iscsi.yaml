@@ -102,11 +102,6 @@ spec:
                 value: nsenter
               - name: ISCSIADM_HOST_PATH
                 value: /usr/local/sbin/iscsiadm
-              # democratic-csi stops an iscsiadm call after this many ms
-              # (default 30000). The wrapper below may wait up to 45 s
-              # before a logout.
-              - name: ISCSI_DEFAULT_TIMEOUT
-                value: "90000"
             # A logout waits until the session's filesystem is gone from
             # every mount namespace: democratic-csi/iscsiadm-wrapper.yaml
             # has the script and the reason (lost writes at pod restarts).
