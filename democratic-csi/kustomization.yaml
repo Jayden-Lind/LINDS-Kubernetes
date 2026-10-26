@@ -1,0 +1,52 @@
+# democratic-csi for zfs-iscsi, rendered from its Helm chart and patched.
+# Argo CD renders it with `kustomize build --enable-helm` (argocd-cm
+# kustomize.buildOptions in bootstrap/kustomization.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+helmCharts:
+  - name: democratic-csi
+    repo: https://democratic-csi.github.io/charts/
+    version: 0.15.1
+    releaseName: democratic-csi-iscsi
+    namespace: democratic-csi
+    valuesFile: values.yaml
+
+resources:
+  - iscsiadm-wrapper.yaml
+
+patches:
+  # The chart mounts /var/lib/kubelet into driver-registrar and
+  # /var/lib/kubelet/plugins into cleanup with no mount propagation. Each of
+  # those containers then keeps a private copy of every volume mounted on
+  # the node when the pod starts. When such a volume's pod stops later, the
+  # copy keeps the filesystem alive after kubelet unmounts it, and the iSCSI
+  # logout takes the disk away under it: its last writes are lost.
+  # HostToContainer makes the host's unmounts reach these containers too.
+  # (Seen on talos-linds-worker-02, 2026-10-27, with
+  # /proc/<pid>/mountinfo: mounts of the iSCSI disks with no shared:/master:
+  # tag in the csi-node-driver-registrar and cleanup processes.)
+  # The test operations stop the build if a chart update moves these
+  # containers or mounts; then fix the indexes.
+  - target:
+      kind: DaemonSet
+      name: democratic-csi-iscsi-node
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/2/name
+        value: driver-registrar
+      - op: test
+        path: /spec/template/spec/containers/2/volumeMounts/2/name
+        value: kubelet-dir
+      - op: add
+        path: /spec/template/spec/containers/2/volumeMounts/2/mountPropagation
+        value: HostToContainer
+      - op: test
+        path: /spec/template/spec/containers/3/name
+        value: cleanup
+      - op: test
+        path: /spec/template/spec/containers/3/volumeMounts/0/name
+        value: plugins-dir
+      - op: add
+        path: /spec/template/spec/containers/3/volumeMounts/0/mountPropagation
+        value: HostToContainer
