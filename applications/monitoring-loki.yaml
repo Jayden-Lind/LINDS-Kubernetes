@@ -47,6 +47,11 @@ spec:
               # normal line sizes. The chart's other server keys are kept.
               grpc_server_max_recv_msg_size: 67108864
               grpc_server_max_send_msg_size: 67108864
+              # At info Loki logged every query it ran (several lines each,
+              # with the whole query) and an index-table lookup every few
+              # seconds: 40 MB on 2026-10-25, more while dashboards are open.
+              # warn keeps its warnings and errors.
+              log_level: warn
             querier:
               # Concurrent sub-queries per querier. Was 2, which serialised
               # every wide-range dashboard; the SingleBinary pod has a 3-CPU
@@ -292,6 +297,13 @@ spec:
 
             configMap:
               content: |
+                // Alloy's own log. info adds a line for every log stream it
+                // opens or closes (each new pod); warn keeps the rest.
+                logging {
+                  level  = "warn"
+                  format = "logfmt"
+                }
+
                 // --- Kubernetes pod logs ---
                 discovery.kubernetes "pods" {
                   role = "pod"
@@ -377,6 +389,52 @@ spec:
                   stage.drop {
                     older_than          = "167h"
                     drop_counter_reason = "older_than_loki_accepts"
+                  }
+
+                  // Routine lines that no log level turns off, each rule
+                  // limited to one source. Sizes are a day in Loki on
+                  // 2026-10-25. loki_process_dropped_lines_total{reason=...}
+                  // counts what each rule drops.
+                  //
+                  // democratic-csi's csi-proxy logs two lines for every CSI
+                  // gRPC call and has no switch for it (~7 MB).
+                  stage.match {
+                    selector = "{namespace=\"democratic-csi\", container=\"csi-proxy\"}"
+                    stage.drop {
+                      expression          = " request (\\(|headers )"
+                      drop_counter_reason = "csi_proxy_request"
+                    }
+                  }
+                  // democratic-csi prints every findmnt it runs with
+                  // console.log, whatever its log level (~16 MB).
+                  stage.match {
+                    selector = "{namespace=\"democratic-csi\", container=\"csi-driver\"}"
+                    stage.drop {
+                      expression          = "^executing mount command: findmnt "
+                      drop_counter_reason = "csi_findmnt"
+                    }
+                  }
+                  // Kyverno's own informers still list its deprecated v1
+                  // kinds, and it logs the API server's deprecation warning
+                  // for each list (~850 lines in 15 h). No such policy
+                  // exists here: the policies are a MutatingPolicy and a
+                  // GeneratingPolicy, so there is nothing to migrate.
+                  stage.match {
+                    selector = "{namespace=\"kyverno\"}"
+                    stage.drop {
+                      expression          = "Warning: kyverno\\.io/v[0-9a-z]+ [A-Za-z]+ is deprecated"
+                      drop_counter_reason = "kyverno_own_deprecated_kinds"
+                    }
+                  }
+                  // Argo CD's application controller stays at info for its
+                  // sync and apply lines; these per-reconcile messages were
+                  // 80% of its 13.5 MB.
+                  stage.match {
+                    selector = "{namespace=\"argocd\", container=\"argocd-application-controller\"}"
+                    stage.drop {
+                      expression          = "\"msg\":\"(Reconciliation completed|GetRepoObjs stats|Skipping auto-sync: application status is Synced|Update successful|Ignore status for all objects|Refreshing app status[^\"]*|Comparing app state[^\"]*|No status changes\\. Skipping patch|Requesting app refresh caused by object update)\""
+                      drop_counter_reason = "argocd_reconcile_chatter"
+                    }
                   }
                 }
 
@@ -601,6 +659,40 @@ spec:
                         http_hostname      = "",
                         http_method        = "",
                         http_status        = "",
+                      }
+                    }
+
+                    // Not stored: no dashboard reads these
+                    // (base/monitoring/{suricata,network-devices}-dashboard.yaml),
+                    // the router keeps every event in its eve.json, and the
+                    // counters above have already seen them. A day on
+                    // 2026-10-25:
+                    //   stats, once a minute at ~20 KB: 30 MB. Its kernel drops
+                    //     feed suricata_kernel_drops_total above.
+                    //   DNS responses: 65 MB. Every DNS panel asks for
+                    //     requests (dns_type="request" or !="response").
+                    //   QUIC without an SNI: 11 MB. The panels use quic_sni.
+                    stage.drop {
+                      source              = "event_type"
+                      value               = "stats"
+                      drop_counter_reason = "suricata_stats"
+                    }
+                    stage.drop {
+                      source              = "dns_type"
+                      value               = "response"
+                      drop_counter_reason = "suricata_dns_response"
+                    }
+                    stage.match {
+                      selector = "{event_type=\"quic\"}"
+                      stage.template {
+                        source   = "quic_has_sni"
+                        // Helm raw string: the chart passes this file through tpl.
+                        template = {{`"{{ if .quic_sni }}yes{{ else }}no{{ end }}"`}}
+                      }
+                      stage.drop {
+                        source              = "quic_has_sni"
+                        value               = "no"
+                        drop_counter_reason = "suricata_quic_no_sni"
                       }
                     }
                   }

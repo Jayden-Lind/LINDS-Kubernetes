@@ -14,6 +14,14 @@ spec:
     targetRevision: 0.15.1
     helm:
       releaseName: arc
+      valuesObject:
+        flags:
+          # The chart default is debug, and the controller hands its level to
+          # every runner set's listener. At debug/info each listener logs
+          # five lines a minute even when no job is queued (~35k lines a
+          # day for the four sets). warn keeps their warnings and errors;
+          # job history is in GitHub Actions.
+          logLevel: warn
   syncPolicy:
     automated:
       prune: true
