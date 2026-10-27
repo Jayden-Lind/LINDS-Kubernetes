@@ -75,7 +75,7 @@ jobs:
           done
           exit "${rc}"
 
-      - uses: renovatebot/github-action@v46.3.9
+      - uses: renovatebot/github-action@v46.3.10
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
