@@ -221,7 +221,7 @@ spec:
 
     - repoURL: https://grafana.github.io/helm-charts
       chart: alloy
-      targetRevision: 1.14.3
+      targetRevision: 1.14.4
       helm:
         releaseName: alloy-podlogs
         values: |
