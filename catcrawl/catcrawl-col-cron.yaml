@@ -169,10 +169,10 @@ spec:
                 # pages a store, 180 or so on top of the home store's 730, about
                 # 910 a run. Three departments were 53 pages a store, 1,561 a
                 # run, too long for a 12-hour attempt. Page 910 is past where
-                # the runs of September were refused (pages 872 and 882), though
-                # those carried a blocked session and later runs have gone past
-                # 820 clean. If the site refuses now, the home store and every
-                # store finished are already written; the rest wait a week.
+                # two runs were refused in September (pages 872 and 882), though
+                # the run of 2026-10-03 reached 1,273. If the site refuses now,
+                # the home store and every store finished are already written;
+                # the rest wait a week.
                 #
                 # COLES_REGION_STORES in catcrawl-viewer.yaml is this same list:
                 # change them together.
