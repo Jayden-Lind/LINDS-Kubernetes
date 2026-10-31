@@ -258,6 +258,45 @@ tests:
             exp_annotations:
               summary: "jd-router-01: failed systemd units: 2"
 
+  - name: updates of any origin fire after 7 days, and an upgrade clears them
+    interval: 5m
+    input_series:
+      - series: 'router_updates_pending{job="router-node", instance="jd-router-01", origin="other"}'
+        values: '0x10 3x2400 0x200'
+      - series: 'router_updates_pending{job="router-node", instance="jd-router-01", origin="security"}'
+        values: '0x2610'
+    alert_rule_test:
+      - eval_time: 160h
+        alertname: RouterUpdatesPending
+      - eval_time: 180h
+        alertname: RouterUpdatesPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: 3 package updates waiting for 7 days"
+      - eval_time: 210h
+        alertname: RouterUpdatesPending
+
+  - name: a newer kernel that does not run fires after 7 days
+    interval: 5m
+    input_series:
+      - series: 'router_reboot_required{job="router-node", instance="jd-router-01"}'
+        values: '0x10 1x2400'
+    alert_rule_test:
+      - eval_time: 160h
+        alertname: RouterRebootPending
+      - eval_time: 180h
+        alertname: RouterRebootPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-node
+              instance: jd-router-01
+            exp_annotations:
+              summary: "jd-router-01: a newer kernel has waited 7 days for a reboot"
+
   # --- Port forwards ------------------------------------------------------------
   - name: the forward daemon losing the API fires after 15 minutes
     interval: 1m
