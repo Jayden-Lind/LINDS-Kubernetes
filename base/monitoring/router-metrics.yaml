@@ -231,6 +231,26 @@ spec:
             summary: "{{ $labels.instance }}: failed systemd units: {{ $value }}"
             description: "On {{ $labels.instance }}: `systemctl --failed`, then `journalctl -b -u UNIT`. `router` lists them too. After a fix, `systemctl reset-failed UNIT` clears the alert."
 
+        # Only Debian's security packages update on their own. The kernel,
+        # Suricata, FRR, Kea and lldpd wait for an upgrade run (LINDS-Ansible
+        # roles/router), so these alerts are what brings that run about.
+        - alert: RouterUpdatesPending
+          expr: sum by (instance) (router_updates_pending) > 0
+          for: 7d
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: {{ $value }} package updates waiting for 7 days"
+            description: "`router` on {{ $labels.instance }} shows them by origin. Plan an upgrade: LINDS-Ansible `ansible-playbook playbooks/router.yml --limit {{ $labels.instance }} -e router_apt_upgrade=true`."
+        - alert: RouterRebootPending
+          expr: router_reboot_required == 1
+          for: 7d
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: a newer kernel has waited 7 days for a reboot"
+            description: "{{ $labels.instance }} runs an older kernel than the one installed, so it has no fixes from the new one. Plan a reboot. The router is back in about 20 seconds."
+
     - name: router.forwards
       rules:
         # k8s-port-forward (LINDS-Ansible roles/router) lists the
