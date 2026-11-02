@@ -251,6 +251,26 @@ spec:
             summary: "{{ $labels.instance }}: a newer kernel has waited 7 days for a reboot"
             description: "{{ $labels.instance }} runs an older kernel than the one installed, so it has no fixes from the new one. Plan a reboot. The router is back in about 20 seconds."
 
+        # The blocking Suricata (LINDS-Ansible roles/router, tasks/ips.yml). It
+        # fails open: when it does not work, connections still pass and nothing
+        # looks wrong. These alerts are how that shows.
+        - alert: RouterIPSNotAttached
+          expr: router_ips_enabled == 1 and router_ips_attached == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: Suricata is not on its queue, so nothing is blocked"
+            description: "On {{ $labels.instance }}: `router ips`, then `journalctl -u suricata-ips`. Connections to published ports still pass."
+        - alert: RouterIPSOff
+          expr: router_ips_enabled == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: Suricata blocking has been off for an hour"
+            description: "`router ips off` turns itself back on, so a longer gap means suricata-ips stopped. On {{ $labels.instance }}: `systemctl status suricata-ips`, then `router ips on`."
+
     - name: router.forwards
       rules:
         # k8s-port-forward (LINDS-Ansible roles/router) lists the

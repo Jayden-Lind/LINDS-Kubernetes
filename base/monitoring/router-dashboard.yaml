@@ -3646,12 +3646,290 @@ data:
         },
         {
           "type": "row",
+          "id": 35,
+          "title": "Suricata blocking",
+          "gridPos": {
+            "x": 0,
+            "y": 70,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "stat",
+          "id": 36,
+          "title": "Blocking",
+          "description": "On when the queue rule is in place and Suricata listens on it (router_ips_enabled, router_ips_attached). If it is off, connections still pass: nothing is blocked. `router ips` on the router says why.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 71,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {
+                      "text": "✓ On",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "0": {
+                      "text": "✗ Off",
+                      "color": "#d03b3b",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
+            "showPercentChange": false
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "router_ips_enabled{instance=\"$router\"} * router_ips_attached{instance=\"$router\"}",
+              "legendFormat": "__auto",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 37,
+          "title": "Blocked, 24 hours",
+          "description": "Packets the blocking Suricata dropped in the last 24 hours (router_ips_blocked_total). One connection attempt is often several packets.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 75,
+            "w": 4,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 30
+            },
+            "showPercentChange": false
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "increase(router_ips_blocked_total{instance=\"$router\"}[24h])",
+              "legendFormat": "__auto",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "id": 38,
+          "title": "Blocked per hour",
+          "description": "Packets the blocking Suricata dropped, per hour. It sees only new connections from the WAN to published ports.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 71,
+            "w": 8,
+            "h": 8
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#3987e5"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "gradientMode": "none",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisSoftMax": 10,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": false,
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "increase(router_ips_blocked_total{instance=\"$router\"}[1h])",
+              "legendFormat": "Blocked",
+              "refId": "A",
+              "interval": "1h"
+            }
+          ]
+        },
+        {
+          "type": "logs",
+          "id": 39,
+          "title": "Last blocks",
+          "description": "Each connection attempt the blocking Suricata dropped: source, destination and the rule. To let a source through, see \"Suricata blocks on published ports\" in the router role's README.",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 71,
+            "w": 12,
+            "h": 8
+          },
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "dedupStrategy": "none",
+            "sortOrder": "Descending"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", event_type=\"alert\", hostname=\"$router\"} | alert_action=\"blocked\" | line_format \"{{.src_ip}} -> {{.dest_ip}}:{{.dest_port}}  {{.alert_signature}}\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "row",
           "id": 34,
           "title": "Logs",
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 70,
+            "y": 79,
             "w": 24,
             "h": 1
           },
@@ -3667,7 +3945,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 71,
+                "y": 80,
                 "w": 24,
                 "h": 10
               },
@@ -3704,7 +3982,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 81,
+                "y": 90,
                 "w": 24,
                 "h": 10
               },
