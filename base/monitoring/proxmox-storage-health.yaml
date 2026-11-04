@@ -492,3 +492,47 @@ spec:
           annotations:
             summary: "{{ $labels.instance }}: thin pool {{ $labels.vg }}/{{ $labels.lv }} is not healthy"
             description: "device-mapper reports a health status for the pool (out of data space, metadata read-only, failed). `lvs -o+lv_health_status {{ $labels.vg }}` on {{ $labels.instance }}."
+
+    - name: storage-health.backblaze
+      rules:
+        # The weekly Backblaze run of the NAS (LINDS-Ansible roles/backblaze)
+        # writes backblaze.prom next to the storage health file on
+        # jd-proxmox-02, at the end of every run. Backblaze removes the files
+        # of a drive that it has not seen for 30 days, so a run that stops
+        # working has to reach a person well inside that. The file is on /run:
+        # after a reboot of the host it is gone until the next run, which is
+        # why these rules look back over days rather than at the last sample.
+        - alert: StorageBackblazeRunOverdue
+          # Every run carries the last good run's time forward, so failed runs
+          # keep it; a run on a host that rebooted starts again from 0, and
+          # max_over_time keeps the real time from before the reboot.
+          expr: time() - max_over_time(backblaze_run_last_success_timestamp_seconds[10d]) > 8 * 86400
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: the last good Backblaze run of the NAS was {{ $value | humanizeDuration }} ago"
+            description: "The weekly backblaze-run on {{ $labels.instance }} has not ended without an error for more than eight days. `journalctl -u backblaze-run` there says why. Backblaze removes the files of a drive that it does not see for 30 days."
+
+        - alert: StorageBackblazeRunNotReported
+          # No run of any kind has written the file in ten days: the timer is
+          # off, the host has been down, or the role is gone.
+          expr: absent_over_time(backblaze_run_last_success_timestamp_seconds{job="proxmox-storage-health", instance="jd-proxmox-02"}[10d])
+          for: 1h
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "jd-proxmox-02: no Backblaze run of the NAS has reported for ten days"
+            description: "backblaze-run writes /run/node-exporter-textfile/backblaze.prom at the end of every run. On jd-proxmox-02: `systemctl list-timers backblaze-run.timer` and `journalctl -u backblaze-run`. Backblaze removes the files of a drive that it does not see for 30 days."
+
+        - alert: StorageBackblazeNotCompleting
+          # A run that reaches its time limit still lets Backblaze see the
+          # drive, but the backup falls behind. Two runs in a row is a trend.
+          expr: max_over_time(backblaze_run_completed[15d]) == 0
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: Backblaze has not finished a backup of the NAS in its last runs"
+            description: "The runs stopped at their time limit with files left to upload (backblaze_remaining_files). `backblaze-run status` on {{ $labels.instance }} during a run shows what Backblaze is doing. If a week of changes takes longer than the limit, raise backblaze_max_hours in LINDS-Ansible."

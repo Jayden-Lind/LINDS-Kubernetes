@@ -1,0 +1,121 @@
+# promtool unit tests for the storage-health.backblaze group of
+# ../proxmox-storage-health.yaml. Not a manifest, and not in the kustomization.
+#
+# A file of its own because the runs are a week apart: these tests cover weeks,
+# and proxmox-storage-health.test.yaml evaluates every rule every minute, which
+# takes promtool many minutes over that time. Cut the rules out as that file
+# says, then:
+#
+#   promtool test rules base/monitoring/tests/proxmox-storage-health-backblaze.test.yaml
+#
+# Time starts at zero in each test. backblaze-run writes its file at the end
+# of a run, and node_exporter serves it until the next run or a reboot.
+rule_files:
+  - /tmp/proxmox-storage-health.rules.yaml
+
+evaluation_interval: 15m
+
+tests:
+  # A good run at time zero and none after it. The file stays (no reboot).
+  - name: a good Backblaze run, then nothing for more than eight days
+    interval: 1h
+    input_series:
+      - series: 'backblaze_run_last_success_timestamp_seconds{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '0x240'
+      - series: 'backblaze_run_completed{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x240'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: StorageBackblazeRunOverdue
+      - eval_time: 8d1h
+        alertname: StorageBackblazeRunOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: the last good Backblaze run of the NAS was 8d 1h 0m 0s ago"
+      - eval_time: 8d1h
+        alertname: StorageBackblazeRunNotReported
+      - eval_time: 8d1h
+        alertname: StorageBackblazeNotCompleting
+
+  # The host reboots two days after a good run, so the file is gone until the
+  # next run, which is good again. Nothing fires.
+  - name: a reboot between two good Backblaze runs
+    interval: 1h
+    input_series:
+      - series: 'backblaze_run_last_success_timestamp_seconds{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '0x48 _x119 604800x72'
+      - series: 'backblaze_run_completed{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x48 _x119 1x72'
+    alert_rule_test:
+      - eval_time: 6d
+        alertname: StorageBackblazeRunOverdue
+      - eval_time: 6d
+        alertname: StorageBackblazeRunNotReported
+      - eval_time: 9d
+        alertname: StorageBackblazeRunOverdue
+      - eval_time: 9d
+        alertname: StorageBackblazeNotCompleting
+
+  # Runs that fail write the last good time again. After a reboot the first
+  # failed run has no file to read and writes 0. Only one alert fires.
+  - name: Backblaze runs that keep failing, with a reboot between them
+    interval: 1h
+    input_series:
+      - series: 'backblaze_run_last_success_timestamp_seconds{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '0x167 _x10 0x200'
+      - series: 'backblaze_run_completed{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x167 _x10 0x200'
+    alert_rule_test:
+      - eval_time: 12d
+        alertname: StorageBackblazeRunOverdue
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: the last good Backblaze run of the NAS was 12d 0h 0m 0s ago"
+      - eval_time: 12d
+        alertname: StorageBackblazeRunNotReported
+
+  # Nothing has ever written the file.
+  - name: no Backblaze run at all
+    interval: 1h
+    input_series:
+      - series: 'up{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x24'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: StorageBackblazeRunNotReported
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: no Backblaze run of the NAS has reported for ten days"
+
+  # Two runs in a row that stopped at the time limit.
+  - name: Backblaze runs that do not finish
+    interval: 1h
+    input_series:
+      - series: 'backblaze_run_last_success_timestamp_seconds{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '0x168 604800x200'
+      - series: 'backblaze_run_completed{job="proxmox-storage-health", instance="jd-proxmox-02"}'
+        values: '1x24 0x344'
+    alert_rule_test:
+      - eval_time: 14d
+        alertname: StorageBackblazeNotCompleting
+      - eval_time: 16d
+        alertname: StorageBackblazeNotCompleting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: proxmox-storage-health
+              instance: jd-proxmox-02
+            exp_annotations:
+              summary: "jd-proxmox-02: Backblaze has not finished a backup of the NAS in its last runs"
