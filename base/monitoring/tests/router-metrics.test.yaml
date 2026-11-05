@@ -510,3 +510,25 @@ tests:
               hostname: jd-router-01
             exp_annotations:
               summary: "jd-router-01: Suricata missed 5k packets in 15 minutes"
+
+  # --- Latency probe -----------------------------------------------------------
+  - name: a smokeping target that stops counting fires after 10 + 5 minutes
+    interval: 1m
+    input_series:
+      # One ping a second for 20 minutes, then none.
+      - series: 'smokeping_requests_total{job="router-smokeping", instance="jd-router-01", host="1.1.1.1", ip="1.1.1.1"}'
+        values: '0+60x20 1200x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: RouterLatencyProbeStalled
+      - eval_time: 40m
+        alertname: RouterLatencyProbeStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: router-smokeping
+              instance: jd-router-01
+              host: 1.1.1.1
+              ip: 1.1.1.1
+            exp_annotations:
+              summary: "jd-router-01: smokeping sends no ping to 1.1.1.1"

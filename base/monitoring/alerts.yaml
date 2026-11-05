@@ -84,9 +84,15 @@ spec:
             summary: "Disk critically full on {{ $labels.instance }}"
             description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has less than 3% free."
 
+        # Busy = every mode except idle, over the number of CPUs. Not
+        # 1 - idle: jd-router-01's kernel counts about 13% too much idle time
+        # (its modes add up to 4.5 CPU-seconds a second on 4 vCPUs,
+        # 2026-11-06), so 1 - idle stayed below zero there and this alert
+        # could not fire. On the other nodes the result is the same.
         - alert: NodeCPUHighLoad
           expr: >
-            (1 - avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.90
+            sum by (instance) (irate(node_cpu_seconds_total{mode!="idle"}[5m]))
+              / count by (instance) (node_cpu_seconds_total{mode="idle"}) > 0.90
           for: 15m
           labels:
             severity: warning

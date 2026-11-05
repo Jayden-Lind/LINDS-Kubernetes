@@ -144,6 +144,22 @@ spec:
             summary: "{{ $labels.instance }}: the backup WAN ({{ $labels.dev }}) fails its health checks"
             description: "If the primary WAN fails now, the site has no internet. On {{ $labels.instance }}: `router wan` and `router logs wan`; then the cellular modem itself (192.168.0.0/24 on {{ $labels.dev }})."
 
+        # The smokeping prober pings each target once a second. If its first
+        # ping to a target fails, it never pings that target again, and the
+        # Router dashboard has no latency or loss for it: after the
+        # 2026-11-02 boot (no WAN route yet) no ping went to the internet for
+        # 3.5 days. The router now starts the prober after the WAN default
+        # routes (wan-online.service); this alert catches any other stall.
+        - alert: RouterLatencyProbeStalled
+          expr: increase(smokeping_requests_total{job="router-smokeping"}[10m]) == 0
+          for: 5m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }}: smokeping sends no ping to {{ $labels.host }}"
+            description: "The Router dashboard has no latency or loss for {{ $labels.host }}. On {{ $labels.instance }}: `systemctl restart prometheus-smokeping-prober`. Then make sure that smokeping_requests_total{host=\"{{ $labels.host }}\"} counts up again."
+
     - name: router.vpn
       rules:
         # After a reboot the tunnel is back in about a minute (strongSwan
