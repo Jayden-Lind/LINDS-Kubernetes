@@ -1,5 +1,6 @@
 ---
-# Grafana dashboard "Router": jd-router-01 at a glance, for troubleshooting.
+# Grafana dashboard "Router": jd-router-01 and linds-router-01 at a glance, for
+# troubleshooting.
 # Picked up by the kube-prometheus grafana dashboard sidecar via the
 # grafana_dashboard label; grafana_folder puts it in "Network".
 #
@@ -29,7 +30,7 @@ data:
     {
       "uid": "router",
       "title": "Router",
-      "description": "jd-router-01 (and linds-router-01 after the cutover): WAN, tunnels, BGP, DHCP, DNS (Unbound), IDS and health. Config: LINDS-Ansible roles/router (README, Troubleshooting); scrape jobs and alerts: LINDS-Kubernetes base/monitoring/router-metrics.yaml.",
+      "description": "jd-router-01 and linds-router-01: WAN, tunnels, BGP, DHCP, DNS (Unbound), IDS and health. Config: LINDS-Ansible roles/router (README, Troubleshooting); scrape jobs and alerts: LINDS-Kubernetes base/monitoring/router-metrics.yaml.",
       "tags": [
         "router",
         "network"
@@ -528,7 +529,7 @@ data:
           "type": "stat",
           "id": 6,
           "title": "NordVPN handshake",
-          "description": "Time since the last WireGuard handshake on wg10 (VLAN 58's way out). Keepalives renew it every two minutes while the peer answers; RouterWireGuardStale fires at 15 minutes.",
+          "description": "Time since the last WireGuard handshake on the NordVPN tunnel: wg10 (VLAN 58's way out) at JD, wg101 (VLAN 36's) at LINDS. With more than one tunnel, the oldest handshake shows; jd's wg101 (-1, never) does not. Keepalives renew it every two minutes while the peer answers; RouterWireGuardStale fires at 15 minutes.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -602,7 +603,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "router_wireguard_handshake_age_seconds{instance=\"$router\", iface=\"wg10\"}",
+              "expr": "max(router_wireguard_handshake_age_seconds{instance=\"$router\"})",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
@@ -2184,7 +2185,7 @@ data:
                 "properties": [
                   {
                     "id": "displayName",
-                    "value": "Main LAN (VLAN 50)"
+                    "value": "Main LAN"
                   },
                   {
                     "id": "color",
@@ -2274,12 +2275,88 @@ data:
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "lan0.36"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Torrent (VLAN 36)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.80"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Management (VLAN 80)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.110"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Cameras (VLAN 110)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.300"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Servers (VLAN 300)"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "lan0, sent"
                 },
                 "properties": [
                   {
                     "id": "displayName",
-                    "value": "Main LAN (VLAN 50), sent"
+                    "value": "Main LAN, sent"
                   },
                   {
                     "id": "color",
@@ -2362,6 +2439,82 @@ data:
                     "value": {
                       "mode": "fixed",
                       "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.36, sent"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Torrent (VLAN 36), sent"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.80, sent"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Management (VLAN 80), sent"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.110, sent"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Cameras (VLAN 110), sent"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.300, sent"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Servers (VLAN 300), sent"
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
                     }
                   }
                 ]
@@ -2477,7 +2630,7 @@ data:
                 "properties": [
                   {
                     "id": "displayName",
-                    "value": "Main LAN (VLAN 50)"
+                    "value": "Main LAN"
                   }
                 ]
               },
@@ -2526,6 +2679,54 @@ data:
                   {
                     "id": "displayName",
                     "value": "NordVPN US (VLAN 58)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.36"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Torrent (VLAN 36)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.80"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Management (VLAN 80)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.110"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Cameras (VLAN 110)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "lan0.300"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Servers (VLAN 300)"
                   }
                 ]
               }

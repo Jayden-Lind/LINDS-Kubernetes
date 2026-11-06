@@ -2,7 +2,9 @@
 #
 # The routers are not in the cluster; their configuration is LINDS-Ansible,
 # roles/router (README, Troubleshooting). Everything below listens on the
-# cluster network only (10.0.53.1 at JD; nftables input rule 16):
+# cluster network only (10.0.53.1 at JD, 10.3.1.1 at LINDS; nftables input
+# rule 16). Prometheus runs at JD, so it scrapes linds-router-01 through the
+# tunnel, from a JD node address (rule 16a there):
 # - node-exporter, :9100. With the router_* metrics that `router metrics`
 #   writes every 30 s (router-metrics.timer): which WAN is active, the
 #   tunnels, BGP, DHCP pools, failed units, and Unbound's DNS counters
@@ -19,9 +21,6 @@
 # to Discord by the default route in alertmanager-config.yaml. The general
 # node alerts in alerts.yaml (memory, disk, CPU) apply to the router too,
 # through its node-exporter.
-#
-# linds-router-01 is not here yet: add its targets (10.3.1.1, same ports)
-# after the cutover, or PrometheusTargetDown fires for them.
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
@@ -40,6 +39,9 @@ spec:
     - targets: ["10.0.53.1:9100"]
       labels:
         instance: jd-router-01
+    - targets: ["10.3.1.1:9100"]
+      labels:
+        instance: linds-router-01
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
@@ -56,6 +58,9 @@ spec:
     - targets: ["10.0.53.1:9342"]
       labels:
         instance: jd-router-01
+    - targets: ["10.3.1.1:9342"]
+      labels:
+        instance: linds-router-01
 ---
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
@@ -72,6 +77,9 @@ spec:
     - targets: ["10.0.53.1:9374"]
       labels:
         instance: jd-router-01
+    - targets: ["10.3.1.1:9374"]
+      labels:
+        instance: linds-router-01
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -88,8 +96,10 @@ spec:
     # annotation Discord shows; the description says what to do. Where a
     # condition has to last, the WAN and tunnel rules say so with a range
     # (min_over_time and the like), which a single failed scrape does not
-    # interrupt; the others use "for", which it resets. The router is on the
-    # cluster's own site, so its scrapes seldom fail.
+    # interrupt; the others use "for", which it resets. jd-router-01 is on
+    # Prometheus's site, so its scrapes seldom fail. linds-router-01's go
+    # through the tunnel: while the tunnel is down they fail, and
+    # PrometheusTargetDown fires beside RouterTunnelDown.
     - name: router.reporting
       rules:
         # node-exporter answers, but without the router_* metrics: the file
@@ -181,13 +191,16 @@ spec:
         # that reboots drops its session for a few minutes, and NodeNotReady
         # reports the node itself.
         # The static peer is the other site's router, over the tunnel: while
-        # the tunnel is down, RouterTunnelDown is the alert.
+        # the tunnel is down, RouterTunnelDown is the alert. A router that
+        # Prometheus cannot scrape has no router_bgp_peer_up now, so its
+        # cluster peers count only while its scrape works (up == 1).
         - alert: RouterBGPPeerDown
           expr: |
             (
               max_over_time(router_bgp_peer_up{kind="cluster"}[1d]) == 1
               unless on (instance, peer) router_bgp_peer_up == 1
             )
+            and on (instance) up{job="router-node"} == 1
             or (
               router_bgp_peer_up{kind="static"} == 0
               unless on (instance) router_ipsec_up == 0
@@ -201,9 +214,10 @@ spec:
             description: "On {{ $labels.instance }}: `router bgp`. A cluster peer is a Talos node: is the node Ready, and is its cilium pod running? The static peer is the other site's router: `router vpn` first."
 
         # Both WireGuard tunnels send a keepalive every 25 s, so a peer that
-        # answers renews the handshake every two minutes. wg10 is VLAN 58's
-        # way out (NordVPN US). -1 means no handshake ever: wg101 (VLAN 51,
-        # no hosts) has had none.
+        # answers renews the handshake every two minutes. At JD, wg10 is VLAN
+        # 58's way out (NordVPN US). -1 means no handshake ever: jd's wg101
+        # (VLAN 51, no hosts) has had none. At LINDS, wg101 is VLAN 36's way
+        # out (linds-torrent-02).
         - alert: RouterWireGuardStale
           expr: router_wireguard_handshake_age_seconds > 900
           keep_firing_for: 10m
@@ -350,7 +364,7 @@ spec:
             description: "On {{ $labels.instance }}: `journalctl -u unbound` names each SERVFAIL's reason (log-servfail); \"certificate verify failed\" is Quad9's DoT certificate. Then `router dns NAME` compares this router, Quad9 and the DCs."
 
         # Unbound does not answer on its control socket: the daemon is down,
-        # and the LAN, VLAN 52 and the cluster have no DNS. A crash is
+        # and the networks that ask the router have no DNS. A crash is
         # restarted by systemd (Restart=on-failure); this is for one that
         # stays down.
         - alert: RouterDNSDown
@@ -361,7 +375,7 @@ spec:
             severity: critical
           annotations:
             summary: "{{ $labels.instance }}: Unbound is not answering, the networks have no DNS"
-            description: "On {{ $labels.instance }}: `systemctl status unbound`, `journalctl -u unbound -b`, then `unbound-checkconf`. Clients on VLAN 51 and 52 use Quad9 directly and are not affected."
+            description: "On {{ $labels.instance }}: `systemctl status unbound`, `journalctl -u unbound -b`, then `unbound-checkconf`. At JD, clients on VLAN 51 and 52 use Quad9 directly and are not affected."
 
     - name: router.suricata
       rules:
@@ -373,6 +387,7 @@ spec:
           expr: |
             sum by (hostname) (increase(loki_process_custom_suricata_eve_lines_total[15m])) == 0
             or absent_over_time(loki_process_custom_suricata_eve_lines_total{hostname="jd-router-01"}[1h])
+            or absent_over_time(loki_process_custom_suricata_eve_lines_total{hostname="linds-router-01"}[1h])
           keep_firing_for: 15m
           labels:
             severity: warning
