@@ -20,7 +20,54 @@ spec:
         valuesObject:
           controller:
             kind: deployment
-            replicaCount: 2
+            # Two replicas per site, each on its own node. The Service is
+            # externalTrafficPolicy Local, so only a node with a replica
+            # announces 172.16.1.12, and each router prefers its own site's
+            # nodes (a shorter AS path than the route from the other site).
+            #
+            # Public 443 comes in at JD, and only a JD replica can answer it:
+            # a LINDS replica's reply leaves by LINDS's own default route, and
+            # the LINDS router drops a private source address at its WAN. On
+            # 2026-11-06 the 2.8.1 rollout put both replicas (there were two,
+            # with no spread) on the linds workers: from 21:48 every public
+            # connection timed out, until this change. So JD keeps two
+            # replicas, one survives a node drain or reboot there, and a
+            # rollout adds a new pod before it takes an old one away.
+            #
+            # The site spread is hard (DoNotSchedule). Tainted nodes (not
+            # ready, cordoned) do not count, so with a site down every replica
+            # runs at the other one; the kube-descheduler profile
+            # ingress-site-spread moves them back when the site returns.
+            # pod-template-hash: a rollout's new pods are spread among
+            # themselves, not against the old ReplicaSet's.
+            replicaCount: 4
+            strategy:
+              type: RollingUpdate
+              rollingUpdate:
+                maxSurge: 1
+                maxUnavailable: 0
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: datacenter
+                whenUnsatisfiable: DoNotSchedule
+                nodeTaintsPolicy: Honor
+                matchLabelKeys: [pod-template-hash]
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nginx-ingress
+                    app.kubernetes.io/instance: nginx-ingress-mtls
+              - maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: ScheduleAnyway
+                matchLabelKeys: [pod-template-hash]
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nginx-ingress
+                    app.kubernetes.io/instance: nginx-ingress-mtls
+            # A node drain or the descheduler takes one replica at a time.
+            podDisruptionBudget:
+              enabled: true
+              maxUnavailable: 1
             hostNetwork: false
             disableIPV6: true
             enableExternalDNS: false

@@ -77,6 +77,33 @@ spec:
                 balance:
                   enabled:
                     - RemovePodsViolatingTopologySpreadConstraint
+            # The public mTLS ingress only (applications/nginx-ingress-mtls.yaml):
+            # two replicas per site, a hard spread over `datacenter`. While a
+            # site is down its replicas run at the other site, and they stay
+            # there after the site is back; if that site is JD, public 443
+            # then has no replica that can answer it. This profile evicts the
+            # replicas that put the spread right, one at a time (the
+            # PodDisruptionBudget allows one unavailable). The evictor's
+            # labelSelector keeps the profile to those pods.
+            - name: ingress-site-spread
+              pluginConfig:
+                - name: DefaultEvictor
+                  args:
+                    nodeFit: true
+                    labelSelector:
+                      matchLabels:
+                        app.kubernetes.io/instance: nginx-ingress-mtls
+                - name: RemovePodsViolatingTopologySpreadConstraint
+                  args:
+                    constraints:
+                      - DoNotSchedule
+                    namespaces:
+                      include:
+                        - nginx-ingress-mtls
+              plugins:
+                balance:
+                  enabled:
+                    - RemovePodsViolatingTopologySpreadConstraint
             # Replicas of one workload stacked on one node are spread out
             # when other nodes can take them. Same cause as CoreDNS: after the
             # 2026-10-04 restart all three immich-machine-learning pods sat on
