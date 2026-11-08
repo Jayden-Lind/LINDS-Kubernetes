@@ -1,0 +1,11 @@
+# The namespace for device certificate requests. The LINDS-Ansible role
+# cluster_cert (playbooks/certificates.yml) creates a CertificateRequest here
+# for each device, the linds-ca ClusterIssuer signs it, and the role deletes it
+# when it has the certificate. So the namespace is normally empty.
+#
+# The private keys never come here: each device's key stays on the Ansible
+# control node, or on the device itself (the iDRAC8).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: device-certs
