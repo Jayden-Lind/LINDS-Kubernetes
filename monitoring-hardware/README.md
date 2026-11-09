@@ -16,7 +16,6 @@ This replaced Zabbix on 2026-10-24.
 | jd-proxmox-02, linds-proxmox-01 (Proxmox API) | 10.0.50.246, 192.168.6.205 | prometheus-pve-exporter, `pve` | Each host, each guest (state, CPU, memory, disk and network I/O), each storage |
 | linds-truenas-01 | 10.3.1.50 | snmp_exporter, `snmp`, `system,if_mib,ucd_la_table,ucd_memory,truenas` | Pool health and space, pool I/O, ARC, interfaces, load, memory |
 | linds-switch-01 (OfficeConnect 1920S) | 192.168.6.210 | snmp_exporter, `snmp`, `system,if_mib` | Ports: link, speed, traffic, errors |
-| linds-vyos-01 | 192.168.6.1 | snmp_exporter, `snmp`, `system,if_mib,ucd_la_table,ucd_memory` | Interfaces, load, memory. Remove at the cutover to linds-router-01. |
 
 Not here, because other jobs already do it:
 
@@ -25,7 +24,7 @@ Not here, because other jobs already do it:
   `storage_health`). Its job and alerts stay there; the dashboard's Storage
   row reads them. The row's status tiles show the storage alerts that are
   firing, so they agree with Discord.
-- jd-router-01: `base/monitoring/router-metrics.yaml`.
+- jd-router-01 and linds-router-01: `base/monitoring/router-metrics.yaml`.
 - The Talos nodes: kube-prometheus-stack.
 
 ## Files
