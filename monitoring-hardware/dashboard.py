@@ -615,8 +615,7 @@ panels += [
 y = 115
 NAS = 'job="snmp", instance="linds-truenas-01"'
 SW = 'job="snmp", instance="linds-switch-01"'
-VY = 'job="snmp", instance="linds-vyos-01"'
-panels.append(row("LINDS · TrueNAS, switch and router over SNMP", y))
+panels.append(row("LINDS · TrueNAS and switch over SNMP", y))
 panels += [
     stat("NAS pools", "Each ZFS pool on linds-truenas-01. StorageTrueNasPoolNotOnline says which state it is in.",
          [target(f'(zpoolHealth{{{NAS}, zpoolHealth="ONLINE"}} * 0) or (zpoolHealth{{{NAS}, zpoolHealth!="ONLINE"}} * 2)',
@@ -649,19 +648,13 @@ panels += [
                      'and on (instance, ifIndex) ifType_info{job="snmp", ifType="ethernetCsmacd"})',
                      "{{instance}} · {{ifName}}", instant=True)],
              g(16, y + 8, 8, 10), "short", no_value="✓ None"),
-    timeseries("linds-vyos-01: internet and tunnel", "The LINDS router's WAN (eth1) and the tunnel to JD (vti0). "
-               "Until the cutover to linds-router-01, which the Router dashboard shows.",
-               [target(f'rate(ifHCInOctets{{{VY}, ifName=~"eth1|vti0"}}[5m]) * 8', "{{ifName}} in"),
-                target(f'rate(ifHCOutOctets{{{VY}, ifName=~"eth1|vti0"}}[5m]) * 8', "{{ifName}} out", "B")],
-               g(0, y + 18, 24, 8), "bps",
-               overrides=[override("eth1 in", "Internet in", BLUE), override("eth1 out", "Internet out", ORANGE),
-                          override("vti0 in", "Tunnel in", AQUA), override("vti0 out", "Tunnel out", YELLOW)]),
 ]
 
 dashboard = {
     "uid": "hardware",
     "title": "Hardware",
-    "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS, switch and router. Exporters, "
+    "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switch. The Router "
+                   "dashboard shows both routers. Exporters, "
                    "scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads "
                    "storage health (base/monitoring/proxmox-storage-health.yaml).",
     "tags": ["hardware", "proxmox"],

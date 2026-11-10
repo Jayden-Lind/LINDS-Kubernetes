@@ -55,15 +55,6 @@ spec:
         device: switch
         __param_module: system,if_mib
         __param_auth: public_v2
-    # Until the cutover to linds-router-01, which has node-exporter like
-    # jd-router-01 (base/monitoring/router-metrics.yaml). Remove it then.
-    - targets: ["192.168.6.1"]
-      labels:
-        instance: linds-vyos-01
-        site: linds
-        device: router
-        __param_module: system,if_mib,ucd_la_table,ucd_memory
-        __param_auth: public_v2
   # action: replace is the default, written out so that ArgoCD's diff
   # matches what the API server stores.
   relabelings:

@@ -26,7 +26,7 @@ data:
     {
       "uid": "hardware",
       "title": "Hardware",
-      "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS, switch and router. Exporters, scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads storage health (base/monitoring/proxmox-storage-health.yaml).",
+      "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switch. The Router dashboard shows both routers. Exporters, scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads storage health (base/monitoring/proxmox-storage-health.yaml).",
       "tags": [
         "hardware",
         "proxmox"
@@ -5494,7 +5494,7 @@ data:
         {
           "type": "row",
           "id": 36,
-          "title": "LINDS · TrueNAS, switch and router over SNMP",
+          "title": "LINDS · TrueNAS and switch over SNMP",
           "collapsed": false,
           "gridPos": {
             "x": 0,
@@ -6328,176 +6328,6 @@ data:
               "showLegend": false,
               "displayMode": "list",
               "placement": "bottom"
-            }
-          }
-        },
-        {
-          "type": "timeseries",
-          "id": 44,
-          "title": "linds-vyos-01: internet and tunnel",
-          "description": "The LINDS router's WAN (eth1) and the tunnel to JD (vti0). Until the cutover to linds-router-01, which the Router dashboard shows.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 133,
-            "w": 24,
-            "h": 8
-          },
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "refId": "A",
-              "expr": "rate(ifHCInOctets{job=\"snmp\", instance=\"linds-vyos-01\", ifName=~\"eth1|vti0\"}[5m]) * 8",
-              "legendFormat": "{{ifName}} in",
-              "range": true,
-              "instant": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "refId": "B",
-              "expr": "rate(ifHCOutOctets{job=\"snmp\", instance=\"linds-vyos-01\", ifName=~\"eth1|vti0\"}[5m]) * 8",
-              "legendFormat": "{{ifName}} out",
-              "range": true,
-              "instant": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "bps",
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "drawStyle": "line",
-                "lineWidth": 2,
-                "lineInterpolation": "linear",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "showPoints": "never",
-                "pointSize": 4,
-                "spanNulls": false,
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "barAlignment": 0,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "text",
-                    "value": null
-                  }
-                ]
-              },
-              "min": 0
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "eth1 in"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Internet in"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#3987e5"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "eth1 out"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Internet out"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#d95926"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "vti0 in"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Tunnel in"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#199e70"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "vti0 out"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Tunnel out"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "#c98500"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "legend": {
-              "showLegend": true,
-              "displayMode": "list",
-              "placement": "bottom",
-              "calcs": []
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "none"
             }
           }
         }
