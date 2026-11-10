@@ -6,7 +6,7 @@
 #   linds.com.au/mtls-mirror: "true"
 # and Kyverno generates <name>-mtls in the same namespace with the same
 # rules and TLS block (reusing the app's existing cert-manager secret) but
-# ingressClassName: nginx-mtls. The mirror tracks source changes and is
+# ingressClassName: nginx-mtls and no cert-manager annotations. The mirror tracks source changes and is
 # garbage-collected when the source Ingress is deleted.
 #
 # CEL GeneratingPolicy (policies.kyverno.io); the kyverno.io/v1
@@ -63,12 +63,27 @@ spec:
       expression: object.metadata.name
     - name: namespace
       expression: object.metadata.namespace
+    # The annotations to copy, as a list of {key, value}. This CEL
+    # environment has no map comprehension, so `downstream` builds the map
+    # from this list with listObjToMap().
+    - name: copiedAnnotations
+      expression: >-
+        object.metadata.?annotations.orValue({}).filter(k,
+          !k.startsWith("cert-manager.io/") &&
+          !k.startsWith("acme.cert-manager.io/") &&
+          k != "kubernetes.io/tls-acme"
+        ).map(k, {"key": k, "value": object.metadata.annotations[k]})
     - name: downstream
-      # Annotations are copied wholesale so per-app nginx.org/* tuning
-      # (websockets, proxy-buffering) carries over. That includes
-      # cert-manager.io/cluster-issuer, which is benign here: the
-      # Certificate for the shared TLS secret is owned by the source
-      # Ingress, so ingress-shim logs "not owned" and skips it.
+      # Annotations are copied so per-app nginx.org/* tuning (websockets,
+      # proxy-buffering) carries over, except the cert-manager ones. Only
+      # the source Ingress may ask cert-manager for the Certificate of the
+      # shared TLS secret. When the mirror also asked, whichever Ingress
+      # cert-manager saw first became the owner. For radarr and sonarr that
+      # was the mirror: cert-manager copied the mirror's
+      # generate.kyverno.io/* labels onto the Certificate and from there
+      # onto each CertificateRequest, and Kyverno's
+      # protect-generation-labels webhook denied every request, so the
+      # certificates could not renew (2026-11-03 to 2026-11-10).
       expression: >-
         [{
           "apiVersion": dyn("networking.k8s.io/v1"),
@@ -80,7 +95,8 @@ spec:
               "linds.com.au/mtls-mirror-of": string(variables.name),
               "app.kubernetes.io/managed-by": "kyverno"
             },
-            "annotations": object.metadata.?annotations.orValue({})
+            "annotations": listObjToMap(variables.copiedAnnotations,
+              variables.copiedAnnotations, "key", "value")
           }),
           "spec": dyn({
             "ingressClassName": "nginx-mtls",
