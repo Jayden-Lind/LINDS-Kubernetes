@@ -65,7 +65,7 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   mountOptions:
-    - nfsvers=4.1
+    - nfsvers=4.2
     - soft
   nfs:
     server: jd-truenas-01.linds.com.au
