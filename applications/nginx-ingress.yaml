@@ -42,6 +42,16 @@ spec:
               # response is buffered to a temporary file" a few times a day).
               # Large responses then stream through the proxy buffers.
               proxy-max-temp-file-size: "0"
+              # Send a request body to the application while the client
+              # uploads it. By default nginx first writes the whole body to a
+              # temporary file on the node's disk, then sends it: a large
+              # upload (a phone video to Immich) is written twice and the
+              # application sees nothing until the client has finished. The
+              # ConfigMap has no key for this directive, so it is a snippet
+              # in the http block (ConfigMap snippets do not need
+              # enableSnippets).
+              http-snippets: |
+                proxy_request_buffering off;
               # Enable HTTP/2 for all TLS servers on this controller.
               # This controller defaults http2 to false; there is no per-Ingress
               # toggle, so it must be set here on the ConfigMap.

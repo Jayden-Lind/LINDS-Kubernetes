@@ -119,6 +119,11 @@ spec:
                 # Stream large responses instead of spooling them to disk
                 # (same as applications/nginx-ingress.yaml).
                 proxy-max-temp-file-size: "0"
+                # Send request bodies to the application while the client
+                # uploads them, not from a temporary file on the node's disk
+                # (same as applications/nginx-ingress.yaml).
+                http-snippets: |
+                  proxy_request_buffering off;
                 http2: "true"
                 keepalive: "32"
                 server-tokens: "false"
