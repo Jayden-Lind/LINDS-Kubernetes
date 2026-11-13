@@ -107,8 +107,8 @@ spec:
       targetPort: metrics-ms
       protocol: TCP
       name: metrics-ms
+  # No controller label: this selects the JD workers and the LINDS worker.
   selector:
-    app.kubernetes.io/controller: main
     app.kubernetes.io/instance: immich
     app.kubernetes.io/name: microservices
 ---
@@ -488,8 +488,8 @@ spec:
       hostNetwork: false
       hostPID: false
       dnsPolicy: ClusterFirst
-      # JD only: the originals are on jd-fs-01, and a LINDS node would read
-      # them through the site tunnel.
+      # JD: the originals are on jd-fs-01. The one worker at LINDS is the
+      # Deployment immich-microservices-linds below.
       nodeSelector:
         datacenter: jd
       # One replica per JD worker where possible.
@@ -583,6 +583,176 @@ spec:
             # node memory pressure, three times, on three nodes, and the
             # last node also holds the PostgreSQL primary. With a limit the
             # kernel stops this container only, before the node is short.
+            limits:
+              memory: 5Gi
+          name: main
+          ports:
+          - containerPort: 8082
+            name: metrics-ms
+            protocol: TCP
+          # This worker has no HTTP API. The metrics port opens when the
+          # worker has started.
+          startupProbe:
+            failureThreshold: 30
+            tcpSocket:
+              port: metrics-ms
+            periodSeconds: 10
+            timeoutSeconds: 1
+          livenessProbe:
+            failureThreshold: 3
+            tcpSocket:
+              port: metrics-ms
+            periodSeconds: 10
+            timeoutSeconds: 1
+          volumeMounts:
+          - mountPath: /data
+            name: data
+          - mountPath: /usr/src/app/library
+            name: library
+          - mountPath: /immich-config
+            name: immich-config
+            readOnly: true
+          - mountPath: /etc/ssl/linds
+            name: linds-ca
+            readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: immich-nfs-pvc
+        - name: library
+          persistentVolumeClaim:
+            claimName: immich-library-pvc
+        - name: immich-config-template
+          configMap:
+            name: immich-config-template
+        - name: immich-config
+          emptyDir: {}
+        - name: linds-ca
+          secret:
+            secretName: linds-ca-cert
+---
+# One more job worker, at LINDS. Same pod as immich-microservices above;
+# keep the two in step. The differences: one replica, LINDS nodes, and the
+# label app.kubernetes.io/controller: linds, so that the two Deployments do
+# not select each other's pods.
+#
+# The originals are on jd-fs-01: this worker reads each one through the
+# site tunnel, which uses JD's upload. One replica only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-microservices-linds
+  labels:
+    app.kubernetes.io/controller: linds
+    app.kubernetes.io/instance: immich
+    app.kubernetes.io/name: microservices
+  namespace: immich
+spec:
+  revisionHistoryLimit: 3
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Stop the old pod before the new one starts (see above).
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/controller: linds
+      app.kubernetes.io/name: microservices
+      app.kubernetes.io/instance: immich
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/controller: linds
+        app.kubernetes.io/instance: immich
+        app.kubernetes.io/name: microservices
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: immich-server
+      automountServiceAccountToken: false
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        datacenter: linds
+      affinity:
+        # Never on the control plane (see immich-machine-learning above).
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+        # Preferably not beside the machine-learning pod at LINDS: the
+        # LINDS workers have 4 vCPUs.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: machine-learning
+                    app.kubernetes.io/instance: immich
+      initContainers:
+        # Same as in immich-server: renders the config with the OIDC secret.
+        - name: render-config
+          image: ghcr.io/immich-app/immich-server:v3
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - 'sed "s|__OAUTH_CLIENT_SECRET__|${OAUTH_CLIENT_SECRET}|" /template/immich.json > /immich-config/immich.json'
+          env:
+            - name: OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: immich-oidc
+                  key: client-secret
+          volumeMounts:
+            - mountPath: /template
+              name: immich-config-template
+              readOnly: true
+            - mountPath: /immich-config
+              name: immich-config
+      containers:
+        - env:
+          - name: DB_DATABASE_NAME
+            value: immich
+          - name: DB_HOSTNAME
+            value: linds-postgres-rw.postgresql-linds.svc.cluster.local
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: password
+                name: immich-auth
+          - name: DB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                key: username
+                name: immich-auth
+          - name: IMMICH_MACHINE_LEARNING_URL
+            value: http://immich-machine-learning:3003
+          - name: IMMICH_TELEMETRY_INCLUDE
+            value: all
+          - name: IMMICH_WORKERS_EXCLUDE
+            value: api
+          - name: REDIS_HOSTNAME
+            value: immich-valkey
+          - name: TZ
+            value: Australia/Melbourne
+          - name: IMMICH_CONFIG_FILE
+            value: /immich-config/immich.json
+          - name: NODE_EXTRA_CA_CERTS
+            value: /etc/ssl/linds/ca.crt
+          image: ghcr.io/immich-app/immich-server:v3
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            # Same limit as immich-microservices (see the reason there).
             limits:
               memory: 5Gi
           name: main
