@@ -4,6 +4,11 @@
 # setting - the values below were exported from the running instance's
 # system_metadata table so nothing is lost.
 #
+# The "job" concurrency values apply to EACH immich-microservices replica
+# (immich.yaml), so the total is the value times the number of replicas.
+# thumbnailGeneration and videoConversion are low because each of their jobs
+# can hold several hundred MB, and a replica has a 5Gi memory limit.
+#
 # The client secret is NOT here: an initContainer substitutes
 # __OAUTH_CLIENT_SECRET__ from the immich-oidc secret at pod start, so this
 # repository (which is public) never contains it.
@@ -63,10 +68,10 @@ data:
           "concurrency": 10
         },
         "thumbnailGeneration": {
-          "concurrency": 10
+          "concurrency": 3
         },
         "videoConversion": {
-          "concurrency": 5
+          "concurrency": 2
         }
       },
       "library": {
