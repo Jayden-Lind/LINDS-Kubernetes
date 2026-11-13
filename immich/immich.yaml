@@ -461,12 +461,12 @@ metadata:
   namespace: immich
 spec:
   revisionHistoryLimit: 3
-  replicas: 3
+  replicas: 4
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      # Replace one replica at a time and never run a fourth: a surge pod
-      # would add its memory to a node that is already busy.
+      # Replace one replica at a time and never run an extra one: a surge
+      # pod would add its memory to a node that is already busy.
       maxSurge: 0
       maxUnavailable: 1
   selector:

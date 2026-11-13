@@ -6,8 +6,10 @@
 #
 # The "job" concurrency values apply to EACH immich-microservices replica
 # (immich.yaml), so the total is the value times the number of replicas.
-# thumbnailGeneration and videoConversion are low because each of their jobs
-# can hold several hundred MB, and a replica has a 5Gi memory limit.
+# thumbnailGeneration and videoConversion are low because a replica has a
+# 5Gi memory limit. Measured 2026-11-13 with full-size WebP on 14-24 MP RAW:
+# at 3 thumbnail jobs a replica held 2.5-3.8 GB most of the time, but peaks
+# passed 5 GB and the kernel killed each replica about every 7 minutes.
 #
 # The client secret is NOT here: an initContainer substitutes
 # __OAUTH_CLIENT_SECRET__ from the immich-oidc secret at pod start, so this
@@ -68,7 +70,7 @@ data:
           "concurrency": 10
         },
         "thumbnailGeneration": {
-          "concurrency": 3
+          "concurrency": 2
         },
         "videoConversion": {
           "concurrency": 2
