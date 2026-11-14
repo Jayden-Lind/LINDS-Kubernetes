@@ -461,7 +461,9 @@ metadata:
   namespace: immich
 spec:
   revisionHistoryLimit: 3
-  replicas: 4
+  # Two, not more: a worker keeps about 2 GB after a backlog even when idle,
+  # and the JD workers have 16 GB each for everything.
+  replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -492,15 +494,6 @@ spec:
       # Deployment immich-microservices-linds below.
       nodeSelector:
         datacenter: jd
-      # One replica per JD worker where possible.
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app.kubernetes.io/name: microservices
-              app.kubernetes.io/instance: immich
       affinity:
         # Never on the control plane (see immich-machine-learning above).
         nodeAffinity:
@@ -509,9 +502,17 @@ spec:
               - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
-        # Preferably not on the node of the PostgreSQL primary: a replica
-        # uses every vCPU of its node while a backlog runs.
         podAntiAffinity:
+          # Never two workers on one node: two 8Gi limits do not fit in a
+          # 16 GB node beside its other pods.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: microservices
+                  app.kubernetes.io/instance: immich
+          # Preferably not on the node of the PostgreSQL primary: a replica
+          # uses every vCPU of its node while a backlog runs.
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -575,16 +576,27 @@ spec:
           image: ghcr.io/immich-app/immich-server:v3
           imagePullPolicy: IfNotPresent
           resources:
+            # The request is what an idle worker holds after a backlog
+            # (about 2 GB). With 1Gi the scheduler packed the nodes too
+            # full, and on 2026-11-14 the kubelet evicted an idle worker
+            # when the machine-learning pod beside it loaded its models.
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 2Gi
             # On 2026-11-13 one pod with ten thumbnail jobs on 24 MP RAW
             # files grew past 8 GB in 13 minutes. The kubelet evicted it for
-            # node memory pressure, three times, on three nodes, and the
-            # last node also holds the PostgreSQL primary. With a limit the
-            # kernel stops this container only, before the node is short.
+            # node memory pressure, three times, on three nodes. With a
+            # limit the kernel stops this container only, before the node
+            # is short.
+            #
+            # 8Gi, not 5Gi: a layered 16-bit TIFF or PSD goes through
+            # ImageMagick, which loads every layer. Two 1.6 GB TIFFs (7
+            # layers of 24 MP) needed more than 5 GiB for one decode and
+            # killed a worker at every nightly retry. ImageMagick's own
+            # memory limits (MAGICK_MEMORY_LIMIT) were tested and do not
+            # contain it.
             limits:
-              memory: 5Gi
+              memory: 8Gi
           name: main
           ports:
           - containerPort: 8082
@@ -749,12 +761,12 @@ spec:
           image: ghcr.io/immich-app/immich-server:v3
           imagePullPolicy: IfNotPresent
           resources:
+            # Same values as immich-microservices (see the reasons there).
             requests:
               cpu: 500m
-              memory: 1Gi
-            # Same limit as immich-microservices (see the reason there).
+              memory: 2Gi
             limits:
-              memory: 5Gi
+              memory: 8Gi
           name: main
           ports:
           - containerPort: 8082
