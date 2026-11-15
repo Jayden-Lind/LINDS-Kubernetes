@@ -1,0 +1,54 @@
+# Minecraft is open to the internet (jd-router-01 forwards TCP 25565 here, see
+# service.yaml). If the server is taken over, this policy keeps it away from
+# everything else: no LAN, no other site, no cluster pod, node or API server.
+# It may only answer players, ask the cluster DNS, and use HTTPS on the
+# internet.
+#
+# Everything the server needs out is HTTPS: Mojang's session and services
+# APIs (online-mode logins, chat signing keys), and at start the image's
+# downloads - Paper builds from fill.papermc.io, the vanilla jar Paperclip
+# patches from piston-data.mojang.com, Chunky from Modrinth, and the
+# whitelist's UUID-to-name lookups at playerdb.co.
+#
+# The internet rule names the port instead of allowing all of them, for the
+# same reason as valheim/network-policy.yaml: jd-router-01's public address is
+# "internet" too, and the router answers SSH, DNS, SNMP and BGP to any source
+# on the cluster VLAN.
+#
+# To see what it drops: hubble observe --namespace minecraft --verdict DROPPED
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: minecraft-server
+spec:
+  description: "Minecraft: players in, cluster DNS and HTTPS out, nothing else"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft
+      app.kubernetes.io/instance: minecraft
+  ingress:
+    # Players, from the internet and the LAN (externalTrafficPolicy Local
+    # keeps their own addresses, so both arrive as `world`).
+    - fromEntities: [world]
+      toPorts:
+        - ports:
+            - port: "25565"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
