@@ -1,12 +1,40 @@
+# The server directory, mounted at /data: the worlds, the Paper jar and its
+# libraries, plugins, configs and logs.
+#
+# zfs-iscsi like the other single-writer game saves (valheim/pvc.yaml): a zvol
+# of its own on jd-proxmox-02, so it gets sanoid dailies (14 kept - the
+# rollback for griefing or a bad upgrade) and TRIM through the StorageClass's
+# discard mount option. The old deployment kept everything on NFS.
+#
+# Seeded by hand on 2026-11-16, before the first start, with two saves:
+#   world/, world_the_end/       the 2025 server (old minecraft/ app, NAS
+#                                minecraft/jd-nfs-pvc-minecraft), last played
+#                                2025-12-18 on vanilla 1.21.9. Its current
+#                                nether was world/DIM-1 (vanilla layout);
+#                                Paper moves it to world_nether/ on first
+#                                start. world_the_end/ is the only End that
+#                                ever held anything (Paper era, to 2025-04).
+#   LINDS/, LINDS_nether/,       the 2023 server (VM 1110 JD-Minecraft-01,
+#   LINDS_the_end/               /root/LINDS on its own disk), last played
+#                                2023-11-26 on Paper 1.20.1. Not loaded until
+#                                LEVEL says so - see statefulset.yaml.
+# The originals on the NAS and on VM 1110's disk were only read.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: jd-nfs-pvc-minecraft
+  name: minecraft-data
+  annotations:
+    # Must exist before the StatefulSet.
+    argocd.argoproj.io/sync-wave: "-1"
+    # This is the world. Never let a prune take it.
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
-  storageClassName: nfs-csi
+  storageClassName: zfs-iscsi
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
-
+      # ~1 GB of worlds and ~0.3 GB of server files on day one. The zvol is
+      # sparse, so the headroom costs nothing until it is used. A claim can
+      # only grow.
+      storage: 20Gi
