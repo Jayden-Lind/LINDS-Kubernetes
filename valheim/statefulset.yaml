@@ -26,7 +26,14 @@ kind: StatefulSet
 metadata:
   name: valheim
 spec:
-  replicas: 1
+  # Retired 2026-11-15: scaled to 0, nothing deleted. The world
+  # (saves-directory-valheim-0) and the server files keep their zvols, and
+  # the world zvol keeps its sanoid dailies. service.yaml is unpublished and
+  # Renovate skips valheim/ (renovate.json5) for as long as this is 0.
+  # To bring the server back, revert the commit that set this to 0: that
+  # restores replicas 1, the public annotations and the Renovate updates
+  # together.
+  replicas: 0
   serviceName: valheim
   # Same labels the chart's StatefulSet used, so the Service selector and any
   # saved dashboards keep working.

@@ -12,6 +12,12 @@
 # The 2458 port is gone with crossplay - it only ever carried the PlayFab
 # backend. Re-add it here, in the ports annotation and in the StatefulSet if
 # CROSSPLAY goes back to true.
+#
+# UNPUBLISHED while the server is retired (2026-11-15, replicas 0 in
+# statefulset.yaml): the four public.linds.com.au/ annotations are removed,
+# so jd-router-01 drops the WAN forward of UDP 2456-2457 and
+# external-dns-public deletes the Cloudflare record. Reverting the retirement
+# commit puts them back.
 apiVersion: v1
 kind: Service
 metadata:
@@ -23,12 +29,6 @@ metadata:
     # 10.0.50.200 and points it at the address above, so players at home
     # reach the server without leaving the LAN.
     external-dns.kubernetes.io/hostname: valheim.linds.com.au
-    # Internet: the router forwards these WAN ports here, and Cloudflare
-    # gets valheim.linds.com.au as a CNAME to jd.linds.com.au.
-    public.linds.com.au/ports: "2456-2457/udp"
-    public.linds.com.au/publish: "true"
-    public.linds.com.au/hostname: valheim.linds.com.au
-    public.linds.com.au/target: jd.linds.com.au
 spec:
   type: LoadBalancer
   # Keep the players' real source IPs in the server log - which only started
