@@ -1,0 +1,245 @@
+# The Minecraft server (Java Edition): Paper on itzg/minecraft-server.
+#
+# Chosen 2026-11-16, with Minecraft 26.3 the current release:
+#
+# - Paper, not vanilla, Fabric or Folia. Paper 26.3 builds are on the stable
+#   channel since build 175 (2026-10-11). Its chunk system (Moonrise) loads
+#   and generates chunks on worker threads, which is where a many-core,
+#   low-clock EPYC gains the most. Folia (regionised ticking) is alpha on
+#   26.3, breaks most plugins, and only pays off with many players spread out.
+# - The image fetches the newest STABLE Paper build of VERSION at every start,
+#   so Paper fixes arrive with a restart. VERSION itself is pinned: a new
+#   Minecraft version upgrades the world one way, so it is a deliberate edit
+#   here, once Paper has stable builds for it.
+# - The image tag is the image's scripts plus Java 25 (HotSpot), which 26.3
+#   requires. Renovate bumps it (renovate.json5).
+#
+# The platform side was tuned before this existed: each JD worker VM is
+# pinned to one CCD of the EPYC 7B13 (LINDS-Terraform `local.jd_ccd`), so the
+# server shares that CCD's 32 MB L3 only with the other pods on its node; the
+# VMs use CPU type `host`, so the JIT gets AVX2; KSM is off on jd-proxmox-02,
+# so guest memory sits on 2 MiB host pages. One core reaches only ~2.63 GHz
+# (max boost 3.54) because the host firmware runs Operating Mode "Maximum
+# Efficiency" with EfficiencyModeEn: kept that way on purpose (2026-11-16).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minecraft
+spec:
+  replicas: 1
+  serviceName: minecraft
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft
+      app.kubernetes.io/instance: minecraft
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minecraft
+        app.kubernetes.io/instance: minecraft
+    spec:
+      # JD only - the world is JD-side iSCSI - and never the control-plane
+      # node: etcd lives there. In practice this is talos-worker-01, the only
+      # JD worker with 8Gi of requests free (Valheim's old slot).
+      nodeSelector:
+        datacenter: jd
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      # The image stops the server through RCON on SIGTERM, which saves every
+      # world first. Generous, so a drain never costs progress.
+      terminationGracePeriodSeconds: 120
+      # Nothing in here talks to the API server.
+      automountServiceAccountToken: false
+      # No MINECRAFT_PORT=tcp://... style variables from the Service next to
+      # the image's own environment-driven configuration.
+      enableServiceLinks: false
+      securityContext:
+        # The uid the image itself switches to; set here, it starts as that
+        # user directly and needs no root at all.
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-server:2026.11.0-java25@sha256:8d5080d8dcd0a2629c2e4f248678373a337a40537ad6ef2857c7dbcda6e3eadd
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: TYPE
+              value: PAPER
+            - name: VERSION
+              value: "26.3"
+            # The save to load. Two are on the volume (minecraft/pvc.yaml):
+            #   world  the 2025 server - in use
+            #   LINDS  the 2023 server, staged and never loaded yet
+            # Switching is this one line. Each save keeps its own player
+            # inventories and positions; the whitelist and ops are shared.
+            # The first start on LINDS upgrades it from 1.20.1, one way.
+            - name: LEVEL
+              value: world
+            - name: TZ
+              value: Australia/Melbourne
+            # Heap. Plenty for a group of friends; the pod limit below adds
+            # ~2 GiB for everything that is not heap.
+            - name: MEMORY
+              value: 6G
+            # Paper's own flag set for 26.3 (the "flags.recommended" list at
+            # fill.papermc.io/v3/projects/paper/versions/26.3): G1 with
+            # Aikar-style tuning, plus compact object headers (JEP 519, a
+            # product feature in Java 25: smaller objects, so more of the heap
+            # and the L3 holds live data) and AlwaysPreTouch.
+            #
+            # Added: -XX:+UseTransparentHugePages. Talos boots with
+            # transparent_hugepage=madvise (LINDS-Terraform
+            # talos-schematic.tf), so the JVM has to ask for huge pages, and
+            # with AlwaysPreTouch the whole heap is on 2 MiB pages from the
+            # first second - on top of 2 MiB pages on the host.
+            #
+            # G1 rather than ZGC: no Minecraft benchmark favours ZGC at a 6 GiB
+            # heap, Paper only documents G1, and the image's docs suggest ZGC
+            # for 32 GB+ heaps. USE_AIKAR_FLAGS is off so these are the only
+            # GC flags.
+            - name: USE_AIKAR_FLAGS
+              value: "false"
+            - name: JVM_XX_OPTS
+              value: >-
+                -XX:+UseCompactObjectHeaders
+                -XX:+AlwaysPreTouch
+                -XX:+DisableExplicitGC
+                -XX:+PerfDisableSharedMem
+                -XX:+UnlockExperimentalVMOptions
+                -XX:+UseG1GC
+                -XX:G1HeapRegionSize=8M
+                -XX:G1MaxNewSizePercent=40
+                -XX:G1MixedGCCountTarget=4
+                -XX:G1MixedGCLiveThresholdPercent=90
+                -XX:G1NewSizePercent=30
+                -XX:G1RSetUpdatingPauseTimePercent=5
+                -XX:G1ReservePercent=20
+                -XX:InitiatingHeapOccupancyPercent=15
+                -XX:MaxTenuringThreshold=1
+                -XX:SurvivorRatio=32
+                -XX:+UseTransparentHugePages
+            # server.properties. The gameplay values are the 2025 server's,
+            # so the world plays as it did; the MOTD is the 2023 server's,
+            # the only one ever set by hand. view/simulation distance are the
+            # main CPU levers if the server ever gets busy.
+            - name: MOTD
+              value: UwU Crew
+            - name: DIFFICULTY
+              value: hard
+            - name: MODE
+              value: survival
+            - name: PVP
+              value: "true"
+            - name: MAX_PLAYERS
+              value: "20"
+            - name: VIEW_DISTANCE
+              value: "10"
+            - name: SIMULATION_DISTANCE
+              value: "10"
+            - name: SPAWN_PROTECTION
+              value: "16"
+            # lz4: cheaper chunk saves than the default deflate, at some disk.
+            - name: REGION_FILE_COMPRESSION
+              value: lz4
+            # The zvol is sync=disabled anyway (democratic-csi); a sync per
+            # chunk write would buy nothing.
+            - name: SYNC_CHUNK_WRITES
+              value: "false"
+            - name: ONLINE_MODE
+              value: "TRUE"
+            # Public server, so a whitelist. By UUID, so a player who renames
+            # still matches; the image looks the names up (PlayerDB). These
+            # are everyone with real play time on either old server:
+            #   TheZneaks    8aeff5b2-d583-4033-b290-a665cf91cb22
+            #   Peza777      ac7e92f1-9af5-40ec-a277-910374e2685e
+            #   ItsOccupy    be2c1e5f-8902-419f-9f8e-1b10a1dfca6d
+            #   sir_slimy    d19b8a08-cc53-4145-b71c-2548d805cc4a
+            #   Cullore      0c9e49d9-e329-47bb-a717-b279cd1df976
+            #   The_Gherks   881c2e07-9b8b-4549-80d1-ca3ca3216354
+            #   Lando11      54b59fb7-b182-47a4-9c44-6fb3b865c51d
+            #   TeeeeJaaaaY  2cb64a0e-2613-4282-b2ae-027d9a97702a
+            # Left out on purpose: the 0-8 minute joins from when the old
+            # servers had no whitelist (matscan is a server-scanner bot).
+            #
+            # The image MERGES this list into whitelist.json at each start
+            # (EXISTING_WHITELIST_FILE default), so `/whitelist add` in game
+            # survives a restart. Removing someone means `/whitelist remove`
+            # AND deleting the line here.
+            - name: WHITELIST
+              value: |
+                8aeff5b2-d583-4033-b290-a665cf91cb22
+                ac7e92f1-9af5-40ec-a277-910374e2685e
+                be2c1e5f-8902-419f-9f8e-1b10a1dfca6d
+                d19b8a08-cc53-4145-b71c-2548d805cc4a
+                0c9e49d9-e329-47bb-a717-b279cd1df976
+                881c2e07-9b8b-4549-80d1-ca3ca3216354
+                54b59fb7-b182-47a4-9c44-6fb3b865c51d
+                2cb64a0e-2613-4282-b2ae-027d9a97702a
+            # Kick anyone who drops off the whitelist at once.
+            - name: ENFORCE_WHITELIST
+              value: "TRUE"
+            # TheZneaks, operator on both old servers.
+            - name: OPS
+              value: 8aeff5b2-d583-4033-b290-a665cf91cb22
+            # Chunky pre-generates terrain ahead of play, the cure for
+            # chunk-generation lag on a low-clock CPU:
+            #   rcon-cli chunky radius 3000
+            #   rcon-cli chunky start
+            # The list is declarative: a plugin dropped from it is removed
+            # from plugins/ at the next start. spark (tick profiler) is built
+            # into Paper.
+            - name: MODRINTH_PROJECTS
+              value: chunky
+          ports:
+            - name: minecraft
+              containerPort: 25565
+              protocol: TCP
+          # Ready = the server answers a status ping (the image's own health
+          # check). With externalTrafficPolicy Local that also gates the BGP
+          # advertisement, so the router forwards nothing until then. No
+          # liveness probe: the first start on an old world upgrades it for
+          # minutes, and a probe would kill it halfway.
+          readinessProbe:
+            exec:
+              command: [mc-health]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            # No CPU limit, as for Valheim: a CFS quota throttles the GC and
+            # chunk worker threads in bursts, which shows up as tick spikes.
+            # The request gives the pod the node's largest share under
+            # contention.
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            # 6 GiB heap + ~2 GiB for metaspace, code cache, GC structures,
+            # thread stacks and network buffers. AlwaysPreTouch commits the
+            # whole heap at start, so the pod sits near this from the first
+            # minute: expected, not a leak.
+            limits:
+              memory: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-data

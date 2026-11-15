@@ -1,19 +1,38 @@
+# Java Edition only: one TCP port. No query (UDP 25565) and no RCON port -
+# RCON stays inside the pod, where the image uses it for a clean stop and
+# `kubectl exec -n minecraft minecraft-0 -- rcon-cli` reaches it.
+#
+# Published (docs/publish-a-service.md): jd-router-01 forwards WAN TCP 25565
+# to the pinned address, and external-dns-public points minecraft.linds.com.au
+# at jd.linds.com.au. Players type minecraft.linds.com.au - 25565 is the
+# client's default port, so no SRV record is needed. The whitelist in
+# statefulset.yaml is what keeps strangers out; the network policy is what
+# keeps a taken-over server away from everything else.
 apiVersion: v1
 kind: Service
 metadata:
   name: minecraft
+  annotations:
+    # Pinned, so the address in the logs and in Hubble stays the same.
+    lbipam.cilium.io/ips: "172.16.1.13"
+    # Internal DNS: the same name with the Service's own address, so players
+    # at home do not go out through the WAN.
+    external-dns.kubernetes.io/hostname: minecraft.linds.com.au
+    # Internet.
+    public.linds.com.au/ports: "25565/tcp"
+    public.linds.com.au/publish: "true"
+    public.linds.com.au/hostname: minecraft.linds.com.au
+    public.linds.com.au/target: jd.linds.com.au
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Cluster
+  # Players' own addresses reach the server (bans by IP, the log), and Cilium
+  # advertises the address only from the node that runs the pod.
+  externalTrafficPolicy: Local
   selector:
-    app: minecraft
+    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/instance: minecraft
   ports:
-    - port: 25565
-      targetPort: 25565
-      protocol: UDP
-      name: minecraft-udp
-    - port: 25565
-      targetPort: 25565
+    - name: minecraft
+      port: 25565
+      targetPort: minecraft
       protocol: TCP
-      name: minecraft-tcp
-

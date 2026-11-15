@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: minecraft
+  namespace: argocd
+  # Back from applications/disabled/ on 2026-11-16, rebuilt on the valheim/
+  # pattern: plain manifests, a zfs-iscsi world volume, a pinned image that
+  # Renovate bumps. The old ImageUpdater (image-updates/disabled/) is gone
+  # rather than moved back: it followed `latest` by digest, and a game server
+  # should only change when someone merges a bump - see
+  # minecraft/statefulset.yaml.
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: minecraft
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: minecraft
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
