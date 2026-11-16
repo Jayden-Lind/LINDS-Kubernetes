@@ -120,8 +120,16 @@ spec:
 
     - name: kubernetes.pods
       rules:
+        # Fires for one hour after an OOM kill, then resolves. The reason
+        # metric alone stays 1 for as long as the pod exists, so one kill
+        # kept this alert firing (and repeating every 4 h) for days: a
+        # machine-learning pod killed once on 2026-11-14 still notified on
+        # 2026-11-16. The restart counter limits it to a recent kill.
         - alert: PodOOMKilled
-          expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          expr: >
+            (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1)
+            and on (namespace, pod, container)
+            (increase(kube_pod_container_status_restarts_total[1h]) > 0)
           for: 0m
           labels:
             severity: warning
