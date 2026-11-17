@@ -16,6 +16,12 @@ spec:
   storageClassName: "manual"
   persistentVolumeReclaimPolicy: Retain
   volumeMode: Filesystem
+  # NFS 4.2 only. Without the option the client can fall back to version 3,
+  # and a version 3 mount needs rpcbind and rpc.statd on the node. The Talos
+  # nodes do not run them (LINDS-Terraform proxmox/talos-schematic.tf).
+  # The option applies at the next mount of the volume.
+  mountOptions:
+    - nfsvers=4.2
   nfs:
     server: jd-truenas-01.linds.com.au
     path: /mnt/NAS
