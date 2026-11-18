@@ -16,6 +16,7 @@ This replaced Zabbix on 2026-10-24.
 | jd-proxmox-02, linds-proxmox-01 (Proxmox API) | 10.0.50.246, 192.168.6.205 | prometheus-pve-exporter, `pve` | Each host, each guest (state, CPU, memory, disk and network I/O), each storage |
 | linds-truenas-01 | 10.3.1.50 | snmp_exporter, `snmp`, `system,if_mib,ucd_la_table,ucd_memory,truenas` | Pool health and space, pool I/O, ARC, interfaces, load, memory |
 | linds-switch-01 (OfficeConnect 1920S) | 192.168.6.210 | snmp_exporter, `snmp`, `system,if_mib` | Ports: link, speed, traffic, errors |
+| linds-switch-02 (EdgeRouter X SFP, a VLAN switch) | 10.0.80.3 | snmp_exporter, `snmp`, `system,if_mib` | Ports: link, speed, traffic, errors |
 
 Not here, because other jobs already do it:
 

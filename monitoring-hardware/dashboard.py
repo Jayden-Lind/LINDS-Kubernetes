@@ -192,25 +192,28 @@ def relabel(expr, mapping):
     return expr
 
 
-def switch_ports(grid):
-    """One row per switch port: link, speed, traffic and errors, sorted by port number."""
-    sw = 'job="snmp", instance="linds-switch-01", ifName=~"[0-9]+"'
+def switch_ports(grid, instance="linds-switch-01", ports="[0-9]+", numeric=True, title="Switch ports",
+                 desc="Every port of linds-switch-01: link (ifOperStatus), speed, traffic in and out together, and "
+                      "damaged frames in the last hour."):
+    """One row per switch port: link, speed, traffic and errors, sorted by port (as a number when the port
+    names are numbers). The speed shows only for a port with a link: a port without one reports the speed
+    it last had, or 10 Mb/s."""
+    sw = f'job="snmp", instance="{instance}", ifName=~"{ports}"'
     q = [
         (f"max by (ifName) (ifOperStatus{{{sw}}})", "A"),
-        (f"max by (ifName) (ifHighSpeed{{{sw}}})", "B"),
+        (f"max by (ifName) (ifHighSpeed{{{sw}}}) * on (ifName) (max by (ifName) (ifOperStatus{{{sw}}}) == bool 1)", "B"),
         (f"sum by (ifName) (rate(ifHCInOctets{{{sw}}}[5m]) + rate(ifHCOutOctets{{{sw}}}[5m])) * 8", "C"),
         (f"sum by (ifName) (increase(ifInErrors{{{sw}}}[1h]) + increase(ifOutErrors{{{sw}}}[1h]))", "D"),
     ]
     return {
-        "type": "table", "id": next(_ids), "title": "Switch ports",
-        "description": "Every port of linds-switch-01: link (ifOperStatus), speed, traffic in and out together, and "
-                       "damaged frames in the last hour.",
+        "type": "table", "id": next(_ids), "title": title,
+        "description": desc,
         "datasource": DS, "gridPos": grid,
         "targets": [target(e, "", ref, True, "table") for e, ref in q],
         "transformations": [
             {"id": "merge", "options": {}},
-            {"id": "convertFieldType", "options": {"conversions": [{"targetField": "ifName", "destinationType": "number"}],
-                                                   "fields": {}}},
+            *([{"id": "convertFieldType", "options": {"conversions": [{"targetField": "ifName", "destinationType": "number"}],
+                                                      "fields": {}}}] if numeric else []),
             {"id": "organize", "options": {
                 "excludeByName": {"Time": True},
                 "indexByName": {"ifName": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4},
@@ -615,7 +618,8 @@ panels += [
 y = 115
 NAS = 'job="snmp", instance="linds-truenas-01"'
 SW = 'job="snmp", instance="linds-switch-01"'
-panels.append(row("LINDS · TrueNAS and switch over SNMP", y))
+SW2 = 'job="snmp", instance="linds-switch-02"'
+panels.append(row("LINDS · TrueNAS and switches over SNMP", y))
 panels += [
     stat("NAS pools", "Each ZFS pool on linds-truenas-01. StorageTrueNasPoolNotOnline says which state it is in.",
          [target(f'(zpoolHealth{{{NAS}, zpoolHealth="ONLINE"}} * 0) or (zpoolHealth{{{NAS}, zpoolHealth!="ONLINE"}} * 2)',
@@ -647,13 +651,22 @@ panels += [
              [target('sort_desc(((increase(ifInErrors{job="snmp"}[1h]) + increase(ifOutErrors{job="snmp"}[1h])) > 0) '
                      'and on (instance, ifIndex) ifType_info{job="snmp", ifType="ethernetCsmacd"})',
                      "{{instance}} · {{ifName}}", instant=True)],
-             g(16, y + 8, 8, 10), "short", no_value="✓ None"),
+             g(16, y + 8, 8, 18), "short", no_value="✓ None"),
+    stat("linds-switch-02", "The EdgeRouter X behind port 5 of linds-switch-01, used as a VLAN switch: ports with a "
+         "link. There is no uptime: EdgeOS restarts its SNMP agent at each configuration change, so sysUpTime is not "
+         "the time since the switch started.",
+         [target(f'count(ifOperStatus{{{SW2}, ifName=~"eth[0-4]"}} == 1)', "Ports up")],
+         g(0, y + 18, 4, 8), text_mode="value_and_name", color_mode="none", value_size=24),
+    switch_ports(g(4, y + 18, 12, 8), "linds-switch-02", "eth[0-4]", numeric=False, title="linds-switch-02 ports",
+                 desc="Every port of linds-switch-02 (EdgeRouter X): link, speed, traffic in and out together, and "
+                      "damaged frames in the last hour. eth5, the SFP port, is not shown: it is empty, and EdgeOS "
+                      "reports it as up."),
 ]
 
 dashboard = {
     "uid": "hardware",
     "title": "Hardware",
-    "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switch. The Router "
+    "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switches. The Router "
                    "dashboard shows both routers. Exporters, "
                    "scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads "
                    "storage health (base/monitoring/proxmox-storage-health.yaml).",

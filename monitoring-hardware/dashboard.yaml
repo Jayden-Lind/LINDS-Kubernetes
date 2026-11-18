@@ -26,7 +26,7 @@ data:
     {
       "uid": "hardware",
       "title": "Hardware",
-      "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switch. The Router dashboard shows both routers. Exporters, scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads storage health (base/monitoring/proxmox-storage-health.yaml).",
+      "description": "Both hosts' BMCs, storage and Proxmox, and the LINDS NAS and switches. The Router dashboard shows both routers. Exporters, scrape jobs and alerts: LINDS-Kubernetes monitoring-hardware/ (README). The Storage row reads storage health (base/monitoring/proxmox-storage-health.yaml).",
       "tags": [
         "hardware",
         "proxmox"
@@ -5494,7 +5494,7 @@ data:
         {
           "type": "row",
           "id": 36,
-          "title": "LINDS · TrueNAS and switch over SNMP",
+          "title": "LINDS · TrueNAS and switches over SNMP",
           "collapsed": false,
           "gridPos": {
             "x": 0,
@@ -6035,7 +6035,7 @@ data:
                 "uid": "prometheus"
               },
               "refId": "B",
-              "expr": "max by (ifName) (ifHighSpeed{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"})",
+              "expr": "max by (ifName) (ifHighSpeed{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}) * on (ifName) (max by (ifName) (ifOperStatus{job=\"snmp\", instance=\"linds-switch-01\", ifName=~\"[0-9]+\"}) == bool 1)",
               "legendFormat": "",
               "range": false,
               "instant": true,
@@ -6270,7 +6270,7 @@ data:
             "x": 16,
             "y": 123,
             "w": 8,
-            "h": 10
+            "h": 18
           },
           "targets": [
             {
@@ -6329,6 +6329,317 @@ data:
               "displayMode": "list",
               "placement": "bottom"
             }
+          }
+        },
+        {
+          "type": "stat",
+          "id": 44,
+          "title": "linds-switch-02",
+          "description": "The EdgeRouter X behind port 5 of linds-switch-01, used as a VLAN switch: ports with a link. There is no uptime: EdgeOS restarts its SNMP agent at each configuration change, so sysUpTime is not the time since the switch started.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 133,
+            "w": 4,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "count(ifOperStatus{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"} == 1)",
+              "legendFormat": "Ports up",
+              "range": true,
+              "instant": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "value_and_name",
+            "orientation": "auto",
+            "wideLayout": true,
+            "text": {
+              "valueSize": 24
+            },
+            "showPercentChange": false
+          }
+        },
+        {
+          "type": "table",
+          "id": 45,
+          "title": "linds-switch-02 ports",
+          "description": "Every port of linds-switch-02 (EdgeRouter X): link, speed, traffic in and out together, and damaged frames in the last hour. eth5, the SFP port, is not shown: it is empty, and EdgeOS reports it as up.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 133,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "A",
+              "expr": "max by (ifName) (ifOperStatus{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"})",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "B",
+              "expr": "max by (ifName) (ifHighSpeed{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}) * on (ifName) (max by (ifName) (ifOperStatus{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}) == bool 1)",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "C",
+              "expr": "sum by (ifName) (rate(ifHCInOctets{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}[5m]) + rate(ifHCOutOctets{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}[5m])) * 8",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "refId": "D",
+              "expr": "sum by (ifName) (increase(ifInErrors{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}[1h]) + increase(ifOutErrors{job=\"snmp\", instance=\"linds-switch-02\", ifName=~\"eth[0-4]\"}[1h]))",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "ifName": 0,
+                  "Value #A": 1,
+                  "Value #B": 2,
+                  "Value #C": 3,
+                  "Value #D": 4
+                },
+                "renameByName": {
+                  "ifName": "Port",
+                  "Value #A": "Link",
+                  "Value #B": "Speed",
+                  "Value #C": "Traffic",
+                  "Value #D": "Errors, 1 h"
+                }
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Link"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "✓ Up",
+                            "color": "#0ca30c",
+                            "index": 0
+                          },
+                          "2": {
+                            "text": "○ Down",
+                            "color": "text",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Speed"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "Mbits"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "–",
+                            "index": 0
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Traffic"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bps"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "max",
+                    "value": 1000000000.0
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Errors, 1 h"
+                },
+                "properties": [
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "fields": ""
+            },
+            "sortBy": [
+              {
+                "displayName": "Port",
+                "desc": false
+              }
+            ]
           }
         }
       ]
