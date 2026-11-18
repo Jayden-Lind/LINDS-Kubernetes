@@ -55,6 +55,19 @@ spec:
         device: switch
         __param_module: system,if_mib
         __param_auth: public_v2
+    # An EdgeRouter X SFP behind port 5 of linds-switch-01, used only as a
+    # VLAN switch. It keeps 10.0.80.3 by a DHCP reservation (LINDS-Ansible,
+    # files/linds/etc/kea/kea-dhcp4.conf). EdgeOS answers v2c with the 64-bit
+    # counters, only to the node networks 10.3.1.0/24 and 10.0.53.0/24. Its
+    # sysUpTime is the SNMP agent's, which restarts at each configuration
+    # change.
+    - targets: ["10.0.80.3"]
+      labels:
+        instance: linds-switch-02
+        site: linds
+        device: switch
+        __param_module: system,if_mib
+        __param_auth: public_v2
   # action: replace is the default, written out so that ArgoCD's diff
   # matches what the API server stores.
   relabelings:
