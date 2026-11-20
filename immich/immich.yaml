@@ -357,6 +357,12 @@ spec:
             value: http://immich-machine-learning:3003
           - name: IMMICH_TELEMETRY_INCLUDE
             value: all
+          # Immich 3.4.2 gives the metrics exporter the host "::" when
+          # IMMICH_HOST is not set. The exporter cannot make a URL from it
+          # and answers every scrape with 400 (immich-app/immich#33466).
+          # The pods have IPv4 addresses only, so 0.0.0.0 loses nothing.
+          - name: IMMICH_HOST
+            value: "0.0.0.0"
           # This pod answers the web and mobile clients only. The jobs
           # (thumbnails, transcodes, library scans) run in the
           # immich-microservices pods below, so a heavy job cannot slow or
@@ -563,6 +569,9 @@ spec:
             value: http://immich-machine-learning:3003
           - name: IMMICH_TELEMETRY_INCLUDE
             value: all
+          # See IMMICH_HOST in immich-server.
+          - name: IMMICH_HOST
+            value: "0.0.0.0"
           - name: IMMICH_WORKERS_EXCLUDE
             value: api
           - name: REDIS_HOSTNAME
@@ -751,6 +760,9 @@ spec:
             value: http://immich-machine-learning:3003
           - name: IMMICH_TELEMETRY_INCLUDE
             value: all
+          # See IMMICH_HOST in immich-server.
+          - name: IMMICH_HOST
+            value: "0.0.0.0"
           - name: IMMICH_WORKERS_EXCLUDE
             value: api
           - name: REDIS_HOSTNAME
