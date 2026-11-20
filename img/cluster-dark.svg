@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 842" width="960" height="842" role="img" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+<title>Homelab Kubernetes cluster</title>
+<desc>One Talos Linux cluster of seven nodes across two sites. Cilium peers with each site's router over BGP. Platform layers and workloads are listed below the nodes.</desc>
+<rect width="960" height="842" rx="14" fill="#0d1117"/>
+<text x="24" y="38" font-size="21" fill="#e6edf3" font-weight="700">Kubernetes cluster</text>
+<text x="24" y="59" font-size="12.5" fill="#9da9b6">Talos 1.14.6 · Kubernetes 1.37.2 · Cilium 1.20.5 · 7 nodes, 132 pods. Read from the cluster on 20 Nov 2026.</text>
+<rect x="24" y="80" width="584" height="148" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<text x="40" y="104" font-size="10.5" fill="#6b7785" font-weight="700" letter-spacing="0.9">ZONE JD · ON JD-PROXMOX-02 · 8 VCPU, 16 GB EACH</text>
+<rect x="40" y="116" width="104" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="48" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="60" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">talos-cp</text>
+<text x="60" y="156" font-size="11.5" fill="#9da9b6">control plane</text>
+<rect x="152" y="116" width="104" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="160" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="172" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">worker-01</text>
+<text x="172" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="264" y="116" width="104" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="272" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="284" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">worker-02</text>
+<text x="284" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="376" y="116" width="104" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="384" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="396" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">worker-03</text>
+<text x="396" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="488" y="116" width="104" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="496" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="508" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">worker-04</text>
+<text x="508" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="40" y="186" width="552" height="26" rx="13" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="316" y="203.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">eBGP · AS 64512 to jd-router-01 (AS 64550)</text>
+<rect x="624" y="80" width="312" height="148" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<text x="640" y="104" font-size="10.5" fill="#6b7785" font-weight="700" letter-spacing="0.9">ZONE LINDS · 4 VCPU, 16 GB EACH</text>
+<rect x="640" y="116" width="136" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="648" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="660" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">linds-worker-01</text>
+<text x="660" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="784" y="116" width="136" height="54" rx="9" fill="#1c2430" stroke="#303a48" stroke-width="1"/>
+<rect x="792" y="125" width="3.5" height="36" rx="1.75" fill="#3fc5b0"/>
+<text x="804" y="139" font-size="12" fill="#e6edf3" font-weight="650" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">linds-worker-02</text>
+<text x="804" y="156" font-size="11.5" fill="#9da9b6">worker</text>
+<rect x="640" y="186" width="280" height="26" rx="13" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="780" y="203.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">eBGP · AS 64513 to linds-router-01</text>
+<path d="M60,250 L900,250" fill="none" stroke="#b694f6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="901.5,250.0 893.7,253.0 893.7,247.0" fill="#b694f6"/>
+<polygon points="58.5,250.0 66.3,247.0 66.3,253.0" fill="#b694f6"/>
+<rect x="277.925" y="242.5" width="404.15" height="17.5" rx="4" fill="#0d1117"/>
+<text x="480" y="254" font-size="11.5" fill="#9da9b6" font-weight="500" text-anchor="middle">IPsec tunnel between the site routers · native routing, no overlay</text>
+<rect x="24" y="276" width="912" height="84" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="288" width="3.5" height="60" rx="1.75" fill="#58a6ff"/>
+<text x="54" y="306" font-size="13" fill="#e6edf3" font-weight="650">Networking</text>
+<rect x="224" y="290" width="200.2" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="324.1" y="306.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Cilium eBPF, no kube-proxy</text>
+<rect x="432.2" y="290" width="134.08" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="499.24" y="306.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">BGP control plane</text>
+<rect x="574.28" y="290" width="161.44" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="655" y="306.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">LB-IPAM 172.16.1.0/24</text>
+<rect x="743.72" y="290" width="64.84" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="776.14" y="306.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Hubble</text>
+<rect x="224" y="322" width="128.2" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="288.1" y="338.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Network policies</text>
+<rect x="360.2" y="322" width="159.04" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="439.72" y="338.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">CoreDNS at both sites</text>
+<rect x="24" y="370" width="912" height="84" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="382" width="3.5" height="60" rx="1.75" fill="#58a6ff"/>
+<text x="54" y="400" font-size="13" fill="#e6edf3" font-weight="650">Ingress and identity</text>
+<rect x="224" y="384" width="206.08" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="327.04" y="400.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">nginx-ingress · LAN and VPN</text>
+<rect x="438.08" y="384" width="325.96" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="601.06" y="400.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">nginx-ingress-mtls · internet, client certificates</text>
+<rect x="772.04" y="384" width="106.24" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="825.16" y="400.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">cert-manager</text>
+<rect x="224" y="416" width="163.24" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="305.62" y="432.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">external-dns · AD DNS</text>
+<rect x="395.24" y="416" width="179.2" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="484.84" y="432.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">external-dns · Cloudflare</text>
+<rect x="582.44" y="416" width="206.92" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="685.9" y="432.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Keycloak · AD single sign-on</text>
+<rect x="797.36" y="416" width="72.28" height="24" rx="12" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="833.5" y="432.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Kyverno</text>
+<rect x="24" y="464" width="912" height="52" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="476" width="3.5" height="28" rx="1.75" fill="#3fc5b0"/>
+<text x="54" y="494" font-size="13" fill="#e6edf3" font-weight="650">GitOps and secrets</text>
+<rect x="224" y="478" width="288.04" height="24" rx="12" fill="#3fc5b0" fill-opacity="0.14" stroke="#3fc5b0" stroke-width="1" stroke-opacity="0.55"/>
+<text x="368.02" y="494.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Argo CD 3.6 · app of apps, 37 applications</text>
+<rect x="520.04" y="478" width="111.88" height="24" rx="12" fill="#3fc5b0" fill-opacity="0.14" stroke="#3fc5b0" stroke-width="1" stroke-opacity="0.55"/>
+<text x="575.98" y="494.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Image Updater</text>
+<rect x="639.92" y="478" width="79.72" height="24" rx="12" fill="#3fc5b0" fill-opacity="0.14" stroke="#3fc5b0" stroke-width="1" stroke-opacity="0.55"/>
+<text x="679.78" y="494.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Renovate</text>
+<rect x="727.64" y="478" width="54.4" height="24" rx="12" fill="#3fc5b0" fill-opacity="0.14" stroke="#3fc5b0" stroke-width="1" stroke-opacity="0.55"/>
+<text x="754.84" y="494.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Vault</text>
+<rect x="790.04" y="478" width="125.44" height="24" rx="12" fill="#3fc5b0" fill-opacity="0.14" stroke="#3fc5b0" stroke-width="1" stroke-opacity="0.55"/>
+<text x="852.76" y="494.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">External Secrets</text>
+<rect x="24" y="526" width="912" height="84" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="538" width="3.5" height="60" rx="1.75" fill="#e3b341"/>
+<text x="54" y="556" font-size="13" fill="#e6edf3" font-weight="650">Storage and data</text>
+<rect x="224" y="540" width="227.8" height="24" rx="12" fill="#e3b341" fill-opacity="0.14" stroke="#e3b341" stroke-width="1" stroke-opacity="0.55"/>
+<text x="337.9" y="556.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">democratic-csi · ZFS over iSCSI</text>
+<rect x="459.8" y="540" width="111.16" height="24" rx="12" fill="#e3b341" fill-opacity="0.14" stroke="#e3b341" stroke-width="1" stroke-opacity="0.55"/>
+<text x="515.38" y="556.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">csi-driver-nfs</text>
+<rect x="578.96" y="540" width="118.12" height="24" rx="12" fill="#e3b341" fill-opacity="0.14" stroke="#e3b341" stroke-width="1" stroke-opacity="0.55"/>
+<text x="638.02" y="556.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">csi-driver-smb</text>
+<rect x="224" y="572" width="283" height="24" rx="12" fill="#e3b341" fill-opacity="0.14" stroke="#e3b341" stroke-width="1" stroke-opacity="0.55"/>
+<text x="365.5" y="588.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">CloudNativePG · PostgreSQL, 2 instances</text>
+<rect x="515" y="572" width="180.52" height="24" rx="12" fill="#e3b341" fill-opacity="0.14" stroke="#e3b341" stroke-width="1" stroke-opacity="0.55"/>
+<text x="605.26" y="588.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">S3 backups on versitygw</text>
+<rect x="24" y="620" width="912" height="84" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="632" width="3.5" height="60" rx="1.75" fill="#b694f6"/>
+<text x="54" y="650" font-size="13" fill="#e6edf3" font-weight="650">Observability</text>
+<rect x="224" y="634" width="95.56" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="271.78" y="650.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Prometheus</text>
+<rect x="327.56" y="634" width="104.44" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="379.78" y="650.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Alertmanager</text>
+<rect x="440" y="634" width="69.28" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="474.64" y="650.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Grafana</text>
+<rect x="517.28" y="634" width="49.96" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="542.26" y="650.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Loki</text>
+<rect x="575.24" y="634" width="283.72" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="717.1" y="650.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Alloy · pod logs, syslog, Windows events</text>
+<rect x="224" y="666" width="244.96" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="346.48" y="682.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">IPMI, SNMP and Proxmox exporters</text>
+<rect x="476.96" y="666" width="97.84" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="525.88" y="682.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">descheduler</text>
+<rect x="582.8" y="666" width="115.12" height="24" rx="12" fill="#b694f6" fill-opacity="0.14" stroke="#b694f6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="640.36" y="682.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">metrics-server</text>
+<rect x="24" y="714" width="912" height="84" rx="10" fill="#151b23" stroke="#303a48" stroke-width="1"/>
+<rect x="40" y="726" width="3.5" height="60" rx="1.75" fill="#6fd17a"/>
+<text x="54" y="744" font-size="13" fill="#e6edf3" font-weight="650">Workloads</text>
+<rect x="224" y="728" width="68.56" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="258.28" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Immich</text>
+<rect x="300.56" y="728" width="120.52" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="360.82" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Home Assistant</text>
+<rect x="429.08" y="728" width="49.96" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="454.06" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Plex</text>
+<rect x="487.04" y="728" width="159.28" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="566.68" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Sonarr, Radarr, Bazarr</text>
+<rect x="654.32" y="728" width="70.72" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="689.68" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Tautulli</text>
+<rect x="733.04" y="728" width="80.92" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="773.5" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Minecraft</text>
+<rect x="821.96" y="728" width="73.72" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="858.82" y="744.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Factorio</text>
+<rect x="224" y="760" width="71.56" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="259.78" y="776.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Mumble</text>
+<rect x="303.56" y="760" width="98.08" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="352.6" y="776.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">Stirling PDF</text>
+<rect x="409.64" y="760" width="76.48" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="447.88" y="776.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">catcrawl</text>
+<rect x="494.12" y="760" width="165.28" height="24" rx="12" fill="#6fd17a" fill-opacity="0.14" stroke="#6fd17a" stroke-width="1" stroke-opacity="0.55"/>
+<text x="576.76" y="776.2" font-size="12" fill="#e6edf3" font-weight="500" text-anchor="middle">GitHub Actions runners</text>
+<text x="24" y="822" font-size="11.5" fill="#9da9b6">Node names have the prefix talos-: talos-cp, talos-worker-01, talos-linds-worker-01.</text>
+</svg>
