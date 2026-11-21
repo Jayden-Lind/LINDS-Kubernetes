@@ -14,6 +14,7 @@ resources:
   - monitoring/logs-kubernetes-dashboard.yaml
   - monitoring/logs-syslog-dashboard.yaml
   - monitoring/logs-windows-dashboard.yaml
+  - monitoring/windows-security-alerts.yaml
 
   - nginx/pdf.yml
   - nginx/argocd.yml

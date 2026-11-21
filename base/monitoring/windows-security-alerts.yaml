@@ -1,0 +1,214 @@
+# Alerts on attacks against the Windows domain, read from the event logs in
+# Loki.
+#
+# How the events get here: Grafana Alloy on each Windows server sends its
+# event logs to Loki (LINDS-Ansible, role windows_logs). From the Security log
+# it sends only what its XPath query selects, so each Security event that a
+# rule below reads must also be in that query.
+#
+# How the rules run: Loki's ruler runs them every minute and sends the alerts
+# to Alertmanager (applications/monitoring-loki.yaml, loki.rulerConfig). The
+# rules sidecar in the Loki pod loads every ConfigMap in this namespace that
+# has the label loki_rule.
+#
+# Each alert says that something happened. It fires while the event is less
+# than 10 minutes old, then ends by itself. Alertmanager sends these alerts
+# (label category="security") to the receiver discord-security, which sends
+# no "resolved" message (alertmanager-config.yaml).
+#
+# How a rule reads an event: each line in Loki is the JSON event of
+# loki.source.windowsevent. Its event_data field is the EventData of the
+# event as XML, <Data Name='Field'>value</Data>. A rule makes event_data the
+# line (line_format) and reads each field with regexp. The event ID is
+# structured metadata (event_id), not a label.
+#
+# To test a rule without an alert, run its expression in Grafana Explore
+# (data source Loki) over a time range that has the event.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: windows-security-alerts
+  namespace: monitoring
+  labels:
+    loki_rule: ""
+data:
+  windows-security.yaml: |
+    groups:
+      - name: windows-security
+        interval: 1m
+        rules:
+          # Kerberoasting. An attacker asks for service tickets in RC4 (or
+          # DES), because the part of the ticket encrypted with the service
+          # account's password hash can then be cracked offline quickly.
+          # Normal clients here use AES (0x11, 0x12). Ticket types: 0x17 and
+          # 0x18 RC4, 0x1 and 0x3 DES.
+          - alert: ADKerberosRC4ServiceTicket
+            expr: |
+              sum by (hostname, service, account, client) (
+                count_over_time(
+                  {job="windows", channel="Security"} | event_id="4769"
+                  | json keywords="keywords", event_data="event_data"
+                  | keywords="Audit Success"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='TicketEncryptionType'>(?P<etype>[^<]*)</Data>"
+                  | etype=~"^0x(17|18|1|3)$"
+                  | regexp "<Data Name='ServiceName'>(?P<service>[^<]*)</Data>"
+                  | regexp "<Data Name='TargetUserName'>(?P<account>[^<]*)</Data>"
+                  | regexp "<Data Name='IpAddress'>(?P<client>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.hostname }} issued an RC4 or DES service ticket for
+                {{ $labels.service }} to {{ $labels.account }} from
+                {{ $labels.client }}. This is how Kerberoasting starts.
+
+          # AS-REP roasting. For an account that does not need Kerberos
+          # pre-authentication, anyone can ask for a TGT, and part of the
+          # answer is encrypted with the account's password hash. Pre-auth
+          # type 0 means no pre-authentication.
+          - alert: ADKerberosNoPreauthTicket
+            expr: |
+              sum by (hostname, account, client) (
+                count_over_time(
+                  {job="windows", channel="Security"} | event_id="4768"
+                  | json keywords="keywords", event_data="event_data"
+                  | keywords="Audit Success"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='PreAuthType'>(?P<preauth>[^<]*)</Data>"
+                  | preauth="0"
+                  | regexp "<Data Name='TargetUserName'>(?P<account>[^<]*)</Data>"
+                  | regexp "<Data Name='IpAddress'>(?P<client>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.hostname }} issued a TGT without pre-authentication
+                for {{ $labels.account }} to {{ $labels.client }}. This is
+                AS-REP roasting, or an account that should require
+                pre-authentication.
+
+          # DCSync. Only domain controllers replicate the directory. Another
+          # account that uses the replication rights on the domain is
+          # copying password hashes (mimikatz lsadump::dcsync, impacket
+          # secretsdump). The GUIDs are DS-Replication-Get-Changes,
+          # -Get-Changes-All and -Get-Changes-In-Filtered-Set. Computer
+          # accounts (names that end in $) are left out, as the domain
+          # controllers replicate with their computer accounts. The event
+          # needs the audit subcategory Directory Service Access and an
+          # audit entry on the domain object (LINDS-Ansible windows_logs).
+          - alert: ADReplicationByNonDC
+            expr: |
+              sum by (hostname, domain, account) (
+                count_over_time(
+                  {job="windows", channel="Security"} | event_id="4662"
+                  | json event_data="event_data"
+                  | line_format "{{.event_data}}"
+                  |~ "(?i)1131f6aa-9c07-11d1-f79f-00c04fc2dcd2|1131f6ad-9c07-11d1-f79f-00c04fc2dcd2|89e95b76-444d-4c62-991a-0facbeda640c"
+                  | regexp "<Data Name='SubjectUserName'>(?P<account>[^<]*)</Data>"
+                  | account!~".*\\$"
+                  | regexp "<Data Name='SubjectDomainName'>(?P<domain>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.domain }}\{{ $labels.account }} used the directory
+                replication rights on {{ $labels.hostname }}. Only domain
+                controllers replicate: this is DCSync, a copy of the password
+                hashes.
+
+          # A member added to a group that controls the domain or its domain
+          # controllers. Matched by SID, so a renamed group still matches:
+          # Domain Admins 512, Schema Admins 518, Enterprise Admins 519,
+          # Group Policy Creator Owners 520, Key Admins 526, Enterprise Key
+          # Admins 527, and the builtin Administrators 544, Account Operators
+          # 548, Server Operators 549, Print Operators 550, Backup Operators
+          # 551. DnsAdmins has no fixed SID, so it is matched by name.
+          # 4728 global group, 4732 domain local group, 4756 universal group.
+          - alert: ADPrivilegedGroupMemberAdded
+            expr: |
+              sum by (hostname, group_name, member, actor) (
+                count_over_time(
+                  {job="windows", channel="Security"} | event_id=~"4728|4732|4756"
+                  | json event_data="event_data"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='TargetSid'>(?P<group_sid>[^<]*)</Data>"
+                  | regexp "<Data Name='TargetUserName'>(?P<group_name>[^<]*)</Data>"
+                  | group_sid=~"S-1-5-21-.+-(512|518|519|520|526|527)|S-1-5-32-(544|548|549|550|551)" or group_name="DnsAdmins"
+                  | regexp "<Data Name='MemberName'>(?P<member>[^<]*)</Data>"
+                  | regexp "<Data Name='SubjectUserName'>(?P<actor>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.actor }} added {{ $labels.member }} to
+                {{ $labels.group_name }} on {{ $labels.hostname }}.
+
+          # A new service. Attackers install a service to run code as SYSTEM
+          # (PsExec, impacket smbexec and psexec, many implants). Driver and
+          # agent updates also add services (virtio-win, Defender), about six
+          # a month on each server, so read the path before acting.
+          - alert: WindowsServiceInstalled
+            expr: |
+              sum by (hostname, service, image, account) (
+                count_over_time(
+                  {job="windows", channel="System"} | event_id="7045"
+                  | json event_data="event_data"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='ServiceName'>(?P<service>[^<]*)</Data>"
+                  | regexp "<Data Name='ImagePath'>(?P<image>[^<]*)</Data>"
+                  | regexp "<Data Name='AccountName'>(?P<account>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                New service {{ $labels.service }} on {{ $labels.hostname }}, as
+                {{ $labels.account }}: {{ $labels.image }}
+
+          # The two ways to hide the events above: clear the Security log
+          # (1102), or change the audit policy (4719). Group Policy changes
+          # the audit policy too, but only when the policy itself changes.
+          - alert: WindowsSecurityLogCleared
+            expr: |
+              sum by (hostname) (
+                count_over_time({job="windows", channel="Security"} | event_id="1102" [10m])
+              ) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                The Security log of {{ $labels.hostname }} was cleared.
+
+          - alert: WindowsAuditPolicyChanged
+            expr: |
+              sum by (hostname, actor) (
+                count_over_time(
+                  {job="windows", channel="Security"} | event_id="4719"
+                  | json event_data="event_data"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='SubjectUserName'>(?P<actor>[^<]*)</Data>"
+                [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.actor }} changed the audit policy of
+                {{ $labels.hostname }}.
