@@ -101,8 +101,17 @@ data:
           # -Get-Changes-All and -Get-Changes-In-Filtered-Set. Computer
           # accounts (names that end in $) are left out, as the domain
           # controllers replicate with their computer accounts. The event
-          # needs the audit subcategory Directory Service Access and an
-          # audit entry on the domain object (LINDS-Ansible windows_logs).
+          # needs the audit subcategory Directory Service Access (Success)
+          # and an audit entry on the domain object for extended rights; both
+          # are the Windows defaults on the domain controllers (checked
+          # 2026-11-21). LINDS-Ansible windows_logs sends the event.
+          # Two things that are not attacks also fire it:
+          # - Promoting a domain controller: the new DC copies the directory
+          #   with the credentials of the account that installs it (seen
+          #   2026-10-12, Administrator, when linds-dc was rebuilt).
+          # - Entra Connect, if it is installed again: its MSOL_ account
+          #   replicates password hashes every 30 minutes. Leave that account
+          #   out here then, by name.
           - alert: ADReplicationByNonDC
             expr: |
               sum by (hostname, domain, account) (
