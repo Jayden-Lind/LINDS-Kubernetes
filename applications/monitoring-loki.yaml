@@ -90,6 +90,22 @@ spec:
               retention_delete_delay: 2h
               retention_delete_worker_count: 150
               delete_request_store: s3
+            # The ruler runs the alert rules on logs every minute and sends
+            # the alerts to Alertmanager. The rules are ConfigMaps with the
+            # label loki_rule (base/monitoring/windows-security-alerts.yaml).
+            # The chart's rules sidecar writes them into /rules/fake (see
+            # sidecar.rules below): with local storage the ruler reads
+            # <directory>/<tenant>/*.yaml, and "fake" is the tenant when
+            # auth_enabled is false. Before this, the ruler had no
+            # Alertmanager and read rules from the loki-ruler bucket, which
+            # holds none.
+            rulerConfig:
+              alertmanager_url: http://monitoring-kube-prometheus-alertmanager.monitoring.svc:9093
+              enable_alertmanager_v2: true
+              storage:
+                type: local
+                local:
+                  directory: /rules
             storage:
               bucketNames:
                 chunks: loki-chunks
@@ -155,6 +171,14 @@ spec:
           resultsCache:
             nodeSelector:
               datacenter: jd
+
+          # The rules sidecar (on by default) copies each ConfigMap or Secret
+          # in this namespace with the label loki_rule into this folder, which
+          # the chart also mounts in the Loki container. The folder is the
+          # rule directory of tenant "fake" (loki.rulerConfig above).
+          sidecar:
+            rules:
+              folder: /rules/fake
 
           # Enable minio for storage
           minio:

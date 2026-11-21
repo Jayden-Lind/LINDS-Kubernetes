@@ -28,6 +28,20 @@ spec:
           - name: alertname
             matchType: "=~"
             value: "InfoInhibitor|Watchdog"
+      # Attacks on the Windows domain (windows-security-alerts.yaml, Loki's
+      # ruler). Each says that something happened and ends by itself 10
+      # minutes later, so they go to a receiver that sends no "resolved"
+      # message: it would read as the attack being dealt with. Grouped by
+      # server, so that a burst on one server is one message.
+      - receiver: discord-security
+        matchers:
+          - name: category
+            matchType: "="
+            value: security
+        groupBy:
+          - alertname
+          - hostname
+        repeatInterval: 24h
       # Coles refusing the crawler is a condition that lasts days, and nothing
       # here can fix it. Once a day is enough to say it is still going on.
       - receiver: discord
@@ -67,6 +81,17 @@ spec:
           - instance
   receivers:
     - name: "null"
+    - name: discord-security
+      discordConfigs:
+        - apiURL:
+            name: alertmanager-discord-secret
+            key: discord_webhook_url
+          sendResolved: false
+          title: '🚨 SECURITY: {{ .GroupLabels.alertname }}{{ with .GroupLabels.hostname }} on {{ . }}{{ end }}'
+          message: |-
+            {{ range .Alerts -}}
+            > {{ .Annotations.summary }}
+            {{ end }}
     - name: discord-notices
       discordConfigs:
         - apiURL:
