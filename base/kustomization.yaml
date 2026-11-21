@@ -15,6 +15,7 @@ resources:
   - monitoring/logs-syslog-dashboard.yaml
   - monitoring/logs-windows-dashboard.yaml
   - monitoring/windows-security-alerts.yaml
+  - monitoring/router-vpn-alerts.yaml
 
   - nginx/pdf.yml
   - nginx/argocd.yml

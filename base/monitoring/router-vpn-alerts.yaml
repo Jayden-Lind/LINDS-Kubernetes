@@ -1,0 +1,71 @@
+# Alerts on failed logins to the road-warrior VPN (IKEv2 with EAP-MSCHAPv2 on
+# jd-router-01; LINDS-Ansible roles/router, swanctl.conf connection MOBILE).
+#
+# Where the lines come from: charon logs the IKE subsystem at level 1 (each
+# router's strongswan.d/router.conf, charon-systemd.journal.ike = 1); rsyslog
+# sends the journal to Alloy (job="syslog", appname="charon-systemd"). At
+# level 0 a failed login leaves no line at all.
+#
+# What a failed login looks like (2026-11-21, a made-up user from the Linode):
+#    192.53.169.47 is initiating an IKE_SA
+#    received EAP identity 'zz-vpntest'
+#    no EAP key found for hosts 'jd-pfsense.linds.com.au' - 'zz-vpntest'
+#    EAP-MS-CHAPv2 verification failed, retry (1)
+# A known user with a wrong password gives the last line without the one
+# before it. An unknown user gets the same retry as a wrong password, so the
+# answer does not tell an outsider which user names exist.
+#
+# The failure line has no address. RouterVPNLoginFailed pairs it with the
+# "is initiating an IKE_SA" lines of the same 10 minutes: one alert for each
+# address that started an IKE_SA then, which can include a client that
+# connected normally at the same time. alertmanager-config.yaml routes these
+# alerts (category="security") to discord-security, which sends no "resolved".
+#
+# The rules sidecar in the Loki pod loads this ConfigMap (label loki_rule);
+# see base/monitoring/windows-security-alerts.yaml for how the ruler is set up.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-vpn-alerts
+  namespace: monitoring
+  labels:
+    loki_rule: ""
+data:
+  router-vpn.yaml: |
+    groups:
+      - name: router-vpn
+        interval: 1m
+        rules:
+          - alert: RouterVPNLoginFailed
+            expr: |
+              sum by (hostname, source) (
+                count_over_time({job="syslog", appname="charon-systemd"} |= "is initiating an IKE_SA"
+                  | regexp "(?P<source>\\S+) is initiating an IKE_SA" [10m])
+              )
+              and on (hostname)
+              sum by (hostname) (
+                count_over_time({job="syslog", appname="charon-systemd"} |= "EAP-MS-CHAPv2 verification failed" [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                A VPN password check failed on {{ $labels.hostname }} in the
+                last 10 minutes. {{ $labels.source }} started an IKE_SA then.
+
+          # Someone tried a user name that has no VPN account. Scanners and
+          # password-guessing tools try names like admin, test or vpn.
+          - alert: RouterVPNUnknownUser
+            expr: |
+              sum by (hostname, identity) (
+                count_over_time({job="syslog", appname="charon-systemd"} |= "no EAP key found"
+                  | regexp "no EAP key found for hosts '[^']*' - '(?P<identity>[^']*)'" [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                Someone tried to log in to the VPN on {{ $labels.hostname }}
+                as {{ $labels.identity }}, a user that has no account.
