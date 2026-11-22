@@ -124,6 +124,14 @@ spec:
                 # (same as applications/nginx-ingress.yaml).
                 http-snippets: |
                   proxy_request_buffering off;
+                  # The client certificates that may pass (server-snippets
+                  # below): the subjects of the client certificates in
+                  # nginx-ingress-mtls/pki.yaml, as nginx writes them (RFC
+                  # 2253). Every phone and laptop uses mtls-client-jayden.
+                  map $ssl_client_s_dn $mtls_client_allowed {
+                    default 0;
+                    "CN=jayden" 1;
+                  }
                 http2: "true"
                 keepalive: "32"
                 server-tokens: "false"
@@ -142,6 +150,15 @@ spec:
                   ssl_client_certificate /etc/nginx/mtls/ca.crt;
                   ssl_verify_client on;
                   ssl_verify_depth 1;
+                  # A valid signature is not enough: linds-ca is also the root of
+                  # AD CS, so the domain controllers' machine certificates
+                  # (Client Authentication) and device certificates with no
+                  # extended key usage also pass ssl_verify_client. Only the
+                  # subjects in the map above get through (security review
+                  # 2026-11-21).
+                  if ($mtls_client_allowed = 0) {
+                    return 444;
+                  }
                   # Drop connections without a valid client cert (444 closes
                   # the socket with no response) instead of serving a 400 page.
                   error_page 495 496 = @mtls_drop;
