@@ -1,4 +1,5 @@
-# Adds the "server auth" Extended Key Usage to every ingress-shim Certificate.
+# Adds the "server auth" Extended Key Usage to every ingress-shim Certificate,
+# and gives it an ECDSA P-384 key.
 #
 # cert-manager's default usages are "digital signature, key encipherment",
 # which yields a leaf with no ExtendedKeyUsage at all. Apple's TLS trust
@@ -14,6 +15,13 @@
 # already exists is left alone. cert-manager.io/duration IS compared, and
 # pinning it to cert-manager's own 90-day default forces one update that
 # carries the new usages along with it. Verified on v1.21.1.
+#
+# The key: cert-manager's default is RSA 2048. ingress-shim copies
+# cert-manager.io/private-key-algorithm and -size into spec.privateKey, also
+# on a Certificate that already exists, and cert-manager then issues the
+# certificate again with a new key (verified on v1.21.3). The issuer's own
+# key is not changed by this: the leaf has an ECDSA key and the signature of
+# the CA.
 #
 # Each annotation is added only when absent, so a hand-set value on an
 # Ingress wins. mutateExisting patches Ingresses that already exist when
@@ -52,7 +60,9 @@ spec:
     - name: something-to-add
       expression: >-
         !object.metadata.?annotations[?'cert-manager.io/usages'].hasValue() ||
-        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue()
+        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/private-key-algorithm'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/private-key-size'].hasValue()
   targetMatchConditions:
     - name: has-cert-manager-issuer
       expression: >-
@@ -61,7 +71,9 @@ spec:
     - name: something-to-add
       expression: >-
         !object.metadata.?annotations[?'cert-manager.io/usages'].hasValue() ||
-        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue()
+        !object.metadata.?annotations[?'cert-manager.io/duration'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/private-key-algorithm'].hasValue() ||
+        !object.metadata.?annotations[?'cert-manager.io/private-key-size'].hasValue()
   mutations:
     - patchType: JSONPatch
       jsonPatch:
@@ -77,4 +89,16 @@ spec:
               op: "add",
               path: "/metadata/annotations/" + jsonpatch.escapeKey("cert-manager.io/duration"),
               value: "2160h"
+            }] : []) +
+          (!object.metadata.?annotations[?'cert-manager.io/private-key-algorithm'].hasValue() ?
+            [JSONPatch{
+              op: "add",
+              path: "/metadata/annotations/" + jsonpatch.escapeKey("cert-manager.io/private-key-algorithm"),
+              value: "ECDSA"
+            }] : []) +
+          (!object.metadata.?annotations[?'cert-manager.io/private-key-size'].hasValue() ?
+            [JSONPatch{
+              op: "add",
+              path: "/metadata/annotations/" + jsonpatch.escapeKey("cert-manager.io/private-key-size"),
+              value: "384"
             }] : [])
