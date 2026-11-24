@@ -48,7 +48,7 @@ data:
         {
           "title": "Suricata",
           "type": "link",
-          "url": "/d/suricata-vyos",
+          "url": "/d/suricata",
           "icon": "dashboard"
         },
         {
