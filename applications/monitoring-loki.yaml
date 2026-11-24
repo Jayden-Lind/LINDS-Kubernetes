@@ -637,7 +637,8 @@ spec:
                         tls_sni            = "tls.sni",
                         quic_sni           = "quic.sni",
                         http_hostname      = "http.hostname",
-                        http_method        = "http.method",
+                        // EVE calls it http.http_method ("http.method" matched nothing).
+                        http_method        = "http.http_method",
                         http_status        = "http.status",
                         // The stats event (once a minute): packets the kernel
                         // dropped since the last one. Absent when zero.

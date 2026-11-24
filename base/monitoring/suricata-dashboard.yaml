@@ -1,10 +1,15 @@
 ---
-# Grafana dashboard for Suricata EVE events shipped from jd-vyos-01 via
-# syslog -> Alloy (172.16.1.23:1515/tcp) -> Loki. Picked up by the
-# kube-prometheus grafana dashboard sidecar via the grafana_dashboard label.
-# Panels use the event_type label and the structured metadata that Alloy's
-# loki.process.syslog attaches (alert_*, src_ip, dest_ip, dns_*, tls_sni,
-# http_*), so they never run `| json` over the whole stream.
+# Grafana dashboard for the Suricata events of jd-router-01 and
+# linds-router-01: router -> rsyslog -> Alloy (172.16.1.23:1515/tcp) -> Loki.
+# The Grafana dashboard sidecar reads it (label grafana_dashboard).
+#
+# GENERATED. Edit suricata-dashboard.py and make this file again:
+#   python3 base/monitoring/suricata-dashboard.py > base/monitoring/suricata-dashboard.yaml
+#
+# The panels use the labels hostname and event_type and the structured
+# metadata that Alloy attaches (applications/monitoring-loki.yaml: alert_*,
+# src_ip, dest_ip, dns_*, tls_sni, quic_sni, http_*). No panel runs `| json`
+# on the whole stream.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,15 +20,15 @@ metadata:
   annotations:
     grafana_folder: Logs
 data:
-  suricata-vyos.json: |
+  suricata.json: |
     {
-      "uid": "suricata-vyos",
-      "title": "Suricata — jd-vyos-01",
-      "description": "Suricata IDS on the VyOS LAN trunk. EVE JSON -> rsyslog -> Alloy 172.16.1.23:1515 -> Loki. Config: LINDS-Ansible roles/vyos (jd_suricata.yml).",
+      "uid": "suricata",
+      "title": "Suricata",
+      "description": "What Suricata on the two routers blocked, reported and saw. Events go from the router to Alloy (syslog, 172.16.1.23:1515) and then to Loki. Router side: LINDS-Ansible roles/router.",
       "tags": [
         "suricata",
         "network",
-        "vyos",
+        "router",
         "logs"
       ],
       "timezone": "browser",
@@ -35,11 +40,94 @@ data:
         "from": "now-6h",
         "to": "now"
       },
+      "annotations": {
+        "list": []
+      },
+      "links": [
+        {
+          "title": "Router",
+          "type": "link",
+          "url": "/d/router",
+          "icon": "dashboard"
+        },
+        {
+          "title": "Network devices",
+          "type": "link",
+          "url": "/d/network-devices",
+          "icon": "dashboard"
+        }
+      ],
       "templating": {
         "list": [
           {
+            "name": "router",
+            "label": "Router",
+            "description": "The router that saw the event.",
+            "type": "query",
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "query": {
+              "label": "hostname",
+              "refId": "LokiVariableQueryEditor-VariableQuery",
+              "stream": "{job=\"suricata\"}",
+              "type": 1
+            },
+            "definition": "label_values({job=\"suricata\"}, hostname)",
+            "refresh": 2,
+            "sort": 1,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".+",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "ip",
+            "label": "Address",
+            "description": "An address at one end of the event, as a regular expression. Example: 192[.]168[.]1[.]20 for one device, 192[.]168[.]1[.].* for a network.",
+            "type": "textbox",
+            "query": ".*",
+            "current": {
+              "text": ".*",
+              "value": ".*"
+            },
+            "options": []
+          },
+          {
+            "name": "name",
+            "label": "Name contains",
+            "description": "Text in the DNS name, the server name or the HTTP host.",
+            "type": "textbox",
+            "query": "",
+            "current": {
+              "text": "",
+              "value": ""
+            },
+            "options": []
+          },
+          {
+            "name": "severity",
+            "label": "Alert severity",
+            "type": "custom",
+            "query": "High : 1,Medium : 2,Low : 3",
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
             "name": "event_type",
-            "label": "Event type",
+            "label": "Raw events: type",
+            "description": "For the section \"Raw events\" only.",
             "type": "query",
             "datasource": {
               "type": "loki",
@@ -62,54 +150,20 @@ data:
               "value": "$__all"
             },
             "options": []
-          },
-          {
-            "name": "severity",
-            "label": "Alert severity",
-            "type": "custom",
-            "query": "High : 1,Medium : 2,Low : 3",
-            "multi": true,
-            "includeAll": true,
-            "allValue": ".*",
-            "current": {
-              "text": "All",
-              "value": "$__all"
-            },
-            "options": []
-          },
-          {
-            "name": "ip",
-            "label": "IP (regex, src or dest)",
-            "type": "textbox",
-            "query": ".*",
-            "current": {
-              "text": ".*",
-              "value": ".*"
-            },
-            "options": []
-          },
-          {
-            "name": "search",
-            "label": "Search (regex)",
-            "type": "textbox",
-            "query": "",
-            "current": {
-              "text": "",
-              "value": ""
-            },
-            "options": []
           }
         ]
       },
       "panels": [
         {
           "type": "stat",
-          "title": "IDS alerts",
+          "id": 1,
+          "title": "Blocked",
+          "description": "Connections that the router stopped. The source address is on a list of hostile addresses (Emerging Threats DROP, CINS and COMPROMISED). The router blocks at the published ports only; linds-router-01 does not block.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 0,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -118,7 +172,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -130,29 +188,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "red"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "stat",
-          "title": "High severity",
+          "id": 2,
+          "title": "Alerts",
+          "description": "Events that a rule reported and the router let through.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 4,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -161,7 +218,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=\"1\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action!=\"blocked\" | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -173,29 +234,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "dark-red"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "stat",
-          "title": "DNS queries",
+          "id": 3,
+          "title": "High severity",
+          "description": "The alerts with severity 1.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 8,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -204,7 +264,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"request\" [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action!=\"blocked\" | alert_severity=\"1\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -216,29 +280,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "text"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "stat",
-          "title": "TLS sessions",
+          "id": 4,
+          "title": "DNS lookups",
+          "description": "Names that devices asked the router for.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 12,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -247,7 +310,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"tls\"} [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"dns\"} | dns_type!=\"response\" | dns_rrname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -259,29 +326,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "text"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "stat",
-          "title": "HTTP requests",
+          "id": 5,
+          "title": "TLS and QUIC sessions",
+          "description": "Encrypted sessions to and from the internet. Suricata reads the server name at the start of the session.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 16,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -290,7 +356,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\", event_type=\"http\"} [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=~\"tls|quic\"} | tls_sni=~\"(?i).*$name.*\" or quic_sni=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -302,29 +372,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "text"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "stat",
-          "title": "All EVE events",
+          "id": 6,
+          "title": "HTTP requests",
+          "description": "Requests that were not encrypted.",
           "gridPos": {
-            "h": 4,
-            "w": 4,
             "x": 20,
-            "y": 0
+            "y": 0,
+            "w": 4,
+            "h": 4
           },
           "datasource": {
             "type": "loki",
@@ -333,7 +402,11 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({job=\"suricata\"} [$__range]))",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"http\"} | http_hostname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range]))",
               "queryType": "instant"
             }
           ],
@@ -345,29 +418,28 @@ data:
               "fields": "",
               "values": false
             },
-            "colorMode": "value",
+            "colorMode": "none",
             "graphMode": "none",
             "textMode": "value"
           },
           "fieldConfig": {
             "defaults": {
               "unit": "short",
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "text"
-              }
+              "noValue": "0"
             },
             "overrides": []
           }
         },
         {
           "type": "timeseries",
-          "title": "Alerts by severity",
+          "id": 7,
+          "title": "Blocked and alerts",
+          "description": "Blocked connections and alerts for each interval, for each router.",
           "gridPos": {
-            "h": 8,
-            "w": 12,
             "x": 0,
-            "y": 4
+            "y": 4,
+            "w": 12,
+            "h": 7
           },
           "datasource": {
             "type": "loki",
@@ -376,8 +448,12 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (alert_severity) (count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__auto]))",
-              "legendFormat": "{{alert_severity}}",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__auto]))",
+              "legendFormat": "{{hostname}}",
               "queryType": "range"
             }
           ],
@@ -398,91 +474,67 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
+              "min": 0,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
                 "drawStyle": "bars",
                 "fillOpacity": 80,
-                "lineWidth": 1,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
                 "showPoints": "never",
                 "stacking": {
                   "mode": "normal",
                   "group": "A"
-                },
-                "axisSoftMin": 0
-              },
-              "color": {
-                "mode": "palette-classic"
+                }
               }
             },
             "overrides": [
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "1"
+                  "options": "jd-router-01"
                 },
                 "properties": [
                   {
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "red"
+                      "fixedColor": "#3987e5"
                     }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "1 - high"
                   }
                 ]
               },
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "2"
+                  "options": "linds-router-01"
                 },
                 "properties": [
                   {
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "orange"
+                      "fixedColor": "#d95926"
                     }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "2 - medium"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "3"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "blue"
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "3 - low"
                   }
                 ]
               }
             ]
-          },
-          "description": "Stream-engine telemetry SIDs (2210029/2210045/2210020 invalid ack / out of window) are disabled on the router since 2026-09-05; they were 99.5% of all alerts."
+          }
         },
         {
           "type": "timeseries",
-          "title": "EVE events by type",
+          "id": 8,
+          "title": "Events",
+          "description": "All stored events for each interval, for each router. DNS answers and the engine's statistics are not stored.",
           "gridPos": {
-            "h": 8,
-            "w": 12,
             "x": 12,
-            "y": 4
+            "y": 4,
+            "w": 12,
+            "h": 7
           },
           "datasource": {
             "type": "loki",
@@ -491,8 +543,12 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum by (event_type) (count_over_time({job=\"suricata\"} [$__auto]))",
-              "legendFormat": "{{event_type}}",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\"} [$__auto]))",
+              "legendFormat": "{{hostname}}",
               "queryType": "range"
             }
           ],
@@ -513,623 +569,80 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
                 "drawStyle": "bars",
                 "fillOpacity": 80,
-                "lineWidth": 1,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
                 "showPoints": "never",
                 "stacking": {
                   "mode": "normal",
                   "group": "A"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-router-01"
                 },
-                "axisSoftMin": 0
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
               },
-              "color": {
-                "mode": "palette-classic"
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-router-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
               }
-            },
-            "overrides": []
+            ]
           }
         },
         {
-          "type": "table",
-          "title": "Top alert signatures",
+          "type": "row",
+          "id": 9,
+          "title": "Blocked by the router",
           "gridPos": {
-            "h": 10,
-            "w": 12,
             "x": 0,
-            "y": 12
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(20, sum by (alert_signature, alert_category, alert_severity) (count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "alert_signature": "signature",
-                  "alert_category": "category",
-                  "alert_severity": "sev",
-                  "Value #A": "alerts"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "alerts",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "alerts"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top alert sources",
-          "gridPos": {
-            "h": 10,
-            "w": 6,
-            "x": 12,
-            "y": 12
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(15, sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "src_ip": "source",
-                  "Value #A": "alerts"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "alerts",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "alerts"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top alert destinations",
-          "gridPos": {
-            "h": 10,
-            "w": 6,
-            "x": 18,
-            "y": 12
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(15, sum by (dest_ip, dest_port) (count_over_time({job=\"suricata\", event_type=\"alert\"} | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "dest_ip": "destination",
-                  "dest_port": "port",
-                  "Value #A": "alerts"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "alerts",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "alerts"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top queried domains",
-          "gridPos": {
-            "h": 9,
-            "w": 8,
-            "x": 0,
-            "y": 22
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(20, sum by (dns_rrname) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"request\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "dns_rrname": "domain",
-                  "Value #A": "queries"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "queries",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "queries"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top DNS clients",
-          "gridPos": {
-            "h": 9,
-            "w": 4,
-            "x": 8,
-            "y": 22
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(15, sum by (src_ip) (count_over_time({job=\"suricata\", event_type=\"dns\"} | dns_type=\"request\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "src_ip": "client",
-                  "Value #A": "queries"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "queries",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "queries"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top TLS SNI",
-          "gridPos": {
-            "h": 9,
-            "w": 6,
-            "x": 12,
-            "y": 22
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(20, sum by (tls_sni) (count_over_time({job=\"suricata\", event_type=\"tls\"} | tls_sni!=\"\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "tls_sni": "sni",
-                  "Value #A": "sessions"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "sessions",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "sessions"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "table",
-          "title": "Top HTTP hosts",
-          "gridPos": {
-            "h": 9,
-            "w": 6,
-            "x": 18,
-            "y": 22
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "topk(20, sum by (http_hostname) (count_over_time({job=\"suricata\", event_type=\"http\"} | http_hostname!=\"\" [$__range])))",
-              "queryType": "instant",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "http_hostname": "host",
-                  "Value #A": "requests"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "requests",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "footer": {
-              "show": false
-            }
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "align": "auto",
-                "filterable": true
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "requests"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "gauge",
-                      "mode": "basic"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "logs",
-          "title": "EVE events ($event_type)",
-          "gridPos": {
-            "h": 16,
+            "y": 11,
             "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 10,
+          "title": "Blocked connections",
+          "description": "Each connection that the router stopped, newest first. \"From\" is the address on the internet. \"To\" is the published service. One connection can show two lines when two lists have the address.",
+          "gridPos": {
             "x": 0,
-            "y": 31
+            "y": 12,
+            "w": 16,
+            "h": 9
           },
           "datasource": {
             "type": "loki",
@@ -1138,27 +651,1716 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "{job=\"suricata\", event_type=~\"$event_type\"} | src_ip=~\"$ip\" or dest_ip=~\"$ip\" |~ \"(?i)$search\"",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\"",
               "queryType": "range",
-              "maxLines": 2000
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "src_ip",
+                    "dest_ip",
+                    "dest_port",
+                    "proto",
+                    "alert_signature"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "src_ip": 2,
+                  "dest_ip": 3,
+                  "dest_port": 4,
+                  "proto": 5,
+                  "alert_signature": 6
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "src_ip": "From",
+                  "dest_ip": "To",
+                  "dest_port": "Port",
+                  "proto": "Protocol",
+                  "alert_signature": "Rule"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
             }
           ],
           "options": {
-            "showTime": true,
-            "wrapLogMessage": true,
-            "enableLogDetails": true,
-            "sortOrder": "Descending",
-            "dedupStrategy": "none",
-            "prettifyLogMessage": true,
-            "showLabels": false,
-            "showCommonLabels": false,
-            "enableInfiniteScrolling": true
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
           },
-          "description": "Raw EVE JSON. Alert/DNS/TLS/HTTP fields are attached as structured metadata by Alloy (see the line details), so no `| json` is needed to filter: e.g. `| alert_severity=\"1\"`, `| dest_port=\"445\"`."
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "From"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "To"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Port"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Protocol"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 85
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 11,
+          "title": "Most blocked addresses",
+          "description": "The addresses that the router blocked most often in the time range.",
+          "gridPos": {
+            "x": 16,
+            "y": 12,
+            "w": 8,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(20, sum by (src_ip, hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "src_ip": "From",
+                  "hostname": "Router",
+                  "Value #A": "Blocked"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Blocked",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Blocked"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "id": 12,
+          "title": "Alerts (reported, not blocked)",
+          "gridPos": {
+            "x": 0,
+            "y": 21,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 13,
+          "title": "Alerts",
+          "description": "Each event that a rule reported, newest first. The router let these through.",
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 16,
+            "h": 10
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action!=\"blocked\" | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\"",
+              "queryType": "range",
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "alert_severity",
+                    "src_ip",
+                    "dest_ip",
+                    "dest_port",
+                    "alert_signature",
+                    "alert_category"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "alert_severity": 2,
+                  "src_ip": 3,
+                  "dest_ip": 4,
+                  "dest_port": 5,
+                  "alert_signature": 6,
+                  "alert_category": 7
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "alert_severity": "Severity",
+                  "src_ip": "From",
+                  "dest_ip": "To",
+                  "dest_port": "Port",
+                  "alert_signature": "Rule",
+                  "alert_category": "Category"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "From"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 200
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "To"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 200
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Port"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Category"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 180
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Severity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 95
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "▲ High",
+                            "color": "#d03b3b",
+                            "index": 0
+                          },
+                          "2": {
+                            "text": "● Medium",
+                            "color": "#e8703a",
+                            "index": 1
+                          },
+                          "3": {
+                            "text": "▽ Low",
+                            "color": "#fab219",
+                            "index": 2
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 14,
+          "title": "Most frequent rules",
+          "description": "The rules with the most alerts in the time range.",
+          "gridPos": {
+            "x": 16,
+            "y": 22,
+            "w": 8,
+            "h": 10
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(20, sum by (alert_signature, hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action!=\"blocked\" | alert_severity=~\"$severity\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "alert_signature": "Rule",
+                  "hostname": "Router",
+                  "Value #A": "Alerts"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Alerts",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alerts"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "id": 15,
+          "title": "DNS lookups",
+          "gridPos": {
+            "x": 0,
+            "y": 32,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 16,
+          "title": "DNS lookups",
+          "description": "Each name that a device asked the router for, newest first (the last 500). A device that uses a different resolver is not shown. To see one device, put its address in \"Address\".",
+          "gridPos": {
+            "x": 0,
+            "y": 33,
+            "w": 12,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"dns\"} | dns_type!=\"response\" | dns_rrname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\"",
+              "queryType": "range",
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "src_ip",
+                    "dns_rrname"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "src_ip": 2,
+                  "dns_rrname": 3
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "src_ip": "Device",
+                  "dns_rrname": "Name"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Device"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 17,
+          "title": "Most requested names",
+          "description": "",
+          "gridPos": {
+            "x": 12,
+            "y": 33,
+            "w": 7,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(25, sum by (dns_rrname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"dns\"} | dns_type!=\"response\" | dns_rrname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "dns_rrname": "Name",
+                  "Value #A": "Lookups"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Lookups",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Lookups"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 18,
+          "title": "Devices with the most lookups",
+          "description": "",
+          "gridPos": {
+            "x": 19,
+            "y": 33,
+            "w": 5,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(25, sum by (src_ip) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"dns\"} | dns_type!=\"response\" | dns_rrname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "src_ip": "Device",
+                  "Value #A": "Lookups"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Lookups",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Lookups"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "id": 19,
+          "title": "TLS and QUIC sessions",
+          "gridPos": {
+            "x": 0,
+            "y": 44,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 20,
+          "title": "TLS and QUIC sessions",
+          "description": "Each encrypted session, newest first (the last 500). \"Server name\" is the name that the device asked for (SNI). Suricata sees the WAN traffic only.",
+          "gridPos": {
+            "x": 0,
+            "y": 45,
+            "w": 15,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=~\"tls|quic\"} | tls_sni=~\"(?i).*$name.*\" or quic_sni=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" | label_format server_name=`{{ if .tls_sni }}{{ .tls_sni }}{{ else }}{{ .quic_sni }}{{ end }}`",
+              "queryType": "range",
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "src_ip",
+                    "server_name",
+                    "dest_port",
+                    "event_type",
+                    "dest_ip"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "src_ip": 2,
+                  "server_name": 3,
+                  "dest_port": 4,
+                  "event_type": 5,
+                  "dest_ip": 6
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "src_ip": "From",
+                  "server_name": "Server name",
+                  "dest_port": "Port",
+                  "event_type": "Kind",
+                  "dest_ip": "To"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "From"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 235
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Server name"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 260
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Port"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 65
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Kind"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 65
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 21,
+          "title": "Most frequent server names",
+          "description": "",
+          "gridPos": {
+            "x": 15,
+            "y": 45,
+            "w": 5,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(25, sum by (server_name) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=~\"tls|quic\"} | tls_sni=~\"(?i).*$name.*\" or quic_sni=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" | label_format server_name=`{{ if .tls_sni }}{{ .tls_sni }}{{ else }}{{ .quic_sni }}{{ end }}` [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "server_name": "Server name",
+                  "Value #A": "Sessions"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Sessions",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sessions"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 22,
+          "title": "Devices with the most sessions",
+          "description": "",
+          "gridPos": {
+            "x": 20,
+            "y": 45,
+            "w": 4,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(25, sum by (src_ip) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=~\"tls|quic\"} | tls_sni=~\"(?i).*$name.*\" or quic_sni=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "src_ip": "From",
+                  "Value #A": "Sessions"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Sessions",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sessions"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "id": 23,
+          "title": "HTTP requests (not encrypted)",
+          "gridPos": {
+            "x": 0,
+            "y": 56,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 24,
+          "title": "HTTP requests",
+          "description": "Each request that was not encrypted, newest first (the last 500).",
+          "gridPos": {
+            "x": 0,
+            "y": 57,
+            "w": 16,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"http\"} | http_hostname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\"",
+              "queryType": "range",
+              "maxLines": 500,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "src_ip",
+                    "http_method",
+                    "http_hostname",
+                    "http_status",
+                    "dest_ip",
+                    "dest_port"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "src_ip": 2,
+                  "http_method": 3,
+                  "http_hostname": 4,
+                  "http_status": 5,
+                  "dest_ip": 6,
+                  "dest_port": 7
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "src_ip": "From",
+                  "http_method": "Method",
+                  "http_hostname": "Host",
+                  "http_status": "Status",
+                  "dest_ip": "To",
+                  "dest_port": "Port"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "From"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Method"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 85
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 75
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "To"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Port"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 25,
+          "title": "Most frequent hosts",
+          "description": "",
+          "gridPos": {
+            "x": 16,
+            "y": 57,
+            "w": 8,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(20, sum by (http_hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"http\"} | http_hostname=~\"(?i).*$name.*\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "http_hostname": "Host",
+                  "Value #A": "Requests"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Requests",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Requests"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "row",
+          "id": 27,
+          "title": "Raw events",
+          "gridPos": {
+            "x": 0,
+            "y": 66,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": true,
+          "panels": [
+            {
+              "type": "logs",
+              "id": 26,
+              "title": "Raw events ($event_type)",
+              "gridPos": {
+                "x": 0,
+                "y": 67,
+                "w": 24,
+                "h": 16
+              },
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "description": "The event as Suricata wrote it (EVE JSON). Open a line to see all its fields.",
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "queryType": "range",
+                  "maxLines": 1000,
+                  "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=~\"$event_type\"} | src_ip=~\"$ip\" or dest_ip=~\"$ip\" |~ \"(?i)$name\""
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "enableLogDetails": true,
+                "sortOrder": "Descending",
+                "dedupStrategy": "none",
+                "prettifyLogMessage": true,
+                "showLabels": false,
+                "showCommonLabels": false,
+                "enableInfiniteScrolling": true
+              }
+            }
+          ]
         }
-      ],
-      "annotations": {
-        "list": []
-      },
-      "links": []
+      ]
     }
