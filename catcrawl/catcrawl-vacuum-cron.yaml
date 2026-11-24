@@ -98,7 +98,7 @@ spec:
               # postgresql/README.md — and using the server's own image means
               # the psql client here cannot drift from the server version.
               # Bump this together with spec.imageName over there.
-              image: ghcr.io/cloudnative-pg/postgresql:19.0-standard-trixie@sha256:e845b0146b37f13d912461b63b1a25ef4bbc6992e19fa2447f6ec001f4ee06e8
+              image: ghcr.io/cloudnative-pg/postgresql:19.0-standard-trixie@sha256:6f17393bf934a41fec47439306a17e087c5c2f419ddd5bf4b8dc0241da4bceb0
               # Digest-pinned, so there is nothing to re-resolve; the crawler
               # images use Always only because they float on :latest.
               imagePullPolicy: IfNotPresent
