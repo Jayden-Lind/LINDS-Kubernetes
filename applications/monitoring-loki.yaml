@@ -38,6 +38,9 @@ spec:
               chunk_encoding: zstd
             tracing:
               enabled: false
+            # No usage statistics to Grafana Labs.
+            analytics:
+              reporting_enabled: false
             server:
               # gRPC messages are limited to 4 MiB by default. A log query
               # with a bigger result (a few thousand lines, about 5 MB) failed
@@ -288,6 +291,10 @@ spec:
               release: monitoring-kube-prometheus-stack
 
           alloy:
+            # No usage statistics to Grafana Labs. The Windows servers run
+            # Alloy with the same flag (LINDS-Ansible roles/windows_logs).
+            extraArgs:
+              - --disable-reporting
             # On the volume from controller.volumeClaimTemplates.
             storagePath: /var/lib/alloy/data
             mounts:
