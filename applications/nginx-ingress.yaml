@@ -28,6 +28,9 @@ spec:
             resolver:
               ipv6: false
           enableLatencyMetrics: true
+          # No product telemetry to F5, as on the nginx-mtls controller.
+          telemetryReporting:
+            enable: false
           ingressClass:
             name: nginx
             create: true
