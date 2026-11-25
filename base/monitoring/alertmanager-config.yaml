@@ -21,7 +21,17 @@ spec:
       - severity
     groupWait: 30s
     groupInterval: 5m
-    repeatInterval: 4h
+    # Once: an alert is sent when it starts firing and, where the receiver
+    # sends one, when it resolves, and not again in between. Until 2026-11-26
+    # every firing alert was sent again every four hours: the Coles crawl that
+    # failed on 2026-11-11 left ColesCrawlNoRecentSuccess firing for thirteen
+    # days, about 75 Discord messages saying the same thing. A year is what
+    # "never" can be here. It only holds while Alertmanager remembers having
+    # sent the alert, which is for its retention, so that is a year too
+    # (alertmanagerSpec.retention in applications/kube-prometheus.yml); its
+    # default of 120h would send everything still firing again every five
+    # days. Every route below inherits this.
+    repeatInterval: 8760h
     routes:
       - receiver: "null"
         matchers:
@@ -41,21 +51,10 @@ spec:
         groupBy:
           - alertname
           - hostname
-        repeatInterval: 24h
-      # Coles refusing the crawler is a condition that lasts days, and nothing
-      # here can fix it. Once a day is enough to say it is still going on.
-      - receiver: discord
-        matchers:
-          - name: alertname
-            matchType: "="
-            value: ColesCrawlBlocked
-        repeatInterval: 24h
       # Disks, pools and arrays of the two Proxmox hosts
-      # (proxmox-storage-health.yaml). What these say stays true for days - a
-      # pool waiting on a replacement drive, a worn SSD - and does not change
-      # from one hour to the next, so once a day here too. Grouped by host as
-      # well: both hosts raise the same alert names, and a dozen drives on
-      # one of them is one message about that host.
+      # (proxmox-storage-health.yaml). Grouped by host: both hosts raise the
+      # same alert names, and a dozen drives on one of them is one message
+      # about that host.
       - receiver: discord
         matchers:
           - name: alertname
@@ -65,7 +64,6 @@ spec:
           - alertname
           - instance
           - severity
-        repeatInterval: 24h
       # The hardware notices (monitoring-hardware/rules.yaml). Each says that
       # something happened - the BMC logged an event, a host booted, a guest
       # stopped - and clears by itself after a while, whatever the state is

@@ -63,7 +63,8 @@ A device that does not answer is `PrometheusTargetDown`
 
 - The three notices go to the `discord-notices` receiver. It sends no
   "resolved" message, because a notice clears by itself.
-- `Storage*` alerts repeat once a day.
+- `Storage*` alerts are grouped by host. Like every alert, each is sent once
+  when it starts and once when it resolves, and not repeated in between.
 - While `RouterTunnelDown` fires for the LINDS tunnel, alerts with
   `site="linds"` are held back.
 

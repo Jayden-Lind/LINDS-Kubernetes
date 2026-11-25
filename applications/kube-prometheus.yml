@@ -360,6 +360,14 @@ spec:
                 resolveTimeout: 5m
             nodeSelector:
               datacenter: jd
+            # How long Alertmanager remembers the notifications it has sent
+            # (and expired silences). An alert still firing is sent again once
+            # this has passed, whatever its repeatInterval, so it is a year to
+            # match the route's (base/monitoring/alertmanager-config.yaml):
+            # every alert is sent once. The default is 120h. The notification
+            # log is a few kilobytes, and it is on the volume below, so a
+            # restart does not send everything again either.
+            retention: 8760h
             storage:
               volumeClaimTemplate:
                 spec:
