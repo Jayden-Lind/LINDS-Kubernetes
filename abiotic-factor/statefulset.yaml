@@ -110,11 +110,12 @@ spec:
               value: "7777"
             - name: QUERY_PORT
               value: "27015"
-            # In git, and this repo is public, so it is not a secret: it only
-            # keeps passers-by in the server browser out. For a real one, go
-            # back to a generated Secret as in valheim/password.yaml.
+            # Generated in-cluster, see password.yaml.
             - name: SERVER_PASSWORD
-              value: bigwalk
+              valueFrom:
+                secretKeyRef:
+                  name: abiotic-factor-password
+                  key: password
             # No ADMIN_PASSWORD, which leaves in-game admin by password off.
             # Moderators are Steam IDs in Saved/SaveGames/Server/Admin.ini on
             # the save volume - kept out of git, like Minecraft's whitelist.

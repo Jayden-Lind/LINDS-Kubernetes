@@ -6,6 +6,7 @@ namespace: abiotic-factor
 resources:
   - saves-pvc.yaml
   - server-files-pvc.yaml
+  - password.yaml
   - service.yaml
   - statefulset.yaml
   - network-policy.yaml
