@@ -1,0 +1,70 @@
+# Abiotic Factor is open to the internet (jd-router-01 forwards UDP 7777 and
+# 27015 here, see service.yaml). If the server is taken over, this policy
+# keeps it away from everything else: no LAN, no other site, no cluster pod,
+# node or API server. It may only answer players, ask the cluster DNS, and
+# reach the internet on the ports Steam uses.
+#
+# The egress ports are valheim/network-policy.yaml's Steam set, NOT yet
+# observed for this server: DepotDownloader fetches the server from Steam's
+# CM servers and CDN (443/tcp, 80/tcp, 27015-27050/tcp), and the running
+# server registers with Steam (27015-27060/udp, 443/tcp). mod.io, if MODS is
+# ever set, is 443. Check after the first start and tighten or widen:
+#   hubble observe --namespace abiotic-factor --verdict DROPPED
+#
+# The internet rule names ports instead of allowing all of them, for the same
+# reason as valheim/network-policy.yaml: jd-router-01's public address is
+# "internet" too, and the router answers SSH, DNS, SNMP and BGP to any source
+# on the cluster VLAN.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: abiotic-factor-server
+spec:
+  description: "Abiotic Factor: players in, cluster DNS and Steam out, nothing else"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: abiotic-factor
+      app.kubernetes.io/instance: abiotic-factor
+  ingress:
+    # Players and server-browser queries, from the internet and the LAN
+    # (externalTrafficPolicy Local keeps their own addresses, so both arrive
+    # as `world`).
+    - fromEntities: [world]
+      toPorts:
+        - ports:
+            - port: "7777"
+              protocol: UDP
+            - port: "27015"
+              protocol: UDP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16]
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+            - port: "27000"
+              endPort: 27100
+              protocol: TCP
+            - port: "27000"
+              endPort: 27100
+              protocol: UDP
+            # Steam networking (STUN and relays).
+            - port: "3478"
+              protocol: UDP
+            - port: "4379"
+              endPort: 4380
+              protocol: UDP

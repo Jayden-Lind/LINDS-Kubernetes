@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: abiotic-factor
+  namespace: argocd
+  # Plain manifests on the valheim/ and minecraft/ pattern: zfs-iscsi volumes,
+  # a pinned image that Renovate bumps - see abiotic-factor/statefulset.yaml.
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: abiotic-factor
+  source:
+    repoURL: "https://github.com/Jayden-Lind/LINDS-Kubernetes"
+    targetRevision: HEAD
+    path: abiotic-factor
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,29 @@
+# The dedicated server as downloaded from Steam (app 2857200, Windows build),
+# mounted at /data/server-files.
+#
+# Its own volume rather than one shared with the saves, for the reason in
+# valheim/server-files-pvc.yaml: this one is re-downloadable in a few minutes
+# and not worth a snapshot, the save volume is the thing worth keeping.
+# Without it every reschedule pays the download again.
+#
+# Also holds backup/: the image's tarball of the world at each start
+# (BACKUPS_TO_KEEP, 2 by default). A convenience only - the save zvol's
+# snapshots are the retention.
+#
+# TODO (Ansible, not here): set `au.com.linds:sanoid=off` on this zvol via
+# LINDS-Ansible inventory/proxmox.yml `proxmox_sanoid_optout`, as for
+# Valheim's server files.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: abiotic-factor-server-files
+  annotations:
+    # Must exist before the StatefulSet.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  storageClassName: zfs-iscsi
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi

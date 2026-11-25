@@ -1,0 +1,44 @@
+# Abiotic Factor: the game port and the Steam query port, both UDP.
+#
+# Published (docs/publish-a-service.md): jd-router-01 forwards WAN UDP 7777
+# and 27015 to the pinned address, and external-dns-public points
+# abiotic.linds.com.au at jd.linds.com.au. Players join by address
+# (abiotic.linds.com.au:7777) or find "LINDS" in the server browser. The
+# password (SERVER_PASSWORD in statefulset.yaml) keeps passers-by out; the
+# network policy is what keeps a taken-over server away from everything else.
+#
+# The ports here must be the ones the server itself uses (GAME_PORT and
+# QUERY_PORT in statefulset.yaml): the server tells Steam its own ports, so a
+# forward from a different outside port does not work.
+apiVersion: v1
+kind: Service
+metadata:
+  name: abiotic-factor
+  annotations:
+    # Pinned, so the address in the logs and in Hubble stays the same.
+    lbipam.cilium.io/ips: "172.16.1.14"
+    # Internal DNS: the same name with the Service's own address, so players
+    # at home do not go out through the WAN.
+    external-dns.kubernetes.io/hostname: abiotic.linds.com.au
+    # Internet.
+    public.linds.com.au/ports: "7777/udp,27015/udp"
+    public.linds.com.au/publish: "true"
+    public.linds.com.au/hostname: abiotic.linds.com.au
+    public.linds.com.au/target: jd.linds.com.au
+spec:
+  type: LoadBalancer
+  # Players' own addresses reach the server, and Cilium advertises the
+  # address only from the node that runs the pod.
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: abiotic-factor
+    app.kubernetes.io/instance: abiotic-factor
+  ports:
+    - name: game
+      port: 7777
+      targetPort: game
+      protocol: UDP
+    - name: query
+      port: 27015
+      targetPort: query
+      protocol: UDP
