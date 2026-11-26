@@ -24,7 +24,7 @@ spec:
           # Must stay in step with the operator version in kustomization.yaml.
           # config-cli lags upstream Keycloak, so Keycloak's minor line must
           # never move ahead of config-cli's. Grouped in renovate.json5.
-          image: quay.io/adorsys/keycloak-config-cli:6.5.1-26.5.5
+          image: quay.io/adorsys/keycloak-config-cli:6.6.0-26.5.5
           imagePullPolicy: IfNotPresent
           env:
             # In-cluster plaintext: TLS terminates at the ingress and this
