@@ -552,8 +552,8 @@ spec:
           # run was partial, nothing has succeeded, and ArgoCD calls the
           # catcrawl app degraded because the CronJob's last run failed -- nine
           # alerts on 2026-09-26, in seven Discord notifications every four
-          # hours. Alertmanager holds those back while this fires, and repeats
-          # this one daily rather than every four hours
+          # hours. Alertmanager holds those back while this fires, and sends
+          # this one once, as it does every alert since 2026-11-26
           # (base/monitoring/alertmanager-config.yaml). ArgoCD's are the
           # exception: they no longer fire for the catcrawl app at all (see
           # ArgoCDAppDegraded).
