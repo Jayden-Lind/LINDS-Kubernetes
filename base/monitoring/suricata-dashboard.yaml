@@ -158,7 +158,7 @@ data:
           "type": "stat",
           "id": 1,
           "title": "Blocked",
-          "description": "Connections that the router stopped. The source address is on a list of hostile addresses (Emerging Threats DROP, CINS and COMPROMISED). The router blocks at the published ports only; linds-router-01 does not block.",
+          "description": "What jd-router-01 stopped: traffic of an address on a list of hostile addresses, a DNS question or a connection for a name on a malware or phishing list, and traffic that matches a malware signature. linds-router-01 does not block.",
           "gridPos": {
             "x": 0,
             "y": 0,
@@ -636,12 +636,12 @@ data:
         {
           "type": "table",
           "id": 10,
-          "title": "Blocked connections",
-          "description": "Each connection that the router stopped, newest first. \"From\" is the address on the internet. \"To\" is the published service. One connection can show two lines when two lists have the address.",
+          "title": "Blocked",
+          "description": "Each block, newest first. \"Device\" is the device on this side: the one that asked, or the published service that an outside address came to. \"Blocked\" is the name that the device asked for, or the address on the internet.\n\nTo unblock: run the command of the last column on jd-router-01 (it takes about half a minute). `router unblock` alone shows the list, and `router reblock` takes a name out again.",
           "gridPos": {
             "x": 0,
             "y": 12,
-            "w": 16,
+            "w": 24,
             "h": 9
           },
           "datasource": {
@@ -655,7 +655,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\"",
+              "expr": "{job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" | label_format device=`{{ if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .src_ip }}{{ else }}{{ .dest_ip }}{{ end }}`, blocked=`{{ if .dns_rrname }}{{ .dns_rrname }}{{ else if .tls_sni }}{{ .tls_sni }}{{ else if .http_hostname }}{{ .http_hostname }}{{ else if .quic_sni }}{{ .quic_sni }}{{ else if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .dest_ip }}{{ else }}{{ .src_ip }}{{ end }}`, unblock=`router unblock {{ if .dns_rrname }}{{ .dns_rrname }}{{ else if .tls_sni }}{{ .tls_sni }}{{ else if .http_hostname }}{{ .http_hostname }}{{ else if .quic_sni }}{{ .quic_sni }}{{ else if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .dest_ip }}{{ else }}{{ .src_ip }}{{ end }}`",
               "queryType": "range",
               "maxLines": 500,
               "direction": "backward"
@@ -678,11 +678,11 @@ data:
                   "names": [
                     "Time",
                     "hostname",
-                    "src_ip",
-                    "dest_ip",
+                    "device",
+                    "blocked",
                     "dest_port",
-                    "proto",
-                    "alert_signature"
+                    "alert_signature",
+                    "unblock"
                   ]
                 }
               }
@@ -693,19 +693,19 @@ data:
                 "indexByName": {
                   "Time": 0,
                   "hostname": 1,
-                  "src_ip": 2,
-                  "dest_ip": 3,
+                  "device": 2,
+                  "blocked": 3,
                   "dest_port": 4,
-                  "proto": 5,
-                  "alert_signature": 6
+                  "alert_signature": 5,
+                  "unblock": 6
                 },
                 "renameByName": {
                   "hostname": "Router",
-                  "src_ip": "From",
-                  "dest_ip": "To",
+                  "device": "Device",
+                  "blocked": "Blocked",
                   "dest_port": "Port",
-                  "proto": "Protocol",
-                  "alert_signature": "Rule"
+                  "alert_signature": "Why (the rule)",
+                  "unblock": "To unblock, on the router"
                 }
               }
             },
@@ -769,7 +769,19 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "From"
+                  "options": "Device"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 215
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Blocked"
                 },
                 "properties": [
                   {
@@ -781,36 +793,24 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "To"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 130
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
                   "options": "Port"
                 },
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 70
+                    "value": 65
                   }
                 ]
               },
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Protocol"
+                  "options": "To unblock, on the router"
                 },
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 85
+                    "value": 330
                   }
                 ]
               }
@@ -820,12 +820,12 @@ data:
         {
           "type": "table",
           "id": 11,
-          "title": "Most blocked addresses",
-          "description": "The addresses that the router blocked most often in the time range.",
+          "title": "Most blocked",
+          "description": "The names and addresses that the router blocked most often in the time range.",
           "gridPos": {
-            "x": 16,
-            "y": 12,
-            "w": 8,
+            "x": 0,
+            "y": 21,
+            "w": 12,
             "h": 9
           },
           "datasource": {
@@ -839,7 +839,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (src_ip, hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" [$__range])))",
+              "expr": "topk(20, sum by (blocked, hostname) (count_over_time({job=\"suricata\", hostname=~\"$router\", event_type=\"alert\"} | alert_action=\"blocked\" | src_ip=~\"$ip\" or dest_ip=~\"$ip\" | label_format device=`{{ if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .src_ip }}{{ else }}{{ .dest_ip }}{{ end }}`, blocked=`{{ if .dns_rrname }}{{ .dns_rrname }}{{ else if .tls_sni }}{{ .tls_sni }}{{ else if .http_hostname }}{{ .http_hostname }}{{ else if .quic_sni }}{{ .quic_sni }}{{ else if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .dest_ip }}{{ else }}{{ .src_ip }}{{ end }}`, unblock=`router unblock {{ if .dns_rrname }}{{ .dns_rrname }}{{ else if .tls_sni }}{{ .tls_sni }}{{ else if .http_hostname }}{{ .http_hostname }}{{ else if .quic_sni }}{{ .quic_sni }}{{ else if (eq (regexReplaceAll \"^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*\" .src_ip \"\") \"\") }}{{ .dest_ip }}{{ else }}{{ .src_ip }}{{ end }}` [$__range])))",
               "queryType": "instant",
               "format": "table"
             }
@@ -852,9 +852,9 @@ data:
                   "Time": true
                 },
                 "renameByName": {
-                  "src_ip": "From",
+                  "blocked": "Blocked",
                   "hostname": "Router",
-                  "Value #A": "Blocked"
+                  "Value #A": "Blocks"
                 }
               }
             },
@@ -863,7 +863,7 @@ data:
               "options": {
                 "sort": [
                   {
-                    "field": "Blocked",
+                    "field": "Blocks",
                     "desc": true
                   }
                 ]
@@ -889,7 +889,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Blocked"
+                  "options": "Blocks"
                 },
                 "properties": [
                   {
@@ -917,12 +917,27 @@ data:
           }
         },
         {
-          "type": "row",
+          "type": "text",
           "id": 12,
+          "title": "How to unblock",
+          "gridPos": {
+            "x": 12,
+            "y": 21,
+            "w": 12,
+            "h": 9
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "1. Find the block in the table above. **Blocked** is the name or the address.\n2. On jd-router-01, run the command of the last column. Example:\n\n       router unblock example.com\n\n3. Wait about half a minute. The name and its subdomains (or the address) are not blocked any more. They are still logged.\n\n| Command | What it does |\n|---|---|\n| `router blocked` | The last blocks, on the router |\n| `router unblock` | The list of what is unblocked |\n| `router reblock example.com` | Block it again |\n| `router ips off 10` | Stop Suricata for 10 minutes, if a page fails and no block shows here |\n"
+          }
+        },
+        {
+          "type": "row",
+          "id": 13,
           "title": "Alerts (reported, not blocked)",
           "gridPos": {
             "x": 0,
-            "y": 21,
+            "y": 30,
             "w": 24,
             "h": 1
           },
@@ -931,12 +946,12 @@ data:
         },
         {
           "type": "table",
-          "id": 13,
+          "id": 14,
           "title": "Alerts",
           "description": "Each event that a rule reported, newest first. The router let these through.",
           "gridPos": {
             "x": 0,
-            "y": 22,
+            "y": 31,
             "w": 16,
             "h": 10
           },
@@ -1161,12 +1176,12 @@ data:
         },
         {
           "type": "table",
-          "id": 14,
+          "id": 15,
           "title": "Most frequent rules",
           "description": "The rules with the most alerts in the time range.",
           "gridPos": {
             "x": 16,
-            "y": 22,
+            "y": 31,
             "w": 8,
             "h": 10
           },
@@ -1260,11 +1275,11 @@ data:
         },
         {
           "type": "row",
-          "id": 15,
+          "id": 16,
           "title": "DNS lookups",
           "gridPos": {
             "x": 0,
-            "y": 32,
+            "y": 41,
             "w": 24,
             "h": 1
           },
@@ -1273,12 +1288,12 @@ data:
         },
         {
           "type": "table",
-          "id": 16,
+          "id": 17,
           "title": "DNS lookups",
           "description": "Each name that a device asked the router for, newest first (the last 500). A device that uses a different resolver is not shown. To see one device, put its address in \"Address\".",
           "gridPos": {
             "x": 0,
-            "y": 33,
+            "y": 42,
             "w": 12,
             "h": 11
           },
@@ -1412,12 +1427,12 @@ data:
         },
         {
           "type": "table",
-          "id": 17,
+          "id": 18,
           "title": "Most requested names",
           "description": "",
           "gridPos": {
             "x": 12,
-            "y": 33,
+            "y": 42,
             "w": 7,
             "h": 11
           },
@@ -1510,12 +1525,12 @@ data:
         },
         {
           "type": "table",
-          "id": 18,
+          "id": 19,
           "title": "Devices with the most lookups",
           "description": "",
           "gridPos": {
             "x": 19,
-            "y": 33,
+            "y": 42,
             "w": 5,
             "h": 11
           },
@@ -1608,11 +1623,11 @@ data:
         },
         {
           "type": "row",
-          "id": 19,
+          "id": 20,
           "title": "TLS and QUIC sessions",
           "gridPos": {
             "x": 0,
-            "y": 44,
+            "y": 53,
             "w": 24,
             "h": 1
           },
@@ -1621,12 +1636,12 @@ data:
         },
         {
           "type": "table",
-          "id": 20,
+          "id": 21,
           "title": "TLS and QUIC sessions",
           "description": "Each encrypted session, newest first (the last 500). \"Server name\" is the name that the device asked for (SNI). Suricata sees the WAN traffic only.",
           "gridPos": {
             "x": 0,
-            "y": 45,
+            "y": 54,
             "w": 15,
             "h": 11
           },
@@ -1805,12 +1820,12 @@ data:
         },
         {
           "type": "table",
-          "id": 21,
+          "id": 22,
           "title": "Most frequent server names",
           "description": "",
           "gridPos": {
             "x": 15,
-            "y": 45,
+            "y": 54,
             "w": 5,
             "h": 11
           },
@@ -1903,12 +1918,12 @@ data:
         },
         {
           "type": "table",
-          "id": 22,
+          "id": 23,
           "title": "Devices with the most sessions",
           "description": "",
           "gridPos": {
             "x": 20,
-            "y": 45,
+            "y": 54,
             "w": 4,
             "h": 11
           },
@@ -2001,11 +2016,11 @@ data:
         },
         {
           "type": "row",
-          "id": 23,
+          "id": 24,
           "title": "HTTP requests (not encrypted)",
           "gridPos": {
             "x": 0,
-            "y": 56,
+            "y": 65,
             "w": 24,
             "h": 1
           },
@@ -2014,12 +2029,12 @@ data:
         },
         {
           "type": "table",
-          "id": 24,
+          "id": 25,
           "title": "HTTP requests",
           "description": "Each request that was not encrypted, newest first (the last 500).",
           "gridPos": {
             "x": 0,
-            "y": 57,
+            "y": 66,
             "w": 16,
             "h": 9
           },
@@ -2213,12 +2228,12 @@ data:
         },
         {
           "type": "table",
-          "id": 25,
+          "id": 26,
           "title": "Most frequent hosts",
           "description": "",
           "gridPos": {
             "x": 16,
-            "y": 57,
+            "y": 66,
             "w": 8,
             "h": 9
           },
@@ -2311,11 +2326,11 @@ data:
         },
         {
           "type": "row",
-          "id": 27,
+          "id": 28,
           "title": "Raw events",
           "gridPos": {
             "x": 0,
-            "y": 66,
+            "y": 75,
             "w": 24,
             "h": 1
           },
@@ -2323,11 +2338,11 @@ data:
           "panels": [
             {
               "type": "logs",
-              "id": 26,
+              "id": 27,
               "title": "Raw events ($event_type)",
               "gridPos": {
                 "x": 0,
-                "y": 67,
+                "y": 76,
                 "w": 24,
                 "h": 16
               },

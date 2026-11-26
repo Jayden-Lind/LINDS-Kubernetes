@@ -150,6 +150,33 @@ reported = sel('="alert"') + ' | alert_action!="blocked" | alert_severity=~"$sev
 dns = sel('="dns"') + ' | dns_type!="response" | dns_rrname=~"(?i).*$name.*"' + BY_IP
 tls = sel('=~"tls|quic"') + ' | tls_sni=~"(?i).*$name.*" or quic_sni=~"(?i).*$name.*"' + BY_IP
 http = sel('="http"') + ' | http_hostname=~"(?i).*$name.*"' + BY_IP
+# A block has a device on this side and a thing that was blocked: the name
+# that the device asked for, or the address on the internet. The alert has a
+# source and a destination; which one is the device depends on the direction.
+# LOCAL matches an address on this side: private, link-local, or in the IPv6
+# prefix of JD (change it if the ISP delegates another prefix). `[.]`, not a
+# backslash: the text goes through JSON, Grafana and a Go template.
+LOCAL = "^(10[.]|192[.]168[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|fe80:|2001:8003:dc6f:63).*"
+SRC_IS_LOCAL = '(eq (regexReplaceAll "%s" .src_ip "") "")' % LOCAL
+THING = ("{{ if .dns_rrname }}{{ .dns_rrname }}{{ else if .tls_sni }}{{ .tls_sni }}"
+         "{{ else if .http_hostname }}{{ .http_hostname }}{{ else if .quic_sni }}{{ .quic_sni }}"
+         "{{ else if %s }}{{ .dest_ip }}{{ else }}{{ .src_ip }}{{ end }}" % SRC_IS_LOCAL)
+BLOCK_FIELDS = (" | label_format device=`{{ if %s }}{{ .src_ip }}{{ else }}{{ .dest_ip }}{{ end }}`, "
+                "blocked=`%s`, unblock=`router unblock %s`" % (SRC_IS_LOCAL, THING, THING))
+UNBLOCK_HELP = """1. Find the block in the table above. **Blocked** is the name or the address.
+2. On jd-router-01, run the command of the last column. Example:
+
+       router unblock example.com
+
+3. Wait about half a minute. The name and its subdomains (or the address) are not blocked any more. They are still logged.
+
+| Command | What it does |
+|---|---|
+| `router blocked` | The last blocks, on the router |
+| `router unblock` | The list of what is unblocked |
+| `router reblock example.com` | Block it again |
+| `router ips off 10` | Stop Suricata for 10 minutes, if a page fails and no block shows here |
+"""
 # One "name" column for a TLS and for a QUIC session.
 SERVER_NAME = ' | label_format server_name=`{{ if .tls_sni }}{{ .tls_sni }}{{ else }}{{ .quic_sni }}{{ end }}`'
 
@@ -166,9 +193,9 @@ def per_interval(query, by):
 panels = []
 y = 0
 panels += [
-    stat("Blocked", "Connections that the router stopped. The source address is on a list of hostile addresses "
-         "(Emerging Threats DROP, CINS and COMPROMISED). The router blocks at the published ports only; "
-         "linds-router-01 does not block.", count(blocked), g(0, y, 4, 4)),
+    stat("Blocked", "What jd-router-01 stopped: traffic of an address on a list of hostile addresses, a DNS "
+         "question or a connection for a name on a malware or phishing list, and traffic that matches a "
+         "malware signature. linds-router-01 does not block.", count(blocked), g(0, y, 4, 4)),
     stat("Alerts", "Events that a rule reported and the router let through.", count(reported), g(4, y, 4, 4)),
     stat("High severity", "The alerts with severity 1.",
          count(sel('="alert"') + ' | alert_action!="blocked" | alert_severity="1"' + BY_IP), g(8, y, 4, 4)),
@@ -191,17 +218,21 @@ y += 7
 panels.append(row("Blocked by the router", y))
 y += 1
 panels += [
-    events("Blocked connections", "Each connection that the router stopped, newest first. \"From\" is the "
-           "address on the internet. \"To\" is the published service. One connection can show two lines when "
-           "two lists have the address.", blocked, g(0, y, 16, 9),
-           {"hostname": "Router", "src_ip": "From", "dest_ip": "To", "dest_port": "Port", "proto": "Protocol",
-            "alert_signature": "Rule"},
-           {"From": 250, "To": 130, "Port": 70, "Protocol": 85}),
-    top("Most blocked addresses", "The addresses that the router blocked most often in the time range.",
-        "topk(20, %s)" % count(blocked, "src_ip, hostname"), g(16, y, 8, 9),
-        {"src_ip": "From", "hostname": "Router"}, "Blocked"),
+    events("Blocked", "Each block, newest first. \"Device\" is the device on this side: the one that asked, or the "
+           "published service that an outside address came to. \"Blocked\" is the name that the device asked "
+           "for, or the address on the internet.\n\nTo unblock: run the command of the last column on "
+           "jd-router-01 (it takes about half a minute). `router unblock` alone shows the list, and "
+           "`router reblock` takes a name out again.", blocked + BLOCK_FIELDS, g(0, y, 24, 9),
+           {"hostname": "Router", "device": "Device", "blocked": "Blocked", "dest_port": "Port",
+            "alert_signature": "Why (the rule)", "unblock": "To unblock, on the router"},
+           {"Device": 215, "Blocked": 250, "Port": 65, "To unblock, on the router": 330}),
+    top("Most blocked", "The names and addresses that the router blocked most often in the time range.",
+        "topk(20, %s)" % count(blocked + BLOCK_FIELDS, "blocked, hostname"), g(0, y + 9, 12, 9),
+        {"blocked": "Blocked", "hostname": "Router"}, "Blocks"),
+    {"type": "text", "id": next(_ids), "title": "How to unblock", "gridPos": g(12, y + 9, 12, 9),
+     "options": {"mode": "markdown", "content": UNBLOCK_HELP}},
 ]
-y += 9
+y += 18
 
 panels.append(row("Alerts (reported, not blocked)", y))
 y += 1
