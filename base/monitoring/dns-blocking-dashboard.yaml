@@ -1,0 +1,1076 @@
+---
+# Grafana dashboard for the DNS blocklists of jd-router-01 and
+# linds-router-01 (Unbound). The Grafana dashboard sidecar reads it (label
+# grafana_dashboard).
+#
+# GENERATED. Edit dns-blocking-dashboard.py and make this file again:
+#   python3 base/monitoring/dns-blocking-dashboard.py > base/monitoring/dns-blocking-dashboard.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dns-blocking-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Network
+data:
+  dns-blocking.json: |
+    {
+      "uid": "dns-blocking",
+      "title": "DNS blocking",
+      "description": "The names that Unbound on the two routers refuses: advertising, trackers, malware and phishing. Router side: LINDS-Ansible roles/router, \"DNS blocklists\".",
+      "tags": [
+        "dns",
+        "network",
+        "router",
+        "logs"
+      ],
+      "timezone": "browser",
+      "editable": true,
+      "graphTooltip": 1,
+      "schemaVersion": 39,
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "annotations": {
+        "list": []
+      },
+      "links": [
+        {
+          "title": "Suricata",
+          "type": "link",
+          "url": "/d/suricata",
+          "icon": "dashboard"
+        },
+        {
+          "title": "Router",
+          "type": "link",
+          "url": "/d/router",
+          "icon": "dashboard"
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "router",
+            "label": "Router",
+            "description": "The router that refused the question.",
+            "type": "query",
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
+            },
+            "query": {
+              "label": "hostname",
+              "refId": "LokiVariableQueryEditor-VariableQuery",
+              "stream": "{job=\"syslog\", appname=\"unbound\"}",
+              "type": 1
+            },
+            "definition": "label_values({job=\"syslog\", appname=\"unbound\"}, hostname)",
+            "refresh": 2,
+            "sort": 1,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".+",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "list",
+            "label": "List",
+            "type": "custom",
+            "query": "Advertising and trackers : ads,Malware : malware,Phishing : phishing",
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".+",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "name": "device",
+            "label": "Device",
+            "description": "The address that asked, as a regular expression. Example: 192[.]168[.]1[.]20 for one device.",
+            "type": "textbox",
+            "query": ".*",
+            "current": {
+              "text": ".*",
+              "value": ".*"
+            },
+            "options": []
+          },
+          {
+            "name": "name",
+            "label": "Name contains",
+            "description": "Text in the name.",
+            "type": "textbox",
+            "query": "",
+            "current": {
+              "text": "",
+              "value": ""
+            },
+            "options": []
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "id": 1,
+          "title": "Refused",
+          "description": "DNS questions that a blocklist refused. The device gets \"no such name\" at once. One page can ask for the same name more than once, and for more than one record type.",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 5,
+            "h": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum(count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__range]))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": null,
+              "noValue": "0"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "id": 2,
+          "title": "Share of all lookups",
+          "description": "Refused questions as a part of all questions to the routers.",
+          "gridPos": {
+            "x": 5,
+            "y": 0,
+            "w": 5,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "sum(increase(router_dns_blocked_total{job=\"router-node\", instance=~\"$router\"}[$__range])) / sum(increase(router_dns_queries_total{job=\"router-node\", instance=~\"$router\"}[$__range]))",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 1,
+              "noValue": "0"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "id": 3,
+          "title": "Devices with a refused lookup",
+          "description": "Addresses that asked for a listed name. A DNS forwarder (the cluster's DNS, a domain controller) counts as one device.",
+          "gridPos": {
+            "x": 10,
+            "y": 0,
+            "w": 5,
+            "h": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "count(sum by (device) (count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__range])))",
+              "queryType": "instant"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": null,
+              "noValue": "0"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "id": 4,
+          "title": "Names on the lists",
+          "description": "The names of all lists of one router (the two routers have the same lists).",
+          "gridPos": {
+            "x": 15,
+            "y": 0,
+            "w": 5,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max(sum by (instance) (router_dns_blocklist_names{job=\"router-node\", instance=~\"$router\"}))",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": null,
+              "noValue": "0"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "stat",
+          "id": 5,
+          "title": "Oldest list",
+          "description": "The time since the list that changed longest ago was fetched with a change. The lists are fetched each day; most of them change each day.",
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "time() - min(router_dns_blocklist_changed_timestamp_seconds{job=\"router-node\", instance=~\"$router\"})",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "value"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 0,
+              "noValue": "0"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 6,
+          "title": "Refused, by list",
+          "description": "Refused questions for each interval.",
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 12,
+            "h": 7
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (list) (count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__auto]))",
+              "legendFormat": "{{list}}",
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ads"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Advertising and trackers"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "malware"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Malware"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "phishing"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Phishing"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "timeseries",
+          "id": 7,
+          "title": "Refused, by router",
+          "description": "Refused questions for each interval.",
+          "gridPos": {
+            "x": 12,
+            "y": 4,
+            "w": 12,
+            "h": 7
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (hostname) (count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__auto]))",
+              "legendFormat": "{{hostname}}",
+              "queryType": "range"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-router-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-router-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 8,
+          "title": "Most refused names",
+          "description": "The names that were refused most often in the time range.",
+          "gridPos": {
+            "x": 0,
+            "y": 11,
+            "w": 14,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(30, sum by (name, list) (count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "name": "Name",
+                  "list": "List",
+                  "Value #A": "Refused"
+                },
+                "indexByName": {
+                  "name": 0,
+                  "list": 1
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Refused",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "List"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "ads": {
+                            "text": "Advertising and trackers",
+                            "index": 0
+                          },
+                          "malware": {
+                            "text": "Malware",
+                            "index": 1
+                          },
+                          "phishing": {
+                            "text": "Phishing",
+                            "index": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Refused"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 120
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 9,
+          "title": "Devices with the most refused lookups",
+          "description": "A device with many refused lookups has apps or pages with many trackers, or software that asks again and again. Put its address in \"Device\" to see what it asks for.",
+          "gridPos": {
+            "x": 14,
+            "y": 11,
+            "w": 10,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(30, sum by (device, hostname) (count_over_time({job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" [$__range])))",
+              "queryType": "instant",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "device": "Device",
+                  "hostname": "Router",
+                  "Value #A": "Refused"
+                },
+                "indexByName": {
+                  "device": 0,
+                  "hostname": 1
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Refused",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "List"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "ads": {
+                            "text": "Advertising and trackers",
+                            "index": 0
+                          },
+                          "malware": {
+                            "text": "Malware",
+                            "index": 1
+                          },
+                          "phishing": {
+                            "text": "Phishing",
+                            "index": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Refused"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 120
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "table",
+          "id": 10,
+          "title": "Refused lookups",
+          "description": "Each refused question, newest first (the last 1,000). To unblock a name: run the command of the last column on the router of that row.",
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 24,
+            "h": 11
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"syslog\", appname=\"unbound\", hostname=~\"$router\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" | action=\"rpz-nxdomain\" | list=~\"$list\" | device=~\"$device\" | name=~\"(?i).*$name.*\" | label_format unblock=`router unblock {{ .name }}`",
+              "queryType": "range",
+              "maxLines": 1000,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "device",
+                    "name",
+                    "qtype",
+                    "list",
+                    "unblock"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "device": 2,
+                  "name": 3,
+                  "qtype": 4,
+                  "list": 5,
+                  "unblock": 6
+                },
+                "renameByName": {
+                  "hostname": "Router",
+                  "device": "Device",
+                  "name": "Name",
+                  "qtype": "Type",
+                  "list": "List",
+                  "unblock": "To unblock, on the router"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 178
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "List"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "ads": {
+                            "text": "Advertising and trackers",
+                            "index": 0
+                          },
+                          "malware": {
+                            "text": "Malware",
+                            "index": 1
+                          },
+                          "phishing": {
+                            "text": "Phishing",
+                            "index": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Device"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 260
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Type"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 75
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "To unblock, on the router"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 420
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "id": 11,
+          "title": "How to unblock",
+          "gridPos": {
+            "x": 0,
+            "y": 33,
+            "w": 24,
+            "h": 10
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "1. Find the name in the table above.\n2. On the router of that row, run the command of the last column. Example:\n\n       router unblock example.com\n\n3. The name and its subdomains resolve at once. On jd-router-01 the command takes about half a minute, because Suricata loads its rules again.\n\n| Command | What it does |\n|---|---|\n| `router blocked` | The last blocks, on the router |\n| `router unblock` | The list of what is unblocked |\n| `router reblock example.com` | Block it again |\n\nEach router has its own list. A name that the two sites need: run the command on the two routers.\n"
+          }
+        }
+      ]
+    }
