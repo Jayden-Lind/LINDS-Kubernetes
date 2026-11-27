@@ -32,6 +32,9 @@
       // tags). Also only the scripts and the Java runtime: Paper builds come
       // at each start, and the Minecraft version is VERSION in the file.
       "/^minecraft/statefulset\\.yaml$/",
+      // The Abiotic Factor server image. Again only the wrapper scripts and
+      // Wine: the game is downloaded from Steam at each pod start.
+      "/^abiotic-factor/statefulset\\.yaml$/",
       // snmp_exporter, ipmi_exporter and pve-exporter. After a snmp_exporter
       // bump, regenerate monitoring-hardware/snmp/dell-health.yml (README).
       "/^monitoring-hardware/[^/]+-exporter\\.yaml$/",

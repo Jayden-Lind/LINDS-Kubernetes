@@ -1,0 +1,27 @@
+# The save volume, mounted over the server's AbioticFactor/Saved directory:
+# the world (SaveGames/Server/Worlds/<WORLD_NAME>/, with its
+# SandboxSettings.ini), SaveGames/Server/Admin.ini (moderators and bans) and
+# the server's logs.
+#
+# zfs-iscsi like the other single-writer game saves (valheim/pvc.yaml,
+# minecraft/pvc.yaml): a zvol of its own on jd-proxmox-02, so it gets sanoid
+# dailies (14 kept - the rollback for griefing or a bad patch) and TRIM
+# through the StorageClass's discard mount option.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: abiotic-factor-saves
+  annotations:
+    # Must exist before the StatefulSet.
+    argocd.argoproj.io/sync-wave: "-1"
+    # This is the world. Never let a prune take it.
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  storageClassName: zfs-iscsi
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # A world is tens of MB. The zvol is sparse, so the headroom costs
+      # nothing until it is used. A claim can only grow.
+      storage: 5Gi

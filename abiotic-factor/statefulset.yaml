@@ -1,0 +1,170 @@
+# The Abiotic Factor dedicated server, on
+# indifferentbroccoli/abiotic-factor-server-docker.
+#
+# Deep Field Games only ships a Windows server (Steam app 2857200), so every
+# Linux image runs it under Wine. Chosen 2026-11-25:
+#
+# - This image: runs as uid 1000 with no root step, has versioned tags for
+#   Renovate to follow, stops the server with SIGINT so it saves, and was last
+#   released 2026-11-10. It fetches the server with DepotDownloader instead of
+#   SteamCMD.
+# - Not Pleut/abiotic-factor-linux-docker, the one most guides point at: only
+#   a `latest` tag, runs as root, and untouched since 2024-05.
+#
+# Plain manifests on the valheim/ and minecraft/ pattern; there is no chart
+# worth depending on.
+#
+# The image tag is the wrapper scripts and Wine, NOT the game version. The
+# game is downloaded at every pod start (UPDATE_ON_START), and nothing checks
+# for updates while the pod runs. Players on a newer build cannot join an
+# older server, so after a game patch:
+#   kubectl rollout restart -n abiotic-factor statefulset/abiotic-factor
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: abiotic-factor
+spec:
+  replicas: 1
+  serviceName: abiotic-factor
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: abiotic-factor
+      app.kubernetes.io/instance: abiotic-factor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: abiotic-factor
+        app.kubernetes.io/instance: abiotic-factor
+    spec:
+      # JD only - the volumes are JD-side iSCSI - and never the control-plane
+      # node: etcd lives there.
+      nodeSelector:
+        datacenter: jd
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      # On SIGTERM the image sends the server SIGINT and waits for it; the
+      # server saves the world on the way out. The image's own compose file
+      # allows 30s.
+      terminationGracePeriodSeconds: 60
+      # Nothing in here talks to the API server.
+      automountServiceAccountToken: false
+      # No ABIOTIC_FACTOR_PORT=udp://... style variables from the Service next
+      # to the image's own environment-driven configuration.
+      enableServiceLinks: false
+      securityContext:
+        # The image's `steam` user. fsGroup makes both volumes writable to it.
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The save volume is mounted inside the server-files volume, at
+        # AbioticFactor/Saved. If that directory does not exist, the container
+        # runtime creates it - and its parent AbioticFactor/ - as root, and the
+        # download, which runs as uid 1000 and puts the whole game under
+        # AbioticFactor/, then fails with permission denied. Creating the path
+        # here, as uid 1000, before the nested mount exists, avoids that.
+        # Only matters on an empty server-files volume; a no-op afterwards.
+        #
+        # Same image as the server purely so this pulls nothing extra.
+        - name: make-saved-mountpoint
+          image: indifferentbroccoli/abiotic-factor-server-docker:v1.0.1@sha256:04ce69808a89f65e12a889044b23c35c143adf0877f678351e34bdacc1839beb
+          imagePullPolicy: IfNotPresent
+          command: [mkdir, -p, /data/server-files/AbioticFactor/Saved]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: server-files
+              mountPath: /data/server-files
+      containers:
+        - name: abiotic-factor
+          # Renovate bumps this (renovate.json5).
+          image: indifferentbroccoli/abiotic-factor-server-docker:v1.0.1@sha256:04ce69808a89f65e12a889044b23c35c143adf0877f678351e34bdacc1839beb
+          imagePullPolicy: IfNotPresent
+          env:
+            # The name in the server browser.
+            - name: SERVER_NAME
+              value: LINDS
+            # The directory under Saved/SaveGames/Server/Worlds/. Changing it
+            # starts a new world next to the old one. The world's gameplay
+            # settings are its SandboxSettings.ini in that directory, on the
+            # save volume: the server writes the defaults at first start; edit
+            # the file and restart the pod.
+            - name: WORLD_NAME
+              value: Cascade
+            - name: MAX_PLAYERS
+              value: "10"
+            # The image's defaults, spelled out because service.yaml and
+            # network-policy.yaml have to name the same numbers.
+            - name: GAME_PORT
+              value: "7777"
+            - name: QUERY_PORT
+              value: "27015"
+            # Generated in-cluster, see password.yaml.
+            - name: SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: abiotic-factor-password
+                  key: password
+            # No ADMIN_PASSWORD, which leaves in-game admin by password off.
+            # Moderators are Steam IDs in Saved/SaveGames/Server/Admin.ini on
+            # the save volume - kept out of git, like Minecraft's whitelist.
+            - name: TZ
+              value: Australia/Melbourne
+          ports:
+            - name: game
+              containerPort: 7777
+              protocol: UDP
+            - name: query
+              containerPort: 27015
+              protocol: UDP
+          # Ready = the server process exists (the image's own health check).
+          # With externalTrafficPolicy Local that also gates the BGP
+          # advertisement, so the router forwards nothing during the download.
+          # No liveness probe: the first start downloads the whole server, and
+          # a probe would kill it halfway.
+          readinessProbe:
+            exec:
+              command: [pgrep, -f, AbioticFactorServer-Win64-Shipping]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            # The image's README says 2 cores / 4GB minimum, 4+ cores / 8GB
+            # recommended. Requests at the minimum so the pod fits beside
+            # Minecraft; not measured here yet - adjust from Grafana once
+            # people have played. No CPU limit, as for the other game servers.
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: server-files
+              mountPath: /data/server-files
+            # Nested in the mount above on purpose - see the initContainer and
+            # saves-pvc.yaml.
+            - name: saves
+              mountPath: /data/server-files/AbioticFactor/Saved
+      volumes:
+        - name: server-files
+          persistentVolumeClaim:
+            claimName: abiotic-factor-server-files
+        - name: saves
+          persistentVolumeClaim:
+            claimName: abiotic-factor-saves
