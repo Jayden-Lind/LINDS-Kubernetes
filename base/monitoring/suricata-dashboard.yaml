@@ -45,6 +45,12 @@ data:
       },
       "links": [
         {
+          "title": "DNS blocking",
+          "type": "link",
+          "url": "/d/dns-blocking",
+          "icon": "dashboard"
+        },
+        {
           "title": "Router",
           "type": "link",
           "url": "/d/router",

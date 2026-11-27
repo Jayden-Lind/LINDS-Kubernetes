@@ -325,7 +325,8 @@ dashboard = {
     "timezone": "browser", "editable": True, "graphTooltip": 1, "schemaVersion": 39, "refresh": "1m",
     "time": {"from": "now-6h", "to": "now"},
     "annotations": {"list": []},
-    "links": [{"title": "Router", "type": "link", "url": "/d/router", "icon": "dashboard"},
+    "links": [{"title": "DNS blocking", "type": "link", "url": "/d/dns-blocking", "icon": "dashboard"},
+              {"title": "Router", "type": "link", "url": "/d/router", "icon": "dashboard"},
               {"title": "Network devices", "type": "link", "url": "/d/network-devices", "icon": "dashboard"}],
     "templating": {"list": [
         label_values("router", "Router", "hostname", "The router that saw the event."),
