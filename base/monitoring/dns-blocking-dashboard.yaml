@@ -85,7 +85,8 @@ data:
             "name": "list",
             "label": "List",
             "type": "custom",
-            "query": "Advertising and trackers : ads,Malware : malware,Phishing : phishing",
+            "description": "The list that refused the question. For a name on more than one list: malware and phishing first, then the first advertising list.",
+            "query": "Malware and phishing : threats,Advertising and trackers : ads,Advertising and trackers (OISD) : oisd",
             "multi": true,
             "includeAll": true,
             "allValue": ".+",
@@ -425,6 +426,25 @@ data:
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "threats"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Malware and phishing"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "ads"
                 },
                 "properties": [
@@ -444,6 +464,25 @@ data:
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "oisd"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Advertising and trackers (OISD)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "malware"
                 },
                 "properties": [
@@ -451,12 +490,12 @@ data:
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "#d55181"
+                      "fixedColor": "#8a8f98"
                     }
                   },
                   {
                     "id": "displayName",
-                    "value": "Malware"
+                    "value": "Malware (list to 2026-11-28)"
                   }
                 ]
               },
@@ -470,12 +509,12 @@ data:
                     "id": "color",
                     "value": {
                       "mode": "fixed",
-                      "fixedColor": "#c98500"
+                      "fixedColor": "#8a8f98"
                     }
                   },
                   {
                     "id": "displayName",
-                    "value": "Phishing"
+                    "value": "Phishing (list to 2026-11-28)"
                   }
                 ]
               }
@@ -658,7 +697,7 @@ data:
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 190
+                    "value": 240
                   },
                   {
                     "id": "mappings",
@@ -666,17 +705,25 @@ data:
                       {
                         "type": "value",
                         "options": {
-                          "ads": {
-                            "text": "Advertising and trackers",
+                          "threats": {
+                            "text": "Malware and phishing",
                             "index": 0
                           },
-                          "malware": {
-                            "text": "Malware",
+                          "ads": {
+                            "text": "Advertising and trackers",
                             "index": 1
                           },
-                          "phishing": {
-                            "text": "Phishing",
+                          "oisd": {
+                            "text": "Advertising and trackers (OISD)",
                             "index": 2
+                          },
+                          "malware": {
+                            "text": "Malware (list to 2026-11-28)",
+                            "index": 3
+                          },
+                          "phishing": {
+                            "text": "Phishing (list to 2026-11-28)",
+                            "index": 4
                           }
                         }
                       }
@@ -795,7 +842,7 @@ data:
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 190
+                    "value": 240
                   },
                   {
                     "id": "mappings",
@@ -803,17 +850,25 @@ data:
                       {
                         "type": "value",
                         "options": {
-                          "ads": {
-                            "text": "Advertising and trackers",
+                          "threats": {
+                            "text": "Malware and phishing",
                             "index": 0
                           },
-                          "malware": {
-                            "text": "Malware",
+                          "ads": {
+                            "text": "Advertising and trackers",
                             "index": 1
                           },
-                          "phishing": {
-                            "text": "Phishing",
+                          "oisd": {
+                            "text": "Advertising and trackers (OISD)",
                             "index": 2
+                          },
+                          "malware": {
+                            "text": "Malware (list to 2026-11-28)",
+                            "index": 3
+                          },
+                          "phishing": {
+                            "text": "Phishing (list to 2026-11-28)",
+                            "index": 4
                           }
                         }
                       }
@@ -980,7 +1035,7 @@ data:
                 "properties": [
                   {
                     "id": "custom.width",
-                    "value": 190
+                    "value": 240
                   },
                   {
                     "id": "mappings",
@@ -988,17 +1043,25 @@ data:
                       {
                         "type": "value",
                         "options": {
-                          "ads": {
-                            "text": "Advertising and trackers",
+                          "threats": {
+                            "text": "Malware and phishing",
                             "index": 0
                           },
-                          "malware": {
-                            "text": "Malware",
+                          "ads": {
+                            "text": "Advertising and trackers",
                             "index": 1
                           },
-                          "phishing": {
-                            "text": "Phishing",
+                          "oisd": {
+                            "text": "Advertising and trackers (OISD)",
                             "index": 2
+                          },
+                          "malware": {
+                            "text": "Malware (list to 2026-11-28)",
+                            "index": 3
+                          },
+                          "phishing": {
+                            "text": "Phishing (list to 2026-11-28)",
+                            "index": 4
                           }
                         }
                       }

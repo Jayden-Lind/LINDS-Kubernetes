@@ -20,8 +20,14 @@ PROM = {"type": "prometheus", "uid": "prometheus"}
 # router keeps its colour on each dashboard; the lists take the next slots.
 BLUE, ORANGE, AQUA, YELLOW, MAGENTA = "#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"
 ROUTER_COLOR = {"jd-router-01": BLUE, "linds-router-01": ORANGE}
-LIST_COLOR = {"ads": AQUA, "malware": MAGENTA, "phishing": YELLOW}
-LIST_NAME = {"ads": "Advertising and trackers", "malware": "Malware", "phishing": "Phishing"}
+# The log names of the lists (rpz-log-name in the routers' blocklist.conf).
+# "malware" and "phishing" are the two lists that "threats" replaced on
+# 2026-11-28: they stay here, in grey, for the lines that Loki has of them.
+GREY = "#8a8f98"
+LIST_COLOR = {"threats": MAGENTA, "ads": AQUA, "oisd": YELLOW, "malware": GREY, "phishing": GREY}
+LIST_NAME = {"threats": "Malware and phishing", "ads": "Advertising and trackers",
+             "oisd": "Advertising and trackers (OISD)", "malware": "Malware (list to 2026-11-28)",
+             "phishing": "Phishing (list to 2026-11-28)"}
 
 # One refused question, with its parts as labels. A device is the address
 # that asked: a DNS forwarder (the cluster's DNS, a domain controller) shows
@@ -101,7 +107,7 @@ def events(title, desc, expr, grid, columns, widths, lines=1000):
                 {"matcher": {"id": "byName", "options": "Time"},
                  "properties": [{"id": "custom.width", "value": 178}, {"id": "unit", "value": "dateTimeAsLocal"}]},
                 {"matcher": {"id": "byName", "options": "List"},
-                 "properties": [{"id": "custom.width", "value": 190},
+                 "properties": [{"id": "custom.width", "value": 240},
                                 {"id": "mappings", "value": [{"type": "value", "options": {
                                     k: {"text": v, "index": i} for i, (k, v) in enumerate(LIST_NAME.items())}}]}]},
             ] + [width(name, px) for name, px in widths.items()],
@@ -113,7 +119,7 @@ def top(title, desc, expr, grid, columns, count):
     rename = dict(columns)
     rename["Value #A"] = count
     list_mapping = [{"matcher": {"id": "byName", "options": "List"},
-                     "properties": [{"id": "custom.width", "value": 190},
+                     "properties": [{"id": "custom.width", "value": 240},
                                     {"id": "mappings", "value": [{"type": "value", "options": {
                                         k: {"text": v, "index": i} for i, (k, v) in enumerate(LIST_NAME.items())}}]}]}]
     return {
@@ -233,7 +239,10 @@ dashboard = {
          "multi": True, "includeAll": True, "allValue": ".+", "current": {"text": "All", "value": "$__all"},
          "options": []},
         {"name": "list", "label": "List", "type": "custom",
-         "query": "Advertising and trackers : ads,Malware : malware,Phishing : phishing", "multi": True,
+         "description": "The list that refused the question. For a name on more than one list: malware and "
+                        "phishing first, then the first advertising list.",
+         "query": "Malware and phishing : threats,Advertising and trackers : ads,"
+                  "Advertising and trackers (OISD) : oisd", "multi": True,
          "includeAll": True, "allValue": ".+", "current": {"text": "All", "value": "$__all"}, "options": []},
         textbox("device", "Device", ".*", "The address that asked, as a regular expression. Example: "
                 "192[.]168[.]1[.]20 for one device."),
