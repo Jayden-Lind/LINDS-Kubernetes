@@ -96,7 +96,7 @@ example after node restarts.
 
 | Section | What it shows |
 |---|---|
-| Top | Requests per second, 5xx share, 4xx share, request time p50 and p95, client addresses, for each controller. Sites ranked by 5xx and by latency. |
+| Top | Requests per second, 5xx share, 4xx share (without 499), request time p50 and p95, client addresses, for each controller. The Sites table: requests, 5xx, request time and time to first byte for each site, the most 5xx first. Click a heading to rank by latency. |
 | Sites | Requests by status class, server errors by kind (no ready pod, 502, 503, 504, other), request time, time to first byte by site, paths with the most 5xx, paths with slow answers. The Site variable selects the sites. |
 | Clients | Internet and internal clients, top clients, clients with the most 4xx, user agents, unknown hosts (default server), scanner requests and scanner clients. |
 | Logins and client certificates | 401 and 403 by site, the reasons that nginx-mtls refused requests, requests by client certificate, and the tripwire count (must be 0). |

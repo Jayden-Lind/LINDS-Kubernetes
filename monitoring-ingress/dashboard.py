@@ -107,7 +107,9 @@ def row(title, y, collapsed=False, panels=None):
 
 
 def stat(title, desc, targets, grid, unit="short", decimals=None, overrides=None, ds=LOKI, calc="lastNotNull",
-         no_value="0", color=None, thresholds=None, mappings=None, text_mode="value_and_name"):
+         no_value="-", color=None, thresholds=None, mappings=None, text_mode="value_and_name", rows=True):
+    """A Loki instant query returns one table frame with a row for each series.
+    rowsToFields makes each row a field, named by its first text column."""
     defaults = {"unit": unit, "noValue": no_value, "color": color or {"mode": "fixed", "fixedColor": "text"},
                 "mappings": mappings or []}
     if decimals is not None:
@@ -116,7 +118,7 @@ def stat(title, desc, targets, grid, unit="short", decimals=None, overrides=None
         defaults["thresholds"] = thresholds
     return {
         "type": "stat", "id": next(_ids), "title": title, "description": desc, "gridPos": grid, "datasource": ds,
-        "targets": targets,
+        "targets": targets, "transformations": [{"id": "rowsToFields", "options": {}}] if rows else [],
         "options": {"reduceOptions": {"calcs": [calc], "fields": "", "values": False}, "colorMode": "value",
                     "graphMode": "none", "textMode": text_mode, "justifyMode": "auto", "orientation": "vertical",
                     "wideLayout": True, "text": {"valueSize": 22, "titleSize": 11}, "showPercentChange": False},
@@ -125,7 +127,7 @@ def stat(title, desc, targets, grid, unit="short", decimals=None, overrides=None
 
 
 def series(title, desc, targets, grid, unit="short", overrides=None, ds=LOKI, bars=False, stack=False,
-           decimals=None, soft_max=None, legend_calcs=None, color_mode="palette-classic"):
+           decimals=None, soft_max=None, legend_calcs=None, color_mode="palette-classic", log=False):
     custom = {"drawStyle": "bars" if bars else "line", "lineWidth": 0 if bars else 2,
               "fillOpacity": 80 if bars else 0, "showPoints": "never", "spanNulls": False,
               "stacking": {"mode": "normal" if stack else "none", "group": "A"}}
@@ -133,7 +135,11 @@ def series(title, desc, targets, grid, unit="short", overrides=None, ds=LOKI, ba
         custom["barWidthFactor"] = 0.8
     if soft_max is not None:
         custom["axisSoftMax"] = soft_max
-    defaults = {"unit": unit, "min": 0, "color": {"mode": color_mode}, "custom": custom}
+    if log:
+        custom["scaleDistribution"] = {"type": "log", "log": 10}
+    defaults = {"unit": unit, "color": {"mode": color_mode}, "custom": custom}
+    if not log:
+        defaults["min"] = 0
     if decimals is not None:
         defaults["decimals"] = decimals
     return {
@@ -166,7 +172,7 @@ SRC_CELL = override("Source", extra=[{"id": "mappings", "value": [{"type": "valu
 STATUS_CELL = override("Status", extra=[{"id": "mappings", "value": [
     {"type": "regex", "options": {"pattern": "^5..$", "result": {"color": CRIT, "index": 0}}},
     {"type": "regex", "options": {"pattern": "^4..$", "result": {"color": WARN, "index": 1}}}]},
-    {"id": "custom.cellOptions", "value": {"type": "color-text"}}, {"id": "custom.width", "value": 70}])
+    {"id": "custom.cellOptions", "value": {"type": "color-text"}}, {"id": "custom.width", "value": 85}])
 
 
 def table(title, desc, targets, grid, columns, sort=None, overrides=None, ds=LOKI, merge=False, units=None):
@@ -235,7 +241,7 @@ def text(title, content, grid):
 ALL = access()
 S = access("s")
 FIVE = access("s") + ' | s=~"5.."'
-FOUR = access("s") + ' | s=~"4.."'
+FOUR = access("s") + ' | s=~"4.." | s!="499"'
 RT = access("rt", "s") + ' | s!="101" | unwrap rt | __error__=""'
 TTFB = access("uht") + ' | unwrap uht | __error__=""'
 CLASS = access("s") + ' | label_format cls=`{{ printf "%.1sxx" .s }}`'
@@ -267,55 +273,57 @@ panels += [
     stat("Server errors (5xx)", "The share of requests answered with 5xx.",
          [target(ratio(FIVE), "{{namespace}}", instant=True)], g(4, y, 4, 4), unit="percentunit", decimals=2,
          overrides=NS_OVERRIDES),
-    stat("Client errors (4xx)", "The share of requests answered with 4xx. On nginx-mtls this includes 444: a "
-         "request without an allowed client certificate, closed with no answer.",
+    stat("Client errors (4xx)", "The share of requests answered with 4xx, without 499 (the client closed the "
+         "connection first). On nginx-mtls this includes 444: a request without an allowed client certificate, "
+         "closed with no answer.",
          [target(ratio(FOUR), "{{namespace}}", instant=True)], g(8, y, 4, 4), unit="percentunit", decimals=1,
          overrides=NS_OVERRIDES),
     stat("Request time p50", "Half of the requests took less than this (websockets left out).",
          [target("quantile_over_time(0.5, %s [$__range]) by (namespace)" % RT, "{{namespace}}", instant=True)],
-         g(12, y, 4, 4), unit="s", decimals=3, overrides=NS_OVERRIDES, no_value="-"),
+         g(12, y, 4, 4), unit="s", overrides=NS_OVERRIDES),
     stat("Request time p95", "95% of the requests took less than this (websockets left out). A long download "
          "or a stream counts its whole time: see time to first byte in \"Sites by latency\".",
          [target("quantile_over_time(0.95, %s [$__range]) by (namespace)" % RT, "{{namespace}}", instant=True)],
-         g(16, y, 4, 4), unit="s", decimals=3, overrides=NS_OVERRIDES, no_value="-"),
+         g(16, y, 4, 4), unit="s", overrides=NS_OVERRIDES),
     stat("Client addresses", "Different client addresses in the time range.",
          [target("count by (namespace) (%s)" % count(ALL, "namespace, ip"), "{{namespace}}", instant=True)],
          g(20, y, 4, 4), overrides=NS_OVERRIDES),
 ]
 y += 4
 panels += [
-    table("Sites by server errors", "Each site (the server name that answered) in the time range, the most 5xx "
-          "first. \"_\" is the default server: a host that no Ingress has.",
-          [tq(count(ALL, "namespace, sn"), "A"), tq(count(FIVE, "namespace, sn"), "B"),
-           tq("%s / %s" % (count(FIVE, "namespace, sn"), count(ALL, "namespace, sn")), "C")],
-          g(0, y, 12, 8), {"sn": "Site", "namespace": "Controller", "Value #A": "Requests", "Value #B": "5xx",
-                           "Value #C": "5xx share"}, sort="5xx", merge=True,
-          overrides=[NS_CELL, bar_cell("5xx share", CRIT)], units={"5xx share": "percentunit"}),
-    table("Sites by latency", "Request time is the whole request, to the last byte. Time to first byte is how "
-          "long the app took to start its answer: the better sign of a slow app, because long downloads and "
-          "streams do not count.",
+    table("Sites", "Each site (the server name that answered) in the time range, the most 5xx first. Click a "
+          "heading to sort by it. \"_\" is the default server: a host that no Ingress has. Request time is the "
+          "whole request, to the last byte. First byte is how long the app took to start its answer: the better "
+          "sign of a slow app, because long downloads and streams do not count.",
           [tq(count(ALL, "namespace, sn"), "A"),
-           tq("quantile_over_time(0.5, %s [$__range]) by (namespace, sn)" % RT, "B"),
-           tq("quantile_over_time(0.95, %s [$__range]) by (namespace, sn)" % RT, "C"),
-           tq("quantile_over_time(0.95, %s [$__range]) by (namespace, sn)" % TTFB, "D")],
-          g(12, y, 12, 8), {"sn": "Site", "namespace": "Controller", "Value #A": "Requests",
-                            "Value #B": "Request p50", "Value #C": "Request p95", "Value #D": "First byte p95"},
-          sort="First byte p95", merge=True, overrides=[NS_CELL, bar_cell("First byte p95", YELLOW)],
-          units={"Request p50": "s", "Request p95": "s", "First byte p95": "s"}),
+           tq("%s or %s * 0" % (count(FIVE, "namespace, sn"), count(ALL, "namespace, sn")), "B"),
+           tq("(%s or %s * 0) / %s" % (count(FIVE, "namespace, sn"), count(ALL, "namespace, sn"),
+                                       count(ALL, "namespace, sn")), "C"),
+           tq("quantile_over_time(0.5, %s [$__range]) by (namespace, sn)" % RT, "D"),
+           tq("quantile_over_time(0.95, %s [$__range]) by (namespace, sn)" % RT, "E"),
+           tq("quantile_over_time(0.95, %s [$__range]) by (namespace, sn)" % TTFB, "F")],
+          g(0, y, 24, 9), {"sn": "Site", "namespace": "Controller", "Value #A": "Requests", "Value #B": "5xx",
+                           "Value #C": "5xx share", "Value #D": "Request p50", "Value #E": "Request p95",
+                           "Value #F": "First byte p95"},
+          sort="5xx", merge=True,
+          overrides=[NS_CELL, width("Site", 230), width("Requests", 100), width("5xx", 80),
+                     width("Request p50", 130), width("Request p95", 130),
+                     bar_cell("5xx share", CRIT), bar_cell("First byte p95", YELLOW)],
+          units={"5xx share": "percentunit", "Request p50": "s", "Request p95": "s", "First byte p95": "s"}),
 ]
-y += 8
+y += 9
 
 panels.append(row("Sites (the Site variable selects them)", y))
 y += 1
 panels += [
     series("Requests by status class", "Requests for each interval, stacked by status class.",
            [target(count(CLASS, "cls", "$__auto"), "{{cls}}")], g(0, y, 12, 8), bars=True, stack=True,
-           overrides=CLASS_OVERRIDES, decimals=0),
+           overrides=CLASS_OVERRIDES),
     series("Server errors by kind", "\"no ready pod\": the Service had no ready pod, so nginx answered 502 "
            "itself. 502, 504: nginx could not reach the app or it did not answer in time. 503 and other 5xx "
            "mostly come from the app.",
            [target(count(ERROR_KIND, "kind", "$__auto"), "{{kind}}")], g(12, y, 12, 8), bars=True, stack=True,
-           decimals=0, overrides=[override("no ready pod (502)", color=CRIT), override("502 bad gateway", color=SERIOUS),
+           overrides=[override("no ready pod (502)", color=CRIT), override("502 bad gateway", color=SERIOUS),
                                   override("503 unavailable", color=MAGENTA), override("504 timeout", color=YELLOW),
                                   override("other 5xx (from the app)", color=AQUA)]),
 ]
@@ -325,7 +333,7 @@ panels += [
            [target("quantile_over_time(0.5, %s [$__auto]) by (namespace)" % RT, "p50 {{namespace}}", "A"),
             target("quantile_over_time(0.95, %s [$__auto]) by (namespace)" % RT, "p95 {{namespace}}", "B"),
             target("quantile_over_time(0.99, %s [$__auto]) by (namespace)" % RT, "p99 {{namespace}}", "C")],
-           g(0, y, 12, 8), unit="s",
+           g(0, y, 12, 8), unit="s", log=True,
            overrides=[override("p50 nginx-ingress", "p50 nginx", AQUA), override("p95 nginx-ingress", "p95 nginx", BLUE),
                       override("p99 nginx-ingress", "p99 nginx", MAGENTA),
                       override("p50 nginx-ingress-mtls", "p50 nginx-mtls", YELLOW),
@@ -334,7 +342,7 @@ panels += [
     series("Time to first byte p95, by site", "How long each site's app took to start its answer (95% of "
            "requests were faster). Pick sites with the Site variable to compare a few.",
            [target("quantile_over_time(0.95, %s [$__auto]) by (sn)" % TTFB, "{{sn}}")], g(12, y, 12, 8), unit="s",
-           legend_calcs=["mean", "max"]),
+           legend_calcs=["mean", "max"], log=True),
 ]
 y += 8
 panels += [
@@ -358,7 +366,7 @@ panels += [
     series("Internet and internal clients", "Requests for each interval by where the client is. Internal: a "
            "private address (LAN, VPN, pods). Internet: every other address. nginx sees the real address of an "
            "internet client: the router forwards port 443 without NAT and Cloudflare only serves DNS.",
-           [target(count(ALL, "src", "$__auto"), "{{src}}")], g(0, y, 8, 8), bars=True, stack=True, decimals=0,
+           [target(count(ALL, "src", "$__auto"), "{{src}}")], g(0, y, 8, 8), bars=True, stack=True,
            overrides=[override("public", "internet", ORANGE), override("internal", color=BLUE)]),
     table("Clients with the most requests", "", [tq("topk(20, %s)" % count(ALL, "ip, src, namespace"))],
           g(8, y, 8, 8), {"ip": "Client", "src": "Source", "namespace": "Controller", "Value #A": "Requests"},
@@ -402,12 +410,12 @@ panels += [
     series("401 and 403 by site", "Answers that mean \"log in first\" (401) or \"not allowed\" (403). The alert "
            "IngressAuthFailureBurst fires at 20 from one client to one site in 10 minutes.",
            [target(count(access("s") + ' | s=~"401|403"', "sn", "$__auto"), "{{sn}}")], g(0, y, 12, 8),
-           bars=True, stack=True, decimals=0),
+           bars=True, stack=True),
     series("nginx-mtls: refused requests by reason", "Why nginx-mtls refused a request. 444 closes the "
            "connection with no answer: no certificate, a certificate that linds-ca did not sign, or a subject "
            "that is not in the allow map. A plain HTTP request to port 443 and a request without a Host get 400.",
            [target(count(REFUSAL, "reason", "$__auto"), "{{reason}}")], g(12, y, 12, 8), bars=True, stack=True,
-           decimals=0, overrides=[override("no certificate", color=BLUE), override("certificate not trusted", color=ORANGE),
+           overrides=[override("no certificate", color=BLUE), override("certificate not trusted", color=ORANGE),
                                   override("subject not allowed", color=AQUA), override("plain HTTP to port 443", color=YELLOW),
                                   override("bad request", color=MAGENTA)]),
 ]
@@ -417,10 +425,9 @@ panels += [
          "verified, allowed client certificate. This must be 0. The alert IngressMTLSPassedWithoutCertificate "
          "fires on one.",
          [target("sum(count_over_time(%s [$__range]))" % UNVERIFIED, "served", instant=True)], g(0, y, 4, 8),
-         text_mode="value", color={"mode": "thresholds"},
+         text_mode="value", color={"mode": "thresholds"}, no_value="✓ 0", rows=False,
          thresholds={"mode": "absolute", "steps": [{"color": GOOD, "value": None}, {"color": CRIT, "value": 1}]},
-         mappings=[{"type": "value", "options": {"0": {"text": "✓ 0", "index": 0}}},
-                   {"type": "range", "options": {"from": 1, "to": 1e12, "result": {"text": "✗ ${__value.text}", "index": 1}}}]),
+         mappings=[{"type": "value", "options": {"0": {"text": "✓ 0", "index": 0}}}]),
     table("nginx-mtls requests by client certificate", "The subject of each client certificate that was "
           "presented, with the result of the check. Only subjects in the allow map (applications/"
           "nginx-ingress-mtls.yaml) get through.",
@@ -440,13 +447,13 @@ panels.append(row("Requests", y))
 y += 1
 panels.append(events(
     "Recent requests", "The newest 500 requests that match the variables. \"Status\" and \"Path contains\" "
-    "apply only here. Time is the request time in seconds; Upstream is the app's status.",
+    "apply only here. Seconds is the request time; Upstream is the app's status.",
     access("host", "m", "path", "proto", "s", "rt", "ups", "bytes", "tls", "cv", "ua")
     + ' | s=~"$status" | path=~"(?i).*$path.*"', g(0, y, 24, 14),
     {"namespace": "Controller", "ip": "Client", "src": "Source", "sn": "Site", "m": "Method", "path": "Path",
-     "s": "Status", "rt": "Time", "ups": "Upstream", "bytes": "Bytes", "proto": "Protocol", "tls": "TLS",
+     "s": "Status", "rt": "Seconds", "ups": "Upstream", "bytes": "Bytes", "proto": "Protocol", "tls": "TLS",
      "cv": "Certificate", "ua": "User agent"},
-    {"Client": 125, "Site": 180, "Method": 70, "Path": 320, "Time": 70, "Upstream": 80, "Bytes": 80,
+    {"Client": 125, "Site": 180, "Method": 70, "Path": 320, "Seconds": 75, "Upstream": 80, "Bytes": 80,
      "Protocol": 85, "TLS": 75, "Certificate": 95}, [NS_CELL, SRC_CELL, STATUS_CELL]))
 y += 14
 
@@ -462,13 +469,14 @@ panels += [
                    "{{namespace}}", ds=PROM)], g(0, y, 8, 8), unit="reqps", ds=PROM, overrides=NS_OVERRIDES),
     series("Upstream 5xx share by Ingress", "The share of the app's answers that were 5xx, for each Ingress. "
            "This counts only requests that reached an app: a site with no ready pod is not here.",
-           [target('sum by (resource_namespace, resource_name) (rate(%s_count{%s, code=~"5.."}[$__rate_interval])) / '
-                   'sum by (resource_namespace, resource_name) (rate(%s_count{%s}[$__rate_interval]))' % (LAT, PNS, LAT, PNS),
+           [target('(sum by (resource_namespace, resource_name) (rate(%s_count{%s, code=~"5.."}[$__rate_interval])) or '
+                   'sum by (resource_namespace, resource_name) (rate(%s_count{%s}[$__rate_interval])) * 0) / '
+                   'sum by (resource_namespace, resource_name) (rate(%s_count{%s}[$__rate_interval]))' % (LAT, PNS, LAT, PNS, LAT, PNS),
                    "{{resource_namespace}}/{{resource_name}}", ds=PROM)], g(8, y, 8, 8), unit="percentunit", ds=PROM,
            soft_max=0.05),
-    series("Upstream response time p95 by Ingress", "From the controllers' latency histogram (the time to the "
-           "app's whole answer). Websockets push it to the top bucket.",
-           [target('histogram_quantile(0.95, sum by (le, resource_namespace, resource_name) (rate(%s_bucket{%s}[$__rate_interval]))) / 1000' % (LAT, PNS),
+    series("Upstream response time p95 by Ingress", "From the controllers' latency histogram: the time to the "
+           "app's whole answer. Websocket upgrades (101) are left out: they stay open and sit in the top bucket.",
+           [target('histogram_quantile(0.95, sum by (le, resource_namespace, resource_name) (rate(%s_bucket{%s, code!="101"}[$__rate_interval]))) / 1000' % (LAT, PNS),
                    "{{resource_namespace}}/{{resource_name}}", ds=PROM)], g(16, y, 8, 8), unit="s", ds=PROM),
 ]
 y += 8
@@ -476,26 +484,28 @@ panels += [
     table("Ingresses in the time range", "Requests that reached an app, by Ingress, from the latency histogram.",
           [target('sum by (class, resource_namespace, resource_name) (increase(%s_count{%s}[$__range]))' % (LAT, PNS),
                   ref="A", instant=True, ds=PROM, fmt="table"),
-           target('sum by (class, resource_namespace, resource_name) (increase(%s_count{%s, code=~"5.."}[$__range])) / '
-                  'sum by (class, resource_namespace, resource_name) (increase(%s_count{%s}[$__range]))' % (LAT, PNS, LAT, PNS),
+           target('(sum by (class, resource_namespace, resource_name) (increase(%s_count{%s, code=~"5.."}[$__range])) or '
+                  'sum by (class, resource_namespace, resource_name) (increase(%s_count{%s}[$__range])) * 0) / '
+                  'sum by (class, resource_namespace, resource_name) (increase(%s_count{%s}[$__range]))' % (LAT, PNS, LAT, PNS, LAT, PNS),
                   ref="B", instant=True, ds=PROM, fmt="table"),
-           target('histogram_quantile(0.95, sum by (le, class, resource_namespace, resource_name) (increase(%s_bucket{%s}[$__range]))) / 1000' % (LAT, PNS),
+           target('histogram_quantile(0.95, sum by (le, class, resource_namespace, resource_name) (increase(%s_bucket{%s, code!="101"}[$__range]))) / 1000' % (LAT, PNS),
                   ref="C", instant=True, ds=PROM, fmt="table")],
-          g(0, y, 10, 9), {"resource_namespace": "Namespace", "resource_name": "Ingress", "class": "Class",
+          g(0, y, 12, 9), {"resource_namespace": "Namespace", "resource_name": "Ingress", "class": "Class",
                            "Value #A": "Requests", "Value #B": "5xx share", "Value #C": "p95"},
           sort="Requests", merge=True, ds=PROM, overrides=[bar_cell("Requests")],
           units={"5xx share": "percentunit", "p95": "s", "Requests": "short"}),
     table("Sites on the internet", "Hosts with an Ingress of class nginx-mtls: the mTLS mirrors that "
           "external-dns-public publishes in Cloudflare. The router forwards port 443 to nginx-mtls.",
-          [target('max by (host, namespace, ingress) (kube_ingress_path * on (namespace, ingress) group_left '
-                  'kube_ingress_info{ingressclass="nginx-mtls"})', ref="A", instant=True, ds=PROM, fmt="table")],
-          g(10, y, 7, 9), {"host": "Host", "namespace": "Namespace", "ingress": "Mirror Ingress"}, ds=PROM),
+          [target('label_join(max by (host, namespace, ingress) (kube_ingress_path * on (namespace, ingress) '
+                  'group_left kube_ingress_info{ingressclass="nginx-mtls"}), "mirror", "/", "namespace", "ingress")',
+                  ref="A", instant=True, ds=PROM, fmt="table")],
+          g(12, y, 6, 9), {"host": "Host", "mirror": "Mirror Ingress"}, ds=PROM),
     series("Active connections and reloads", "Open client connections per controller, and each nginx reload "
            "(the controller reloads nginx when an Ingress or its pods change).",
            [target('sum by (namespace) (nginx_ingress_nginx_connections_active{%s})' % PNS, "{{namespace}}", "A", ds=PROM),
             target('sum by (namespace) (increase(nginx_ingress_controller_nginx_reloads_total{%s}[$__rate_interval]))' % PNS,
                    "reloads {{namespace}}", "B", ds=PROM)],
-           g(17, y, 7, 9), ds=PROM, overrides=NS_OVERRIDES + [
+           g(18, y, 6, 9), ds=PROM, overrides=NS_OVERRIDES + [
                override("reloads nginx-ingress", "reloads nginx", AQUA, [{"id": "custom.drawStyle", "value": "bars"}, {"id": "custom.fillOpacity", "value": 80}]),
                override("reloads nginx-ingress-mtls", "reloads nginx-mtls", YELLOW, [{"id": "custom.drawStyle", "value": "bars"}, {"id": "custom.fillOpacity", "value": 80}])]),
 ]
