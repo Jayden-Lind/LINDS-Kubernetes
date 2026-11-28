@@ -22,6 +22,14 @@ permanentLockout: false
 maxFailureWaitSeconds: 900
 failureFactor: 10
 
+# Login events go to the server log through the event listener jboss-logging
+# (the default of a new realm, written here so that it stays). The log level
+# for successful logins is a server option (keycloak.yaml,
+# additionalOptions). Events are not stored in the database (eventsEnabled
+# stays false): Loki keeps the log for 30 days.
+eventsListeners:
+  - jboss-logging
+
 # Short access token, long session: 30 days idle, 365 days at most. Grafana
 # and Argo CD both refresh, so the session length is what decides how often
 # either asks for a password; the access token stays at 5 minutes.

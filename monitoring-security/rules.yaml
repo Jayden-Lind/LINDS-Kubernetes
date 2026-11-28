@@ -1,0 +1,227 @@
+# Alerts on logins and on logs that stop, read from the logs in Loki.
+#
+# These add to the alerts in base/monitoring/windows-security-alerts.yaml
+# (attacks on the domain) and base/monitoring/router-vpn-alerts.yaml (VPN
+# logins). That file tells how the ruler is set up: Loki's ruler runs the
+# rules, and its rules sidecar loads every ConfigMap in this namespace that
+# has the label loki_rule.
+#
+# Each alert has the label category="security". Alertmanager sends these to
+# the receiver discord-security, once, and sends no "resolved" message
+# (base/monitoring/alertmanager-config.yaml). Most alerts here say that
+# something happened: they fire while the event is less than 10 minutes old,
+# then end by themselves.
+#
+# The base rate in each comment is the number of times that the rule would
+# have fired on the logs of 2026-10-30 to 2026-11-28 (all that Loki keeps).
+# A rule that fires on normal activity is worse than no rule, so each rule
+# here fired zero times on those 29 days.
+#
+# The rules name no person, account or address. A login by a person who is
+# allowed in still fires a rule if it is unusual, for example a password
+# login. Read the alert, then the dashboard "Access and logins"
+# (uid security-access).
+#
+# The address that a login came from is the label src. It is not "source":
+# the Windows logs have structured metadata with that name, and LogQL renames
+# a parsed label that has the name of an existing one (source_extracted).
+#
+# To test a rule without an alert, run its expression in Grafana Explore
+# (data source Loki) over a time range that has the event.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-alerts
+  namespace: monitoring
+  labels:
+    loki_rule: ""
+data:
+  security.yaml: |
+    groups:
+      - name: security-logins
+        interval: 1m
+        rules:
+          # An SSH login that did not use a key: a password or
+          # keyboard-interactive login. Every SSH login in the logs used a
+          # key (3,240 in 29 days), and the routers refuse passwords. The
+          # Proxmox hosts allow a root password, so a password login there
+          # is someone with that password. Base rate: 0.
+          - alert: SSHPasswordLogin
+            expr: |
+              sum by (hostname, user, src, method) (
+                count_over_time({job="syslog", appname=~"sshd.*"} |= "Accepted "
+                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<src>\S+) port`
+                  | method!="publickey"
+                [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.user }} logged in to {{ $labels.hostname }} over SSH
+                from {{ $labels.src }} with {{ $labels.method }}, not with a
+                key.
+
+          # An SSH login from an address that is not private. The routers
+          # accept SSH only from 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16
+          # (LINDS-Ansible roles/router, nftables input rule 4, set
+          # lan_addresses), and the other hosts are on private networks. An
+          # IPv6 login from a global address also fires: no device here
+          # logs in over IPv6. Base rate: 0.
+          - alert: SSHLoginFromPublicAddress
+            expr: |
+              sum by (hostname, user, src) (
+                count_over_time({job="syslog", appname=~"sshd.*"} |= "Accepted "
+                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<src>\S+) port`
+                  | src!~`(?i)(::ffff:)?(10|127)[.].*|(::ffff:)?192[.]168[.].*|(::ffff:)?172[.](1[6-9]|2[0-9]|3[01])[.].*|(::ffff:)?169[.]254[.].*|::1|f[cd][0-9a-f]{2}:.*|fe[89ab][0-9a-f]:.*`
+                [10m])
+              ) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.user }} logged in to {{ $labels.hostname }} over SSH
+                from {{ $labels.src }}, an address that is not private.
+
+          # Many failed logins from one address in 10 minutes: password
+          # guessing against SSH, the Proxmox web interface and API, or
+          # Keycloak. The highest counts in the 29 days were 2 SSH failure
+          # lines and 1 Proxmox failure from one address. Base rate: 0.
+          # - SSH: one guess writes one or two lines (a "Failed" or "Invalid
+          #   user" line, then "Connection closed by ... [preauth]"), so 10
+          #   lines are about five guesses.
+          # - Proxmox: pvedaemon logs each failed password with the address.
+          # - Keycloak: the LOGIN_ERROR events of its jboss-logging event
+          #   listener (keycloak/keycloak.yaml). Keycloak locks an account
+          #   for a while after 10 failures (realm/linds.yaml), so 5 failures
+          #   come before the lock.
+          - alert: LoginFailureBurst
+            expr: |
+              sum by (system, hostname, src) (
+                count_over_time({job="syslog", appname=~"sshd.*"}
+                  |~ `Failed \S+ for |Invalid user |(Connection closed by|Disconnected from) (authenticating|invalid) user |maximum authentication attempts|not allowed because`
+                  | regexp `(from|user \S*) (?P<src>[0-9A-Fa-f.:]+)( port|$| not allowed)`
+                  | label_format system="ssh"
+                [10m])
+              ) >= 10
+              or
+              sum by (system, hostname, src) (
+                count_over_time({job="syslog", appname="pvedaemon"} |= "authentication failure;"
+                  | regexp `rhost=(?:::ffff:)?(?P<src>\S+)`
+                  | label_format system="proxmox"
+                [10m])
+              ) >= 5
+              or
+              sum by (system, hostname, src) (
+                count_over_time({namespace="keycloak", container="keycloak"} |= `type="LOGIN_ERROR"`
+                  | regexp `ipAddress="(?P<src>[^"]*)"`
+                  | regexp `error="(?P<error>[^"]*)"`
+                  | error=~"invalid_user_credentials|user_not_found|user_temporarily_disabled|user_disabled"
+                  | label_format system="keycloak", hostname="keycloak"
+                [10m])
+              ) >= 5
+            # A slow attack can drop below the count for a minute. This keeps
+            # it one alert, and one message.
+            keep_firing_for: 30m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $value }} failed {{ $labels.system }} logins to
+                {{ $labels.hostname }} from {{ $labels.src }} in 10 minutes.
+
+          # sudo or su refused a user: the user may not use sudo, typed a
+          # wrong password, or asked for a command that it may not run. The
+          # accounts here use sudo without a password, so this does not come
+          # from a typing error. Base rate: 0.
+          - alert: RootAccessRefused
+            expr: |
+              sum by (hostname, user, reason) (
+                count_over_time({job="syslog", appname=~"sudo|su"}
+                  |~ ` : (user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)|FAILED SU `
+                  | regexp `(?P<user>[^ ]+) : (?P<reason>user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)`
+                  | regexp `FAILED SU \(to \S+\) (?P<user>\S+) on`
+                  | label_format reason=`{{ if .reason }}{{ .reason }}{{ else }}su refused{{ end }}`
+                [10m])
+              ) > 0
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.hostname }} refused root access to
+                {{ $labels.user }}: {{ $labels.reason }}.
+
+          # Password guessing against the domain: 10 or more failed logons for
+          # user accounts from one address in 10 minutes. 4625 is a failed
+          # logon (NTLM, or a logon at a server), 4771 a failed Kerberos
+          # pre-authentication. Computer accounts (names that end in $) are
+          # left out: a computer whose machine password is out of date fails
+          # in bursts (16 events in 2 minutes on 2026-11-09). The domain has
+          # no lockout policy, so nothing else stops a guesser. A spray of
+          # one password against every user also passes 10. The highest
+          # count in the 29 days was 3. Base rate: 0.
+          - alert: ADPasswordGuessing
+            expr: |
+              sum by (client) (
+                count_over_time({job="windows", channel="Security"} | event_id=~"4625|4771"
+                  | json event_data="event_data"
+                  | line_format "{{.event_data}}"
+                  | regexp "<Data Name='TargetUserName'>(?P<account>[^<]*)</Data>"
+                  | account!="" | account!~".*[$]"
+                  | regexp "<Data Name='IpAddress'>(?:::ffff:)?(?P<client>[^<]*)</Data>"
+                [10m])
+              ) >= 10
+            keep_firing_for: 30m
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $value }} failed domain logons for user accounts from
+                {{ $labels.client }} in 10 minutes. This is password guessing.
+
+      # A host that stops sending logs. Then the other rules cannot see it,
+      # so this is an alert on its own. These sources sent a line at least
+      # every hour on each of the 29 days (the longest gap was 1.0 hours);
+      # the torrent VMs, LINDS-Plex-01 and the switches have gaps of 2 to
+      # 100 hours and are not here. Add a host to both lists when it sends
+      # logs all the time. Base rate: 0.
+      #
+      # The rule fires when the source sent lines in the 6 hours before and
+      # none in the last 2 hours, while other sources still send (the last
+      # condition, so that a stop of Loki or Alloy is one alert,
+      # LokiNotIngesting, and not one for each host). It fires for up to 8
+      # hours. The label site="linds" lets Alertmanager hold it back while
+      # the tunnel to LINDS is down (RouterTunnelDown). Every 5 minutes: it
+      # reads 8 hours of logs.
+      - name: security-log-sources
+        interval: 5m
+        rules:
+          - alert: LogSourceSilent
+            expr: |
+              (
+                sum by (job, hostname, site) (
+                  count_over_time({job=~"syslog|windows", hostname=~"jd-router-01|linds-router-01|jd-proxmox-02|linds-proxmox-01|linds-truenas-01.linds.com.au|jd-dc-01|jd-fs-01|linds-dc|linds-dc2"}
+                    | label_format site=`{{ if hasPrefix "linds" (lower .hostname) }}linds{{ else }}jd{{ end }}`
+                  [6h] offset 2h)
+                )
+                unless on (job, hostname)
+                sum by (job, hostname) (
+                  count_over_time({job=~"syslog|windows", hostname=~"jd-router-01|linds-router-01|jd-proxmox-02|linds-proxmox-01|linds-truenas-01.linds.com.au|jd-dc-01|jd-fs-01|linds-dc|linds-dc2"}[2h])
+                )
+              )
+              and on ()
+              (sum(count_over_time({job=~"syslog|windows"}[10m])) > 0)
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.hostname }} has sent no {{ $labels.job }} lines to
+                Loki for 2 hours. The alerts on its logs cannot fire. No
+                message comes when it starts again: see the dashboard
+                "Security overview", Log sources.

@@ -39,6 +39,20 @@ spec:
   proxy:
     headers: xforwarded
 
+  # Write each login to the log, the successes too. The realm's event
+  # listener jboss-logging (realm/linds.yaml, eventsListeners) writes each
+  # event to the log category org.keycloak.events: a failed login at WARN, a
+  # successful one at DEBUG, which the server does not print. With INFO, the
+  # successes also go to the pod log and so to Loki. The dashboard "Access
+  # and logins" (monitoring-security/) and the alert LoginFailureBurst read
+  # them. This is the option of Keycloak 26.5 for it (Server Administration
+  # guide, "The logging event listener"). The operator gives it to the
+  # server as KC_SPI_EVENTS_LISTENER__JBOSS_LOGGING__SUCCESS_LEVEL. A change
+  # of additionalOptions restarts the two pods, one at a time.
+  additionalOptions:
+    - name: spi-events-listener--jboss-logging--success-level
+      value: info
+
   ingress:
     enabled: true
     className: nginx
