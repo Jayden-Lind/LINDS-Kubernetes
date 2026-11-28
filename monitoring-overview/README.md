@@ -23,7 +23,7 @@ Both use only metrics and logs that exist. Nothing new is scraped.
 
 | Part | What it shows |
 |---|---|
-| JD, LINDS, Cluster & apps | The worst check of each. A check is 0 (OK), 1 (degraded) or 2 (down). Missing data counts as down. |
+| JD, LINDS, Cluster & apps | The worst check of each. A check is 0 (OK), 1 (warning) or 2 (problem). Missing data counts as a problem. |
 | Firing alerts | The alerts that fire now, the worst first. Each alert goes to Discord one time, so a problem that stays is here. Notices (info) do not change a site's state. |
 | Failing checks | The checks that are not OK, by site. |
 | Data protection | The age of the newest good copy of each backup chain. The Backups dashboard has the detail. |

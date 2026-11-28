@@ -92,7 +92,7 @@ spec:
                 "what", "", "what", "monitoring-kube-prometheus-stack-.*|pushgateway-.*|kube-state-metrics|node-exporter")
             )
 
-        # The checks behind each status tile: 0 OK, 1 degraded, 2 down.
+        # The checks behind each status tile: 0 OK, 1 warning, 2 problem.
         # A check whose series is missing counts as down, so that a target
         # that has gone does not show as OK. The 3-minute windows let one
         # failed scrape pass: about four scrapes a day to LINDS fail.

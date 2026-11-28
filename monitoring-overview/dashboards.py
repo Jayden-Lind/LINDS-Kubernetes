@@ -335,20 +335,20 @@ GUESTS_NO_BACKUP = guard('count(pve_not_backed_up_info{job="pve"} and on (instan
 
 CHAINS = [
     # order, chain, protects, copy goes to, proof, datasource, age, state
-    ("01", "JD volume snapshots (sanoid)", "Kubernetes volumes, NFS share, S3 data (Vault, Postgres backups, Loki)",
-     "Same pool, jd-proxmox-02 VM/truenas-nas: 14 dailies", "sanoid log: taking snapshot …_daily", "loki",
+    ("01", "JD volume snapshots (sanoid)", "K8s volumes, NFS share, S3 data (Vault, Postgres backups)",
+     "jd-proxmox-02 VM/truenas-nas: 14 dailies", "sanoid log: taking snapshot …_daily", "loki",
      SNAP_AGE, age_state(SNAP_AGE, 26 * H, 50 * H)),
     ("02", "Copy at LINDS (TrueNAS pull)", "The same, off site",
-     "linds-truenas-01 pool NAS: what the source keeps", "zettarepl log: doing pull … of snapshot= (no ERROR)", "loki",
+     "linds-truenas-01 pool NAS (LINDS)", "zettarepl log: doing pull …, no ERROR", "loki",
      REPLICA_AGE, age_state(REPLICA_AGE, 40 * H, 64 * H)),
     ("03", "Postgres base backup", "linds-postgres: every database",
-     "S3 bucket postgresql-backup on jd-s3-01: 7 days", "barman_cloud_…_last_available_backup_timestamp", "prom",
+     "S3 bucket on jd-s3-01: 7 days", "barman_cloud_…_last_available_backup_…", "prom",
      PG_BASE_AGE, age_state(PG_BASE_AGE, 26 * H, 36 * H)),
     ("04", "Postgres WAL archive", "linds-postgres: changes since the base backup",
-     "The same bucket: point-in-time restore", "cnpg_pg_stat_archiver_seconds_since_last_archival", "prom",
+     "The same bucket (point in time)", "cnpg_pg_stat_archiver_seconds_since_last_archival", "prom",
      PG_WAL_AGE, age_state(PG_WAL_AGE, 1800, 36 * H)),
     ("05", "NAS → Backblaze (weekly)", "jd-fs-01 D: (the NAS), from a ZFS clone",
-     "Backblaze cloud: 1-year version history", "backblaze_run_completed == 1 (Backblaze finished)", "prom",
+     "Backblaze cloud: 1-year history", "backblaze_run_completed == 1 (Backblaze finished)", "prom",
      BACKBLAZE_AGE, age_state(BACKBLAZE_AGE, 8 * D, 15 * D)),
 ]
 
@@ -365,12 +365,12 @@ def chain_table_targets():
         rows[(c[5], "state")].append(tag(c[7], c))
     # DFS Replication: errors only, no age.
     dfsr = ("06", "NAS mirror (DFS Replication)", "jd-fs-01 D: and linds-dc E:, both ways",
-            "The other site: a mirror, so it copies deletions and damage", "DFS Replication log: errors only")
+            "linds-dc E: (copies damage too)", "DFS Replication log: errors only")
     rows[("loki", "age")].append(tag("vector(0) - 1", dfsr))
     rows[("loki", "state")].append(tag(f"(({DFSR_ERRORS}) > bool 0) + (({DFSR_ERRORS}) > bool 99999)", dfsr))
     # Shadow copies: the older of the two servers' last VSS start, and Volsnap errors.
     shadow = ("07", "NAS shadow copies", "jd-fs-01 D: and linds-dc E: (Previous Versions)",
-              "Same volume: 07:00 and 12:00 on weekdays", "VSS starts (indirect), Volsnap errors")
+              "Same volume: 07:00, 12:00 weekdays", "VSS starts (indirect), Volsnap errors")
     vss = " or ".join(f'label_replace({VSS_AGE[h]}, "host", "{h}", "", "")' for h in VSS_AGE)
     rows[("loki", "age")].append(tag(f"max({vss})", shadow))
     rows[("loki", "state")].append(tag(f"(({VOLSNAP_ERRORS}) > bool 0) * 2", shadow))
@@ -543,8 +543,8 @@ def overview():
         ],
         no_value="✓ No alerts firing"))
     panels.append(table(
-        "Failing checks", "The checks behind the three status tiles that are not OK. Degraded: the backup WAN, a "
-        "warning alert, or Loki down. Down: the check failed or its data is missing.",
+        "Failing checks", "The checks behind the three status tiles that are not OK. Warning: the backup WAN, a "
+        "warning alert, or Loki down. Problem: the check failed, its data is missing, or a critical alert fires.",
         g(16, 5, 8, 8),
         [prom(f"overview:check:status > 0 or on () absent({alive}) * 3", "", "A", fmt="table")],
         [{"id": "sortBy", "options": {"fields": {}, "sort": [{"field": "Value", "desc": True}]}},
@@ -552,7 +552,7 @@ def overview():
         overrides=[
             override("Site", extra=[{"id": "mappings", "value": [vmap({k: (v, "text") for k, v in SITE_NAMES.items()})]}]),
             override("Check", extra=[{"id": "mappings", "value": [vmap({k: (v, "text") for k, v in CHECK_NAMES.items()})]}]),
-            override("State", extra=[{"id": "mappings", "value": [vmap({1: ("⚠ Degraded", WARN), 2: ("✗ Down", CRIT),
+            override("State", extra=[{"id": "mappings", "value": [vmap({1: ("⚠ Warning", WARN), 2: ("✗ Problem", CRIT),
                                                                          3: ("✗ Rules not loaded", CRIT)})]},
                                      {"id": "custom.cellOptions", "value": {"type": "color-text"}}]),
         ],

@@ -864,7 +864,7 @@ data:
           "type": "table",
           "id": 6,
           "title": "Failing checks",
-          "description": "The checks behind the three status tiles that are not OK. Degraded: the backup WAN, a warning alert, or Loki down. Down: the check failed or its data is missing.",
+          "description": "The checks behind the three status tiles that are not OK. Warning: the backup WAN, a warning alert, or Loki down. Problem: the check failed, its data is missing, or a critical alert fires.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1066,12 +1066,12 @@ data:
                         "type": "value",
                         "options": {
                           "1": {
-                            "text": "⚠ Degraded",
+                            "text": "⚠ Warning",
                             "color": "#fab219",
                             "index": 0
                           },
                           "2": {
-                            "text": "✗ Down",
+                            "text": "✗ Problem",
                             "color": "#d03b3b",
                             "index": 1
                           },
