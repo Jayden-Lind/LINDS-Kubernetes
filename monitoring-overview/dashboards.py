@@ -614,8 +614,12 @@ def overview():
              g(17, y + 1, 4, 4), unit="s", text_mode="value_and_name", value_size=16, links=to_router,
              thresholds=steps(CRIT, (GOOD, 0), (CRIT, 900)), mappings=[rmap(-1.5, -0.5, "– Unused", "text")],
              no_value="✗ No data"),
-        stat("Probes", "Blackbox probes of the services (Availability dashboard) that fail now.",
-             [prom(guard('count(probe_success{job="blackbox"} == 0) or on () vector(0)', 'probe_success{job="blackbox"}'))],
+        # Each target is probed from both sites (label vantage), so it has two
+        # series. max by (target): a target counts once, and only when it fails
+        # from every site, as the alert ProbeTargetDown does.
+        stat("Probes", "Services that fail their blackbox probe from every site now (Availability dashboard).",
+             [prom(guard('count(max by (target) (probe_success{job="blackbox"}) == 0) or on () vector(0)',
+                         'probe_success{job="blackbox"}'))],
              g(21, y + 1, 3, 4), no_value="– Not deployed yet", links=[link("Availability", "availability")],
              unit="suffix: failing", decimals=0, thresholds=steps("text", (CRIT, 1)),
              mappings=[vmap({0: ("✓ All pass", GOOD)})]),

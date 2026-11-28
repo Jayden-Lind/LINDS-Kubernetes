@@ -2431,7 +2431,7 @@ data:
           "type": "stat",
           "id": 16,
           "title": "Probes",
-          "description": "Blackbox probes of the services (Availability dashboard) that fail now.",
+          "description": "Services that fail their blackbox probe from every site now (Availability dashboard).",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2449,7 +2449,7 @@ data:
                 "uid": "prometheus"
               },
               "refId": "A",
-              "expr": "(count(probe_success{job=\"blackbox\"} == 0) or on () vector(0)) and on () (count(probe_success{job=\"blackbox\"}) > 0)",
+              "expr": "(count(max by (target) (probe_success{job=\"blackbox\"}) == 0) or on () vector(0)) and on () (count(probe_success{job=\"blackbox\"}) > 0)",
               "legendFormat": "",
               "range": false,
               "instant": true
