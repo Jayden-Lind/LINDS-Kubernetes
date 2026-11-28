@@ -1,0 +1,92 @@
+# Alerts on the access logs of the two ingress controllers, read from Loki.
+#
+# Where the lines come from: both controllers write one JSON object for each
+# request (log-format in applications/nginx-ingress.yaml and
+# applications/nginx-ingress-mtls.yaml). Alloy sends the pod logs to Loki.
+# The rules keep only the lines that start with {"t": (the access log) and
+# read the fields with | json. README.md lists the fields.
+#
+# How the rules run: Loki's ruler runs them every minute and sends the alerts
+# to Alertmanager (applications/monitoring-loki.yaml, loki.rulerConfig). The
+# rules sidecar in the Loki pod loads every ConfigMap in this namespace that
+# has the label loki_rule.
+#
+# Routing (base/monitoring/alertmanager-config.yaml): IngressSiteServerErrors
+# goes to discord by the default route, with a "resolved" message. The other
+# two have category="security": they go to discord-security, which sends no
+# "resolved" message.
+#
+# How often they would have fired: README.md, section "Alerts".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-traffic-alerts
+  labels:
+    loki_rule: ""
+data:
+  ingress-traffic.yaml: |
+    groups:
+      - name: ingress-traffic
+        interval: 1m
+        rules:
+          # A site answers more than a fifth of its requests with 5xx. This
+          # includes the 502s that nginx gives when a Service has no ready
+          # pod. sn is the server name that answered (the Ingress host).
+          # The floor is 10 errors in 30 minutes, not a number of requests:
+          # then a quiet site with one failed request does not fire, and a
+          # site that fails every request (a sealed Vault) still does.
+          # The 30-minute window keeps the alert on through short gaps, so
+          # one outage is one message. (Loki's ruler ignores keep_firing_for.)
+          # The availability probes (blackbox exporter, user agent "Blackbox
+          # Exporter/...") are left out: a site that is down is their alert.
+          - alert: IngressSiteServerErrors
+            expr: |
+              (
+                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s" | s=~"5.." [30m]))
+                /
+                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn" [30m]))
+              ) > 0.2
+              and
+              sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s" | s=~"5.." [30m])) >= 10
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: >-
+                {{ $labels.sn }} ({{ $labels.namespace }}) answered
+                {{ $value | humanizePercentage }} of its requests with 5xx in
+                the last 30 minutes. The Ingress traffic dashboard shows which
+                kind and which paths.
+
+          # One client got many 401 or 403 answers from one site: password
+          # guessing, or a client with a bad token. Normal is at most 4 in 10
+          # minutes (a browser with an expired Grafana session). The probes
+          # are left out: a health URL that asks for a login is not an attack.
+          - alert: IngressAuthFailureBurst
+            expr: |
+              sum by (namespace, sn, ip) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s", ip="ip" | s=~"401|403" [10m])) >= 20
+            labels:
+              severity: warning
+              category: security
+            annotations:
+              summary: >-
+                {{ $labels.ip }} got {{ $value }} answers 401 or 403 from
+                {{ $labels.sn }} ({{ $labels.namespace }}) in 10 minutes.
+
+          # A tripwire: nginx-mtls must refuse every request without a verified
+          # client certificate whose subject is in the allow map. A success
+          # (2xx, or 101 for a websocket) with cv not SUCCESS, or with allowed
+          # not 1, means that the gate does not work. The probes count here:
+          # the mTLS gate probe sends no certificate on purpose.
+          - alert: IngressMTLSPassedWithoutCertificate
+            expr: |
+              sum by (namespace, sn, ip, cv) (count_over_time({namespace="nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn", s="s", ip="ip", cv="cv", allowed="allowed" | s=~"2..|101" | cv!="SUCCESS" or allowed!="1" [10m])) > 0
+            labels:
+              severity: critical
+              category: security
+            annotations:
+              summary: >-
+                nginx-mtls served {{ $labels.sn }} to {{ $labels.ip }} without
+                a verified, allowed client certificate (certificate check:
+                "{{ $labels.cv }}"). The client-certificate gate is not
+                working.

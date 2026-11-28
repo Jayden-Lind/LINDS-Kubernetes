@@ -71,6 +71,20 @@ spec:
               # *.linds.com.au host is (and stays) HTTPS.
               hsts: "true"
               hsts-max-age: "31536000"
+              # The access log: one JSON object for each request. The Ingress
+              # traffic dashboard reads it (monitoring-ingress/README.md lists
+              # the fields). The path has no query string, because query
+              # strings can hold OAuth codes and tokens. The controller's main
+              # template defines $request_uri_no_args. Keep the same fields in
+              # nginx-ingress-mtls.yaml.
+              log-format-escaping: json
+              log-format: |
+                {"t":"$time_iso8601","ip":"$remote_addr","xff":"$http_x_forwarded_for",
+                "host":"$host","sn":"$server_name","m":"$request_method","path":"$request_uri_no_args","proto":"$server_protocol",
+                "s":"$status","bytes":"$body_bytes_sent","rt":"$request_time",
+                "up":"$upstream_addr","ups":"$upstream_status","urt":"$upstream_response_time","uht":"$upstream_header_time",
+                "ing":"$resource_namespace/$resource_name","svc":"$service",
+                "tls":"$ssl_protocol","cipher":"$ssl_cipher","ua":"$http_user_agent","origin":"$http_origin"}
         prometheus:
           create: true
           port: 9113

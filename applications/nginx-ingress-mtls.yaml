@@ -142,6 +142,19 @@ spec:
                 external-status-address: jd.linds.com.au
                 hsts: "true"
                 hsts-max-age: "31536000"
+                # The access log: the same JSON fields as
+                # applications/nginx-ingress.yaml, then the client certificate
+                # check: cv is $ssl_client_verify (SUCCESS, NONE or FAILED:...),
+                # dn the subject, allowed the result of the map above (1 or 0).
+                log-format-escaping: json
+                log-format: |
+                  {"t":"$time_iso8601","ip":"$remote_addr","xff":"$http_x_forwarded_for",
+                  "host":"$host","sn":"$server_name","m":"$request_method","path":"$request_uri_no_args","proto":"$server_protocol",
+                  "s":"$status","bytes":"$body_bytes_sent","rt":"$request_time",
+                  "up":"$upstream_addr","ups":"$upstream_status","urt":"$upstream_response_time","uht":"$upstream_header_time",
+                  "ing":"$resource_namespace/$resource_name","svc":"$service",
+                  "tls":"$ssl_protocol","cipher":"$ssl_cipher","ua":"$http_user_agent","origin":"$http_origin",
+                  "cv":"$ssl_client_verify","dn":"$ssl_client_s_dn","allowed":"$mtls_client_allowed"}
                 # This is what makes the class mTLS-only: every server block
                 # this controller generates demands a client certificate
                 # signed by linds-ca (client certs live in pki.yaml). Requests
