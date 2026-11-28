@@ -687,20 +687,29 @@ def overview():
            '* on (instance) group_left (nodename) node_uname_info{job="node-exporter"}')
     router_mem = ('label_replace(1 - node_memory_MemAvailable_bytes{job="router-node"} / node_memory_MemTotal_bytes{job="router-node"}, '
                   '"nodename", "$1", "instance", "(.+)")')
+    # The Proxmox hosts: memory as Proxmox counts it (jd-proxmox-02's includes the ZFS cache), and the root
+    # file system (the directory storage "local").
+    host_mem = ('label_replace(pve_memory_usage_bytes{job="pve", id=~"node/.+"} / pve_memory_size_bytes{job="pve", id=~"node/.+"}, '
+                '"nodename", "$1", "instance", "(.+)")')
+    host_disk = ('label_replace(max by (instance) (pve_disk_usage_bytes{job="pve"} / pve_disk_size_bytes{job="pve"} '
+                 '* on (instance, id) group_left () pve_storage_info{job="pve", plugintype="dir"}), "nodename", "$1", "instance", "(.+)")')
     fs = 'fstype!~"tmpfs|overlay|squashfs", mountpoint!~"/boot.*"'
     disk = (f'max by (nodename) ((1 - node_filesystem_avail_bytes{{job="node-exporter", {fs}}} / '
             f'node_filesystem_size_bytes{{job="node-exporter", {fs}}}) * on (instance) group_left (nodename) node_uname_info{{job="node-exporter"}})')
     router_disk = (f'label_replace(max by (instance) (1 - node_filesystem_avail_bytes{{job="router-node", {fs}}} / '
                    f'node_filesystem_size_bytes{{job="router-node", {fs}}}), "nodename", "$1", "instance", "(.+)")')
     panels += [
-        bargauge("Memory used", "Memory in use on each Kubernetes node and router (MemAvailable). NodeMemoryHigh "
-                 "fires at 90%, NodeMemoryCritical at 95%. The Proxmox hosts are on the Hardware dashboard: their "
-                 "figure counts the ZFS cache.",
-                 [prom(f"sort_desc({mem} or {router_mem})", "{{nodename}}")], g(0, y + 5, 8, 10), "percentunit", max_=1,
+        bargauge("Memory used", "Memory in use on each Kubernetes node and router (MemAvailable), and on each "
+                 "Proxmox host as Proxmox counts it. NodeMemoryHigh fires at 90%, NodeMemoryCritical at 95%. "
+                 "jd-proxmox-02's figure includes the ZFS cache, which gives memory back when guests need it.",
+                 [prom(f"sort_desc({mem} or {router_mem} or {host_mem})", "{{nodename}}")], g(0, y + 5, 8, 10),
+                 "percentunit", max_=1,
                  thresholds=steps(BLUE, (WARN, 0.9), (CRIT, 0.95)), links=[link("Kubernetes nodes", "k8s_views_nodes")]),
-        bargauge("Disk used", "The fullest file system of each Kubernetes node and router. NodeDiskAlmostFull fires "
-                 "at 90%, NodeDiskFull at 97%.",
-                 [prom(f"sort_desc({disk} or {router_disk})", "{{nodename}}")], g(8, y + 5, 8, 10), "percentunit", max_=1,
+        bargauge("Disk used", "The fullest file system of each Kubernetes node and router, and each Proxmox host's "
+                 "root file system. NodeDiskAlmostFull fires at 90%, NodeDiskFull at 97%, "
+                 "StorageProxmoxLocalNearlyFull at 90%.",
+                 [prom(f"sort_desc({disk} or {router_disk} or {host_disk})", "{{nodename}}")], g(8, y + 5, 8, 10),
+                 "percentunit", max_=1,
                  thresholds=steps(BLUE, (WARN, 0.9), (CRIT, 0.97)), links=[link("Kubernetes nodes", "k8s_views_nodes")]),
         table("Stopped guests", "Guests that do not run (templates left out). Some are stopped on purpose: old copies "
               "kept after a rebuild, the weekly Backblaze VM, guests started by hand. VM 102 at LINDS must never be "

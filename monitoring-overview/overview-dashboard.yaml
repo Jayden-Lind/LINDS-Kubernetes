@@ -3426,7 +3426,7 @@ data:
           "type": "bargauge",
           "id": 26,
           "title": "Memory used",
-          "description": "Memory in use on each Kubernetes node and router (MemAvailable). NodeMemoryHigh fires at 90%, NodeMemoryCritical at 95%. The Proxmox hosts are on the Hardware dashboard: their figure counts the ZFS cache.",
+          "description": "Memory in use on each Kubernetes node and router (MemAvailable), and on each Proxmox host as Proxmox counts it. NodeMemoryHigh fires at 90%, NodeMemoryCritical at 95%. jd-proxmox-02's figure includes the ZFS cache, which gives memory back when guests need it.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -3444,7 +3444,7 @@ data:
                 "uid": "prometheus"
               },
               "refId": "A",
-              "expr": "sort_desc((1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}) * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"} or label_replace(1 - node_memory_MemAvailable_bytes{job=\"router-node\"} / node_memory_MemTotal_bytes{job=\"router-node\"}, \"nodename\", \"$1\", \"instance\", \"(.+)\"))",
+              "expr": "sort_desc((1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}) * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"} or label_replace(1 - node_memory_MemAvailable_bytes{job=\"router-node\"} / node_memory_MemTotal_bytes{job=\"router-node\"}, \"nodename\", \"$1\", \"instance\", \"(.+)\") or label_replace(pve_memory_usage_bytes{job=\"pve\", id=~\"node/.+\"} / pve_memory_size_bytes{job=\"pve\", id=~\"node/.+\"}, \"nodename\", \"$1\", \"instance\", \"(.+)\"))",
               "legendFormat": "{{nodename}}",
               "range": false,
               "instant": true
@@ -3514,7 +3514,7 @@ data:
           "type": "bargauge",
           "id": 27,
           "title": "Disk used",
-          "description": "The fullest file system of each Kubernetes node and router. NodeDiskAlmostFull fires at 90%, NodeDiskFull at 97%.",
+          "description": "The fullest file system of each Kubernetes node and router, and each Proxmox host's root file system. NodeDiskAlmostFull fires at 90%, NodeDiskFull at 97%, StorageProxmoxLocalNearlyFull at 90%.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -3532,7 +3532,7 @@ data:
                 "uid": "prometheus"
               },
               "refId": "A",
-              "expr": "sort_desc(max by (nodename) ((1 - node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"} / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"}) * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"}) or label_replace(max by (instance) (1 - node_filesystem_avail_bytes{job=\"router-node\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"} / node_filesystem_size_bytes{job=\"router-node\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"}), \"nodename\", \"$1\", \"instance\", \"(.+)\"))",
+              "expr": "sort_desc(max by (nodename) ((1 - node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"} / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"}) * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"}) or label_replace(max by (instance) (1 - node_filesystem_avail_bytes{job=\"router-node\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"} / node_filesystem_size_bytes{job=\"router-node\", fstype!~\"tmpfs|overlay|squashfs\", mountpoint!~\"/boot.*\"}), \"nodename\", \"$1\", \"instance\", \"(.+)\") or label_replace(max by (instance) (pve_disk_usage_bytes{job=\"pve\"} / pve_disk_size_bytes{job=\"pve\"} * on (instance, id) group_left () pve_storage_info{job=\"pve\", plugintype=\"dir\"}), \"nodename\", \"$1\", \"instance\", \"(.+)\"))",
               "legendFormat": "{{nodename}}",
               "range": false,
               "instant": true
