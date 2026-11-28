@@ -1,0 +1,242 @@
+# promtool unit tests for ../rules.yaml. Not a manifest, and not in the
+# kustomization.
+#
+#   yq '.spec' monitoring-overview/rules.yaml > /tmp/overview.rules.yaml
+#   promtool check rules /tmp/overview.rules.yaml
+#   promtool test rules monitoring-overview/tests/rules.test.yaml
+#
+# Time starts at zero in each test, so timestamps below are small numbers.
+rule_files:
+  - /tmp/overview.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- The alert table ----------------------------------------------------------
+  - name: firing alerts get a site, a place and an object; others do not show
+    interval: 1m
+    input_series:
+      # A notice at JD: a guest that stopped.
+      - series: 'ALERTS{alertname="ProxmoxGuestStopped", alertstate="firing", severity="info", instance="jd-proxmox-02", job="pve", site="jd", id="qemu/1115", name="JD-Backup-01"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="ProxmoxGuestStopped", severity="info", instance="jd-proxmox-02", job="pve", site="jd", id="qemu/1115", name="JD-Backup-01"}'
+        values: '0x20'
+      # A node at LINDS, by address. The exporter's own pod is not the object.
+      - series: 'ALERTS{alertname="NodeMemoryHigh", alertstate="firing", severity="warning", instance="10.3.1.100:9100", job="node-exporter", namespace="monitoring", pod="monitoring-kube-prometheus-stack-prometheus-node-exporter-lmp4v"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="NodeMemoryHigh", severity="warning", instance="10.3.1.100:9100", job="node-exporter", namespace="monitoring", pod="monitoring-kube-prometheus-stack-prometheus-node-exporter-lmp4v"}'
+        values: '120x20'
+      # A pod: kube-state-metrics' own address is not a place.
+      - series: 'ALERTS{alertname="KubePodCrashLooping", alertstate="firing", severity="warning", instance="10.244.6.124:8080", job="kube-state-metrics", namespace="immich", pod="immich-server-x", container="server"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="KubePodCrashLooping", severity="warning", instance="10.244.6.124:8080", job="kube-state-metrics", namespace="immich", pod="immich-server-x", container="server"}'
+        values: '300x20'
+      # A node by name.
+      - series: 'ALERTS{alertname="NodeNotReady", alertstate="firing", severity="critical", node="talos-linds-worker-01", job="kube-state-metrics", instance="10.244.6.124:8080"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="NodeNotReady", severity="critical", node="talos-linds-worker-01", job="kube-state-metrics", instance="10.244.6.124:8080"}'
+        values: '0x20'
+      # A router alert that has hostname, not instance.
+      - series: 'ALERTS{alertname="RouterSuricataNoLogs", alertstate="firing", severity="warning", hostname="jd-router-01"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="RouterSuricataNoLogs", severity="warning", hostname="jd-router-01"}'
+        values: '0x20'
+      # A storage alert names the drive.
+      - series: 'ALERTS{alertname="StorageSmartPendingSectors", alertstate="firing", severity="warning", instance="linds-proxmox-01", job="proxmox-storage-health", device="megaraid,5", model="X", serial="Y"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="StorageSmartPendingSectors", severity="warning", instance="linds-proxmox-01", job="proxmox-storage-health", device="megaraid,5", model="X", serial="Y"}'
+        values: '0x20'
+      # Not shown: Watchdog, and an alert that is only pending.
+      - series: 'ALERTS{alertname="Watchdog", alertstate="firing", severity="none"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="Watchdog", severity="none"}'
+        values: '0x20'
+      - series: 'ALERTS{alertname="RouterUpdatesPending", alertstate="pending", severity="warning", instance="linds-router-01"}'
+        values: '1x20'
+      - series: 'ALERTS_FOR_STATE{alertname="RouterUpdatesPending", severity="warning", instance="linds-router-01"}'
+        values: '0x20'
+      # Without it, PostgreSQLBackupMetricsMissing fires and shows in the table.
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds", pod="linds-postgres-1"}'
+        values: '0x20'
+    promql_expr_test:
+      - expr: overview:alert:active_seconds
+        eval_time: 10m
+        exp_samples:
+          - labels: 'overview:alert:active_seconds{alertname="ProxmoxGuestStopped", severity="info", site="jd", where="jd-proxmox-02", what="JD-Backup-01"}'
+            value: 600
+          - labels: 'overview:alert:active_seconds{alertname="NodeMemoryHigh", severity="warning", site="linds", where="10.3.1.100:9100"}'
+            value: 480
+          - labels: 'overview:alert:active_seconds{alertname="KubePodCrashLooping", severity="warning", site="cluster", where="immich", what="immich-server-x"}'
+            value: 300
+          - labels: 'overview:alert:active_seconds{alertname="NodeNotReady", severity="critical", site="linds", where="talos-linds-worker-01"}'
+            value: 600
+          - labels: 'overview:alert:active_seconds{alertname="RouterSuricataNoLogs", severity="warning", site="jd", where="jd-router-01"}'
+            value: 600
+          - labels: 'overview:alert:active_seconds{alertname="StorageSmartPendingSectors", severity="warning", site="linds", where="linds-proxmox-01", what="megaraid,5"}'
+            value: 600
+      # A critical alert makes the site 2; info counts for nothing.
+      - expr: overview:check:status{check="alerts"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'overview:check:status{site="jd", check="alerts"}'
+            value: 1
+          - labels: 'overview:check:status{site="linds", check="alerts"}'
+            value: 2
+          - labels: 'overview:check:status{site="cluster", check="alerts"}'
+            value: 1
+
+  # --- The status tiles -----------------------------------------------------------
+  # Healthy at first. Then, one at a time:
+  # - 10m to 25m: JD's DNS is down.
+  # - 30m to 45m: JD's traffic goes over the backup WAN.
+  # - 50m: one scrape of jd-router-01 fails. Nothing changes.
+  # - from 60m: linds-router-01 stops reporting.
+  # - from 80m: Watchdog stops (the rules do not run).
+  - name: each site reads its worst check
+    interval: 1m
+    input_series:
+      - series: 'up{job="router-node", instance="jd-router-01"}'
+        values: '1x49 _ 1x50'
+      - series: 'up{job="router-node", instance="linds-router-01"}'
+        values: '1x59 0x40'
+      - series: 'router_wan_active{job="router-node", instance="jd-router-01", wan="primary", dev="wan0"}'
+        values: '1x29 0x15 1x54'
+      - series: 'router_wan_healthy{job="router-node", instance="jd-router-01", wan="primary", dev="wan0"}'
+        values: '1x29 0x15 1x54'
+      - series: 'router_wan_active{job="router-node", instance="jd-router-01", wan="backup", dev="wwan0"}'
+        values: '0x29 1x15 0x54'
+      - series: 'router_wan_healthy{job="router-node", instance="jd-router-01", wan="backup", dev="wwan0"}'
+        values: '1x100'
+      - series: 'router_wan_active{job="router-node", instance="linds-router-01", wan="primary", dev="wan0"}'
+        values: '1x59 stale'
+      - series: 'router_wan_healthy{job="router-node", instance="linds-router-01", wan="primary", dev="wan0"}'
+        values: '1x59 stale'
+      - series: 'router_dns_up{job="router-node", instance="jd-router-01"}'
+        values: '1x9 0x15 1x75'
+      - series: 'router_dns_up{job="router-node", instance="linds-router-01"}'
+        values: '1x59 stale'
+      - series: 'router_ipsec_up{job="router-node", instance="jd-router-01", conn="LINDS"}'
+        values: '1x100'
+      - series: 'pve_up{job="pve", id="node/jd-proxmox-02", instance="jd-proxmox-02"}'
+        values: '1x100'
+      - series: 'pve_up{job="pve", id="node/linds-proxmox-01", instance="linds-proxmox-01"}'
+        values: '1x100'
+      - series: 'kube_node_status_condition{job="kube-state-metrics", node="talos-cp", condition="Ready", status="true"}'
+        values: '1x100'
+      - series: 'kube_node_status_condition{job="kube-state-metrics", node="talos-worker-01", condition="Ready", status="true"}'
+        values: '1x100'
+      - series: 'kube_node_status_condition{job="kube-state-metrics", node="talos-linds-worker-01", condition="Ready", status="true"}'
+        values: '1x100'
+      - series: 'up{job="apiserver", instance="10.0.53.200:6443"}'
+        values: '1x100'
+      - series: 'up{job="monitoring-kube-prometheus-alertmanager", container="alertmanager", instance="10.244.3.90:9093"}'
+        values: '1x100'
+      - series: 'up{job="monitoring/loki", instance="10.244.0.245:3100"}'
+        values: '1x100'
+      - series: 'ALERTS{alertname="Watchdog", alertstate="firing", severity="none"}'
+        values: '1x79'
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds", pod="linds-postgres-1"}'
+        values: '0x100'
+    promql_expr_test:
+      - expr: overview:site:status
+        eval_time: 5m
+        exp_samples:
+          - labels: 'overview:site:status{site="jd"}'
+            value: 0
+          - labels: 'overview:site:status{site="linds"}'
+            value: 0
+          - labels: 'overview:site:status{site="cluster"}'
+            value: 0
+      - expr: overview:check:status{site="jd"} > 0
+        eval_time: 20m
+        exp_samples:
+          - labels: 'overview:check:status{site="jd", check="dns"}'
+            value: 2
+      - expr: overview:check:status{site="jd"} > 0
+        eval_time: 40m
+        exp_samples:
+          - labels: 'overview:check:status{site="jd", check="internet"}'
+            value: 1
+      - expr: overview:site:status{site="jd"}
+        eval_time: 50m
+        exp_samples:
+          - labels: 'overview:site:status{site="jd"}'
+            value: 0
+      # The router answers 0, and its own metrics go after 3 minutes.
+      - expr: overview:check:status{site="linds"} > 0
+        eval_time: 70m
+        exp_samples:
+          - labels: 'overview:check:status{site="linds", check="router"}'
+            value: 2
+          - labels: 'overview:check:status{site="linds", check="internet"}'
+            value: 2
+          - labels: 'overview:check:status{site="linds", check="dns"}'
+            value: 2
+      - expr: overview:site:status
+        eval_time: 85m
+        exp_samples:
+          - labels: 'overview:site:status{site="jd"}'
+            value: 0
+          - labels: 'overview:site:status{site="linds"}'
+            value: 2
+          - labels: 'overview:site:status{site="cluster"}'
+            value: 2
+
+  - name: a site whose metrics are all missing reads down, not OK
+    interval: 1m
+    input_series:
+      - series: 'ALERTS{alertname="Watchdog", alertstate="firing", severity="none"}'
+        values: '1x10'
+    promql_expr_test:
+      - expr: overview:site:status
+        eval_time: 5m
+        exp_samples:
+          - labels: 'overview:site:status{site="jd"}'
+            value: 2
+          - labels: 'overview:site:status{site="linds"}'
+            value: 2
+          - labels: 'overview:site:status{site="cluster"}'
+            value: 2
+
+  # --- Postgres backups -------------------------------------------------------------
+  # A backup at 0h and at 24h, then none. 36 hours after the last one is 60h,
+  # and "for: 30m" makes it 60h30m.
+  - name: no new base backup for 36 hours fires after 30 minutes more
+    interval: 5m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds", pod="linds-postgres-1"}'
+        values: '0x287 86400x600'
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds", pod="linds-postgres-2"}'
+        values: '0x287 86400x600'
+    alert_rule_test:
+      - eval_time: 3620m
+        alertname: PostgreSQLBaseBackupStale
+      - eval_time: 3635m
+        alertname: PostgreSQLBaseBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: postgresql-linds
+            exp_annotations:
+              summary: "PostgreSQL in postgresql-linds: the newest base backup is 1d 12h 35m 0s old"
+              description: "The nightly base backup did not finish. WAL archiving can still work, but a restore must replay more WAL, and the 7-day retention removes the old backups. Check `kubectl -n postgresql-linds get backups` and `kubectl -n postgresql-linds logs deploy/barman-cloud`."
+      - eval_time: 3635m
+        alertname: PostgreSQLBackupMetricsMissing
+
+  - name: backup metrics that are gone for 2 hours fire
+    interval: 5m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds", pod="linds-postgres-1"}'
+        values: '0x23'
+    alert_rule_test:
+      - eval_time: 230m
+        alertname: PostgreSQLBackupMetricsMissing
+      - eval_time: 240m
+        alertname: PostgreSQLBackupMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: postgresql-linds
+            exp_annotations:
+              summary: "PostgreSQL in postgresql-linds: no backup metrics for 2 hours"
+              description: "The barman-cloud plugin in the Postgres pods does not report the newest base backup, so its age is not known. Check that the pods run (`kubectl -n postgresql-linds get pods`) and that the cluster still uses the plugin."

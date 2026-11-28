@@ -1,0 +1,83 @@
+# Alerts on backups that only the logs show. Loki's ruler runs them and sends
+# them to Alertmanager (applications/monitoring-loki.yaml, loki.rulerConfig).
+# The rules sidecar in the Loki pod loads this ConfigMap (label loki_rule).
+#
+# - sanoid on jd-proxmox-02 logs each snapshot it takes
+#   ("taking snapshot VM/truenas-nas/...@autosnap_..._daily").
+# - linds-truenas-01 (zettarepl) logs each pull of the replication task
+#   ("doing pull from 'VM/truenas-nas' to 'NAS' ..."), and an ERROR line when
+#   one fails.
+# - Windows logs Volsnap errors when it deletes or aborts shadow copies.
+#
+# A missing line can also mean that the logs do not reach Loki. Then the
+# Backups dashboard is blind too, so the alert is still right.
+#
+# promtool cannot test LogQL. To test a rule, run its expression in Grafana
+# Explore (data source Loki) with a shorter range: [5h] instead of [26h] makes
+# the first two fire.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-log-alerts
+  labels:
+    loki_rule: ""
+data:
+  backups.yaml: |
+    groups:
+      - name: backups
+        # The ranges are a day or more, so once in 10 minutes is enough.
+        interval: 10m
+        rules:
+          # sanoid takes the dailies at 00:00 UTC. 26 hours is one missed day.
+          - alert: StorageSanoidSnapshotsMissing
+            expr: |
+              absent_over_time({job="syslog", appname="sanoid", hostname="jd-proxmox-02"}
+                |= "taking snapshot " |= "_daily" [26h])
+            for: 20m
+            labels:
+              severity: warning
+              instance: jd-proxmox-02
+            annotations:
+              summary: "jd-proxmox-02: sanoid took no daily snapshot of VM/truenas-nas in 26 hours"
+              description: "The Kubernetes volumes, the NFS share and the S3 data get no new snapshot, and linds-truenas-01 has nothing new to pull. On jd-proxmox-02: `systemctl status sanoid.timer sanoid.service` and `journalctl -u sanoid -b`. `zfs list -t snapshot -o name,creation -s creation VM/truenas-nas | tail` shows the newest."
+
+          # The task pulls at 00:00 local time (13:00 or 14:00 UTC).
+          - alert: StorageTrueNasReplicationMissing
+            expr: |
+              absent_over_time({job="syslog", appname="ZETTAREPL", hostname="linds-truenas-01.linds.com.au"}
+                |= "doing pull from 'VM/truenas-nas' to 'NAS'" [26h])
+            for: 20m
+            labels:
+              severity: warning
+              instance: linds-truenas-01
+            annotations:
+              summary: "linds-truenas-01: no replication pull from jd-proxmox-02 in 26 hours"
+              description: "The copy at LINDS of the Kubernetes volumes, the NFS share and the S3 data (Postgres backups included) gets older each day. In TrueNAS: Data Protection, Replication Tasks, the task's state and log. On the NAS, `midclt call replication.query` shows the state too."
+
+          # A pull that fails logs "doing pull" too, so the rule above does not
+          # see it. This one fires for a day after an ERROR line.
+          - alert: StorageTrueNasReplicationErrors
+            expr: |
+              sum by (hostname) (
+                count_over_time({job="syslog", appname="ZETTAREPL"} |~ `\] (ERROR|CRITICAL) +\[` [1d])
+              ) > 0
+            labels:
+              severity: warning
+              instance: linds-truenas-01
+            annotations:
+              summary: "linds-truenas-01: the replication from jd-proxmox-02 logged {{ $value }} errors in the last day"
+              description: "The Backups dashboard shows the lines (TrueNAS replication row). In TrueNAS: Data Protection, Replication Tasks, the task's log. This alert ends one day after the last error, also when the error is not fixed."
+
+          # Volsnap logs an error when Windows deletes shadow copies because
+          # their storage could not grow (event 25), or aborts them. The
+          # Previous Versions from before the event are then gone.
+          - alert: WindowsShadowCopiesLost
+            expr: |
+              sum by (hostname) (
+                count_over_time({job="windows", channel="System", level="error"} | source="Volsnap" [1d])
+              ) > 0
+            labels:
+              severity: warning
+            annotations:
+              summary: "{{ $labels.hostname }}: Windows deleted or aborted shadow copies"
+              description: "Previous Versions from before the event can be gone. The Backups dashboard shows the event (Shadow copies row). On the server: `vssadmin list shadows` and `vssadmin list shadowstorage`. This alert ends one day after the event."
