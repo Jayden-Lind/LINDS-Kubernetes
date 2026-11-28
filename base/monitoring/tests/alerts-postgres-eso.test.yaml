@@ -1,0 +1,139 @@
+# promtool unit tests for the postgresql and external-secrets groups of
+# ../alerts.yaml. Not a manifest, and not in the kustomization.
+#
+#   yq 'select(.kind == "PrometheusRule") | .spec | del(.groups[].rules[].annotations.description)' \
+#     base/monitoring/alerts.yaml > /tmp/alerts.rules.yaml
+#   promtool check rules /tmp/alerts.rules.yaml
+#   promtool test rules base/monitoring/tests/alerts-postgres-eso.test.yaml
+#
+# The series below have the names and labels that the instances and the
+# operator export (read from Prometheus on 2026-11-28). Four of these rules
+# read names that did not exist, and never fired: these tests fail if a rule
+# stops matching the real series.
+rule_files:
+  - /tmp/alerts.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: an instance that cannot query PostgreSQL fires after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'cnpg_collector_up{namespace="postgresql-linds", pod="linds-postgres-1", cluster="linds-postgres"}'
+        values: '1x30'
+      - series: 'cnpg_collector_up{namespace="postgresql-linds", pod="linds-postgres-2", cluster="linds-postgres"}'
+        values: '1x5 0x25'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PostgreSQLDown
+      - eval_time: 12m
+        alertname: PostgreSQLDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: postgresql-linds
+              pod: linds-postgres-2
+              cluster: linds-postgres
+            exp_annotations:
+              summary: "PostgreSQL postgresql-linds/linds-postgres-2 is down"
+
+  - name: an instance that reads 0 for two scrapes while it starts does not fire
+    interval: 1m
+    input_series:
+      - series: 'cnpg_collector_up{namespace="postgresql-linds", pod="linds-postgres-2", cluster="linds-postgres"}'
+        values: '1x5 0x1 1x20'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: PostgreSQLDown
+      - eval_time: 15m
+        alertname: PostgreSQLDown
+
+  - name: no instance at all fires, with the namespace and no pod
+    interval: 1m
+    input_series:
+      - series: 'cnpg_collector_up{namespace="postgresql-linds", pod="linds-postgres-1", cluster="linds-postgres"}'
+        values: '1x5 stale'
+      - series: 'cnpg_collector_up{namespace="postgresql-linds", pod="linds-postgres-2", cluster="linds-postgres"}'
+        values: '1x5 stale'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PostgreSQLDown
+      - eval_time: 13m
+        alertname: PostgreSQLDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: postgresql-linds
+            exp_annotations:
+              summary: "PostgreSQL postgresql-linds is down"
+
+  - name: connections are summed over databases and compared with max_connections
+    interval: 1m
+    input_series:
+      # 330 of 400 on the primary: 82.5%.
+      - series: 'cnpg_backends_total{namespace="postgresql-linds", pod="linds-postgres-2", datname="immich", usename="immich", state="idle"}'
+        values: '200x20'
+      - series: 'cnpg_backends_total{namespace="postgresql-linds", pod="linds-postgres-2", datname="keycloak", usename="keycloak", state="active"}'
+        values: '130x20'
+      - series: 'cnpg_pg_settings_setting{namespace="postgresql-linds", pod="linds-postgres-2", name="max_connections"}'
+        values: '400x20'
+      # 1 of 400 on the standby.
+      - series: 'cnpg_backends_total{namespace="postgresql-linds", pod="linds-postgres-1", datname="app", usename="cnpg_metrics_exporter", state="active"}'
+        values: '1x20'
+      - series: 'cnpg_pg_settings_setting{namespace="postgresql-linds", pod="linds-postgres-1", name="max_connections"}'
+        values: '400x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PostgreSQLHighConnections
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: postgresql-linds
+              pod: linds-postgres-2
+            exp_annotations:
+              summary: "PostgreSQL postgresql-linds/linds-postgres-2 connection usage high"
+
+  - name: a standby more than 50 MB behind fires, a few kB behind does not
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_replication_replay_diff_bytes{namespace="postgresql-linds", pod="linds-postgres-2", application_name="linds-postgres-1", usename="streaming_replica", client_addr="10.244.3.78/32", client_port="42856"}'
+        values: '7312x5 60000000x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: PostgreSQLReplicationLag
+      - eval_time: 12m
+        alertname: PostgreSQLReplicationLag
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: postgresql-linds
+              pod: linds-postgres-2
+              application_name: linds-postgres-1
+            exp_annotations:
+              summary: "PostgreSQL standby linds-postgres-1 is behind linds-postgres-2"
+
+  - name: an ExternalSecret that is not Ready fires once, named by its own namespace
+    interval: 1m
+    input_series:
+      # Two operator pods have reported it (the old pod's series lingers).
+      - series: 'externalsecret_status_condition{namespace="external-secrets-system", pod="external-secrets-operator-a", exported_namespace="argocd", name="argocd-secret", condition="Ready", status="False"}'
+        values: '0x3 1x20'
+      - series: 'externalsecret_status_condition{namespace="external-secrets-system", pod="external-secrets-operator-a", exported_namespace="argocd", name="argocd-secret", condition="Ready", status="True"}'
+        values: '1x3 0x20'
+      - series: 'externalsecret_status_condition{namespace="external-secrets-system", pod="external-secrets-operator-b", exported_namespace="argocd", name="argocd-secret", condition="Ready", status="False"}'
+        values: '0x3 1x20'
+      # A healthy one stays quiet.
+      - series: 'externalsecret_status_condition{namespace="external-secrets-system", pod="external-secrets-operator-a", exported_namespace="monitoring", name="grafana-credentials", condition="Ready", status="False"}'
+        values: '0x23'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ExternalSecretSyncError
+      - eval_time: 12m
+        alertname: ExternalSecretSyncError
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              exported_namespace: argocd
+              name: argocd-secret
+            exp_annotations:
+              summary: "ExternalSecret argocd/argocd-secret sync failed"
