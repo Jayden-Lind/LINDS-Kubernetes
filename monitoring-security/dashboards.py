@@ -116,7 +116,8 @@ class Builder:
                 "options": {"mode": "markdown", "content": content}}
 
     def stat(self, title, desc, targets, grid, ds=LOKI, unit="short", mappings=None, steps=None,
-             no_value="0", links=None, color_mode="value", decimals=None, text_mode="value_and_name"):
+             no_value="0", links=None, color_mode="value", decimals=None, text_mode="value_and_name",
+             value_size=None):
         """One number, or one tile for each series. `steps` are threshold steps
         [(value, colour)]; without them the number is in the text colour."""
         steps = steps or [(None, "text")]
@@ -126,7 +127,7 @@ class Builder:
             "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
                         "colorMode": color_mode, "graphMode": "none", "textMode": text_mode,
                         "justifyMode": "center", "orientation": "auto", "wideLayout": True,
-                        "showPercentChange": False},
+                        "showPercentChange": False, "text": {"valueSize": value_size} if value_size else {}},
             "fieldConfig": {
                 "defaults": {"unit": unit, "noValue": no_value, "decimals": decimals,
                              "mappings": mappings or [],
@@ -639,25 +640,25 @@ def overview():
                links=[link("Suricata", D["suricata"])]),
         b.stat("DNS lists", "The RPZ blocklists that Unbound loaded on each router.",
                [prom_target("count by (instance) (router_dns_blocklist_names > 0)", "{{instance}}", True)],
-               g(7, y, 3, 4), PROM, steps=[(None, CRIT), (1, GOOD)], no_value="▲ 0",
+               g(7, y, 4, 4), PROM, steps=[(None, CRIT), (1, GOOD)], no_value="▲ 0",
                links=[link("DNS blocking", D["dns"])]),
         b.stat("Oldest DNS list", "Time since the oldest list of each router last changed. The lists change "
                "every day (dns-blocklist-update, about 04:40). More than 2 days: the download fails.",
                [prom_target("max by (instance) (time() - router_dns_blocklist_changed_timestamp_seconds)",
                             "{{instance}}", True)],
-               g(10, y, 4, 4), PROM, unit="s", steps=[(None, GOOD), (172800, WARN), (345600, CRIT)],
+               g(11, y, 4, 4), PROM, unit="s", steps=[(None, GOOD), (172800, WARN), (345600, CRIT)],
                no_value="▲ No data", links=[link("DNS blocking", D["dns"])]),
         b.stat("Quiet sources", "Log sources that always send logs (the routers, the Proxmox hosts, TrueNAS, the "
                "Windows servers) and sent nothing for 2 hours. The alert LogSourceSilent is the same test. See "
-               "\"Log sources\" below.", [loki_target(QUIET_NOW, instant=True)], g(14, y, 3, 4),
+               "\"Log sources\" below.", [loki_target(QUIET_NOW, instant=True)], g(15, y, 3, 4),
                steps=[(None, GOOD), (1, CRIT)], no_value="● 0",
                mappings=[{"type": "value", "options": {"0": {"text": "● 0", "color": GOOD}}}], text_mode="value"),
         b.stat("VPN users", "Road-warrior VPN sessions that are up now (router_ipsec_road_warriors).",
-               [prom_target("sum(router_ipsec_road_warriors)", "", True)], g(17, y, 3, 4), PROM,
+               [prom_target("sum(router_ipsec_road_warriors)", "", True)], g(18, y, 3, 4), PROM,
                links=det + [link("Router", D["router"])], text_mode="value"),
-        b.stat("Ingress 401 and 403", "HTTP answers 401 and 403 of the two ingress controllers in the time "
+        b.stat("401/403", "HTTP answers 401 and 403 of the two ingress controllers in the time "
                "range: a request without a login or a client certificate. The dashboard \"Ingress traffic\" has "
-               "the detail.", [loki_target(range_count(INGRESS_REFUSED), instant=True)], g(20, y, 4, 4),
+               "the detail.", [loki_target(range_count(INGRESS_REFUSED), instant=True)], g(21, y, 3, 4),
                links=[link("Ingress traffic", D["ingress"])], text_mode="value"),
     ]
     y += 4
@@ -986,7 +987,8 @@ def access():
                "RouterVPNUnknownUser).", [loki_target(per_interval(vpn_fail(f), "reason"), "{{reason}}")],
                g(8, y, 8, 7), colors={"wrong password": ORANGE, "unknown user": MAGENTA, "EAP failed": YELLOW}),
         b.stat("Connected now", "Road-warrior sessions that are up now, on each router.",
-               [prom_target("router_ipsec_road_warriors", "{{instance}}", True)], g(16, y, 4, 7), PROM),
+               [prom_target("router_ipsec_road_warriors", "{{instance}}", True)], g(16, y, 4, 7), PROM,
+               value_size=40),
         b.top("IKE without a session", "Addresses that started IKE in the time range and never got an IKE "
               "session up: scanners, and clients that failed. The VPN clients and the other site's router are "
               "left out.",

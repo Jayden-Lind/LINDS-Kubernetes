@@ -3836,7 +3836,10 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {
+              "valueSize": 40
+            }
           },
           "fieldConfig": {
             "defaults": {

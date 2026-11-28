@@ -155,7 +155,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -252,7 +253,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -304,7 +306,7 @@ data:
           "gridPos": {
             "x": 7,
             "y": 0,
-            "w": 3,
+            "w": 4,
             "h": 4
           },
           "datasource": {
@@ -339,7 +341,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -379,7 +382,7 @@ data:
           "title": "Oldest DNS list",
           "description": "Time since the oldest list of each router last changed. The lists change every day (dns-blocklist-update, about 04:40). More than 2 days: the download fails.",
           "gridPos": {
-            "x": 10,
+            "x": 11,
             "y": 0,
             "w": 4,
             "h": 4
@@ -416,7 +419,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -460,7 +464,7 @@ data:
           "title": "Quiet sources",
           "description": "Log sources that always send logs (the routers, the Proxmox hosts, TrueNAS, the Windows servers) and sent nothing for 2 hours. The alert LogSourceSilent is the same test. See \"Log sources\" below.",
           "gridPos": {
-            "x": 14,
+            "x": 15,
             "y": 0,
             "w": 3,
             "h": 4
@@ -497,7 +501,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -542,7 +547,7 @@ data:
           "title": "VPN users",
           "description": "Road-warrior VPN sessions that are up now (router_ipsec_road_warriors).",
           "gridPos": {
-            "x": 17,
+            "x": 18,
             "y": 0,
             "w": 3,
             "h": 4
@@ -579,7 +584,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {
@@ -616,12 +622,12 @@ data:
         {
           "type": "stat",
           "id": 7,
-          "title": "Ingress 401 and 403",
+          "title": "401/403",
           "description": "HTTP answers 401 and 403 of the two ingress controllers in the time range: a request without a login or a client certificate. The dashboard \"Ingress traffic\" has the detail.",
           "gridPos": {
-            "x": 20,
+            "x": 21,
             "y": 0,
-            "w": 4,
+            "w": 3,
             "h": 4
           },
           "datasource": {
@@ -656,7 +662,8 @@ data:
             "justifyMode": "center",
             "orientation": "auto",
             "wideLayout": true,
-            "showPercentChange": false
+            "showPercentChange": false,
+            "text": {}
           },
           "fieldConfig": {
             "defaults": {

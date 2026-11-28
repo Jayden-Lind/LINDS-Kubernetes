@@ -22,6 +22,10 @@
 # login. Read the alert, then the dashboard "Access and logins"
 # (uid security-access).
 #
+# The address that a login came from is the label src. It is not "source":
+# the Windows logs have structured metadata with that name, and LogQL renames
+# a parsed label that has the name of an existing one (source_extracted).
+#
 # To test a rule without an alert, run its expression in Grafana Explore
 # (data source Loki) over a time range that has the event.
 apiVersion: v1
@@ -44,9 +48,9 @@ data:
           # is someone with that password. Base rate: 0.
           - alert: SSHPasswordLogin
             expr: |
-              sum by (hostname, user, source, method) (
+              sum by (hostname, user, src, method) (
                 count_over_time({job="syslog", appname=~"sshd.*"} |= "Accepted "
-                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<source>\S+) port`
+                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<src>\S+) port`
                   | method!="publickey"
                 [10m])
               ) > 0
@@ -56,7 +60,7 @@ data:
             annotations:
               summary: >-
                 {{ $labels.user }} logged in to {{ $labels.hostname }} over SSH
-                from {{ $labels.source }} with {{ $labels.method }}, not with a
+                from {{ $labels.src }} with {{ $labels.method }}, not with a
                 key.
 
           # An SSH login from an address that is not private. The routers
@@ -67,10 +71,10 @@ data:
           # logs in over IPv6. Base rate: 0.
           - alert: SSHLoginFromPublicAddress
             expr: |
-              sum by (hostname, user, source) (
+              sum by (hostname, user, src) (
                 count_over_time({job="syslog", appname=~"sshd.*"} |= "Accepted "
-                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<source>\S+) port`
-                  | source!~`(?i)(::ffff:)?(10|127)[.].*|(::ffff:)?192[.]168[.].*|(::ffff:)?172[.](1[6-9]|2[0-9]|3[01])[.].*|(::ffff:)?169[.]254[.].*|::1|f[cd][0-9a-f]{2}:.*|fe[89ab][0-9a-f]:.*`
+                  | regexp `Accepted (?P<method>\S+) for (?P<user>\S+) from (?P<src>\S+) port`
+                  | src!~`(?i)(::ffff:)?(10|127)[.].*|(::ffff:)?192[.]168[.].*|(::ffff:)?172[.](1[6-9]|2[0-9]|3[01])[.].*|(::ffff:)?169[.]254[.].*|::1|f[cd][0-9a-f]{2}:.*|fe[89ab][0-9a-f]:.*`
                 [10m])
               ) > 0
             labels:
@@ -79,7 +83,7 @@ data:
             annotations:
               summary: >-
                 {{ $labels.user }} logged in to {{ $labels.hostname }} over SSH
-                from {{ $labels.source }}, an address that is not private.
+                from {{ $labels.src }}, an address that is not private.
 
           # Many failed logins from one address in 10 minutes: password
           # guessing against SSH, the Proxmox web interface and API, or
@@ -95,24 +99,24 @@ data:
           #   come before the lock.
           - alert: LoginFailureBurst
             expr: |
-              sum by (system, hostname, source) (
+              sum by (system, hostname, src) (
                 count_over_time({job="syslog", appname=~"sshd.*"}
                   |~ `Failed \S+ for |Invalid user |(Connection closed by|Disconnected from) (authenticating|invalid) user |maximum authentication attempts|not allowed because`
-                  | regexp `(from|user \S*) (?P<source>[0-9A-Fa-f.:]+)( port|$| not allowed)`
+                  | regexp `(from|user \S*) (?P<src>[0-9A-Fa-f.:]+)( port|$| not allowed)`
                   | label_format system="ssh"
                 [10m])
               ) >= 10
               or
-              sum by (system, hostname, source) (
+              sum by (system, hostname, src) (
                 count_over_time({job="syslog", appname="pvedaemon"} |= "authentication failure;"
-                  | regexp `rhost=(?:::ffff:)?(?P<source>\S+)`
+                  | regexp `rhost=(?:::ffff:)?(?P<src>\S+)`
                   | label_format system="proxmox"
                 [10m])
               ) >= 5
               or
-              sum by (system, hostname, source) (
+              sum by (system, hostname, src) (
                 count_over_time({namespace="keycloak", container="keycloak"} |= `type="LOGIN_ERROR"`
-                  | regexp `ipAddress="(?P<source>[^"]*)"`
+                  | regexp `ipAddress="(?P<src>[^"]*)"`
                   | regexp `error="(?P<error>[^"]*)"`
                   | error=~"invalid_user_credentials|user_not_found|user_temporarily_disabled|user_disabled"
                   | label_format system="keycloak", hostname="keycloak"
@@ -127,7 +131,7 @@ data:
             annotations:
               summary: >-
                 {{ $value }} failed {{ $labels.system }} logins to
-                {{ $labels.hostname }} from {{ $labels.source }} in 10 minutes.
+                {{ $labels.hostname }} from {{ $labels.src }} in 10 minutes.
 
           # sudo or su refused a user: the user may not use sudo, typed a
           # wrong password, or asked for a command that it may not run. The
