@@ -262,35 +262,56 @@ spec:
 
     - name: postgresql
       rules:
+        # Until 2026-11-28 the three rules below read cnpg_pg_up,
+        # cnpg_pg_settings_value and cnpg_pg_stat_replication_pg_wal_lsn_diff.
+        # CloudNativePG exports none of those, so the rules never fired. The
+        # names below are the ones the instances export
+        # (tests/alerts-postgres-eso.test.yaml).
+        #
+        # cnpg_collector_up is 0 when the exporter in the instance pod cannot
+        # query PostgreSQL. When no instance pod runs at all, the series is
+        # gone, not 0: the absent() branch is for that. 5 minutes, because an
+        # instance reads 0 for a scrape or two while it starts.
         - alert: PostgreSQLDown
-          expr: cnpg_pg_up == 0
-          for: 2m
+          expr: >
+            cnpg_collector_up == 0
+            or absent(cnpg_collector_up{namespace="postgresql-linds"})
+          for: 5m
           labels:
             severity: critical
           annotations:
-            summary: "PostgreSQL {{ $labels.cluster }} is down"
-            description: "CloudNativePG cluster {{ $labels.cluster }} instance {{ $labels.pod }} is not responding to connections."
+            summary: "PostgreSQL {{ $labels.namespace }}{{ if $labels.pod }}/{{ $labels.pod }}{{ end }} is down"
+            description: "{{ if $labels.pod }}Instance {{ $labels.pod }} does not answer its own metrics queries.{{ else }}No PostgreSQL instance in {{ $labels.namespace }} reports metrics: no instance pod runs, or none can be scraped.{{ end }} `kubectl -n {{ $labels.namespace }} get cluster,pods` shows the state."
 
+        # cnpg_backends_total has one series for each database, user and
+        # state, so it is summed to the instance first. The setting has no
+        # cluster label: the instance pod is what the two have in common.
         - alert: PostgreSQLHighConnections
           expr: >
-            cnpg_backends_total
-            / on(cluster, namespace) group_left()
-            cnpg_pg_settings_value{name="max_connections"} > 0.80
+            sum by (namespace, pod) (cnpg_backends_total)
+            / on (namespace, pod)
+            cnpg_pg_settings_setting{name="max_connections"} > 0.80
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "PostgreSQL {{ $labels.cluster }} connection usage high"
-            description: "PostgreSQL cluster {{ $labels.cluster }} is using more than 80% of available connections."
+            summary: "PostgreSQL {{ $labels.namespace }}/{{ $labels.pod }} connection usage high"
+            description: "Instance {{ $labels.pod }} uses more than 80% of max_connections."
 
+        # Bytes of WAL the primary has written that the standby has not
+        # replayed. The series is on the primary, one for each standby
+        # connection (application_name is the standby). The most seen in the
+        # 14 days before 2026-11-28 was 7 kB.
         - alert: PostgreSQLReplicationLag
-          expr: cnpg_pg_stat_replication_pg_wal_lsn_diff > 52428800
+          expr: >
+            max by (namespace, pod, application_name)
+            (cnpg_pg_stat_replication_replay_diff_bytes) > 52428800
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "PostgreSQL {{ $labels.cluster }} replication lag"
-            description: "PostgreSQL cluster {{ $labels.cluster }} has replication lag exceeding 50MB — standby is falling behind."
+            summary: "PostgreSQL standby {{ $labels.application_name }} is behind {{ $labels.pod }}"
+            description: "Standby {{ $labels.application_name }} in {{ $labels.namespace }} is more than 50 MB of WAL behind the primary {{ $labels.pod }}: the standby is falling behind."
 
         - alert: PostgreSQLWALArchivingFailing
           expr: cnpg_pg_stat_archiver_last_failed_time > cnpg_pg_stat_archiver_last_archived_time
@@ -372,15 +393,26 @@ spec:
 
     - name: external-secrets
       rules:
+        # Until 2026-11-28 this rule filtered on the label type="Ready". The
+        # operator's label is condition, so the rule never fired. The
+        # ExternalSecret's own namespace is exported_namespace (namespace is
+        # the operator's). max by: one series, not one for each operator pod
+        # that has reported it.
+        #
+        # The operator writes this metric only for an ExternalSecret it has
+        # reconciled since it started. Those with refreshPolicy OnChange are
+        # reconciled when they change, so most have no series. One that fails
+        # has been reconciled, and so has one.
         - alert: ExternalSecretSyncError
           expr: >
-            externalsecret_status_condition{type="Ready",status="False"} == 1
+            max by (exported_namespace, name)
+            (externalsecret_status_condition{condition="Ready",status="False"}) == 1
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} sync failed"
-            description: "ExternalSecret {{ $labels.name }} in {{ $labels.namespace }} is failing to sync from Vault."
+            summary: "ExternalSecret {{ $labels.exported_namespace }}/{{ $labels.name }} sync failed"
+            description: "ExternalSecret {{ $labels.name }} in {{ $labels.exported_namespace }} is failing to sync from Vault."
 
     - name: monitoring
       rules:
