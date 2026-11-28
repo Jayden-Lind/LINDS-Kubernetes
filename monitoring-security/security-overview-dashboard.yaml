@@ -1,0 +1,2743 @@
+---
+# Grafana dashboard "Security overview" (folder Security, uid security-overview).
+# The Grafana dashboard sidecar reads it (label grafana_dashboard).
+#
+# GENERATED. Edit dashboards.py and make this file again:
+#   python3 monitoring-security/dashboards.py
+#
+# See monitoring-security/README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-overview-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Security
+data:
+  security-overview.json: |
+    {
+      "uid": "security-overview",
+      "title": "Security overview",
+      "description": "Is something attacking or failing now, and are the defences on? Each block links to the dashboard with the detail. Source: LINDS-Kubernetes monitoring-security/.",
+      "tags": [
+        "security",
+        "logins",
+        "suricata",
+        "dns"
+      ],
+      "timezone": "browser",
+      "editable": true,
+      "graphTooltip": 1,
+      "schemaVersion": 39,
+      "refresh": "5m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "annotations": {
+        "list": []
+      },
+      "links": [
+        {
+          "title": "Access and logins",
+          "type": "link",
+          "url": "/d/security-access",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Suricata",
+          "type": "link",
+          "url": "/d/suricata",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "DNS blocking",
+          "type": "link",
+          "url": "/d/dns-blocking",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Network devices",
+          "type": "link",
+          "url": "/d/network-devices",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Logs / Windows",
+          "type": "link",
+          "url": "/d/logs-windows",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Router",
+          "type": "link",
+          "url": "/d/router",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Ingress traffic",
+          "type": "link",
+          "url": "/d/ingress-traffic",
+          "icon": "dashboard",
+          "keepTime": true
+        },
+        {
+          "title": "Availability",
+          "type": "link",
+          "url": "/d/availability",
+          "icon": "dashboard"
+        },
+        {
+          "title": "Backups",
+          "type": "link",
+          "url": "/d/backups",
+          "icon": "dashboard"
+        },
+        {
+          "title": "Overview",
+          "type": "link",
+          "url": "/d/overview",
+          "icon": "dashboard"
+        }
+      ],
+      "templating": {
+        "list": []
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "id": 1,
+          "title": "IPS at JD",
+          "description": "Suricata on jd-router-01 is inline: it blocks. \"Not blocking\" means it is off or not on its queue (alerts RouterIPSOff, RouterIPSNotAttached). linds-router-01 only reports.",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "router_ips_enabled * on (instance) router_ips_attached",
+              "legendFormat": "{{instance}}",
+              "range": false,
+              "instant": true,
+              "editorMode": "code",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "▲ No data",
+              "decimals": null,
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {
+                      "text": "● Blocking",
+                      "color": "#0ca30c",
+                      "index": 0
+                    },
+                    "0": {
+                      "text": "▲ Not blocking",
+                      "color": "#d03b3b",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "#d03b3b"
+                  },
+                  {
+                    "value": 1,
+                    "color": "#0ca30c"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "Router",
+              "url": "/d/router?${__url_time_range}"
+            },
+            {
+              "title": "Suricata",
+              "url": "/d/suricata?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 2,
+          "title": "Suricata, 15 min",
+          "description": "EVE lines in the last 15 minutes from each router's Suricata. 0 means it, or the relay to Loki, stopped (alert RouterSuricataNoLogs).",
+          "gridPos": {
+            "x": 3,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (hostname) (increase(loki_process_custom_suricata_eve_lines_total[15m]))",
+              "legendFormat": "{{hostname}}",
+              "range": false,
+              "instant": true,
+              "editorMode": "code",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "▲ 0",
+              "decimals": null,
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "▲ 0",
+                      "color": "#d03b3b"
+                    }
+                  }
+                }
+              ],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "#d03b3b"
+                  },
+                  {
+                    "value": 1,
+                    "color": "#0ca30c"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "Suricata",
+              "url": "/d/suricata?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 3,
+          "title": "DNS lists",
+          "description": "The RPZ blocklists that Unbound loaded on each router.",
+          "gridPos": {
+            "x": 7,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "count by (instance) (router_dns_blocklist_names > 0)",
+              "legendFormat": "{{instance}}",
+              "range": false,
+              "instant": true,
+              "editorMode": "code",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "▲ 0",
+              "decimals": null,
+              "mappings": [],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "#d03b3b"
+                  },
+                  {
+                    "value": 1,
+                    "color": "#0ca30c"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "DNS blocking",
+              "url": "/d/dns-blocking?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 4,
+          "title": "Oldest DNS list",
+          "description": "Time since the oldest list of each router last changed. The lists change every day (dns-blocklist-update, about 04:40). More than 2 days: the download fails.",
+          "gridPos": {
+            "x": 10,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max by (instance) (time() - router_dns_blocklist_changed_timestamp_seconds)",
+              "legendFormat": "{{instance}}",
+              "range": false,
+              "instant": true,
+              "editorMode": "code",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "▲ No data",
+              "decimals": null,
+              "mappings": [],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "value": 172800,
+                    "color": "#fab219"
+                  },
+                  {
+                    "value": 345600,
+                    "color": "#d03b3b"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "DNS blocking",
+              "url": "/d/dns-blocking?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 5,
+          "title": "Quiet sources",
+          "description": "Log sources that always send logs (the routers, the Proxmox hosts, TrueNAS, the Windows servers) and sent nothing for 2 hours. The alert LogSourceSilent is the same test. See \"Log sources\" below.",
+          "gridPos": {
+            "x": 14,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "count(sum by (job, hostname) (count_over_time({job=~\"syslog|windows\", hostname=~\"jd-router-01|linds-router-01|jd-proxmox-02|linds-proxmox-01|linds-truenas-01.linds.com.au|jd-dc-01|jd-fs-01|linds-dc|linds-dc2\"}[1d])) unless on (job, hostname) sum by (job, hostname) (count_over_time({job=~\"syslog|windows\", hostname=~\"jd-router-01|linds-router-01|jd-proxmox-02|linds-proxmox-01|linds-truenas-01.linds.com.au|jd-dc-01|jd-fs-01|linds-dc|linds-dc2\"}[2h])))",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "● 0",
+              "decimals": null,
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "● 0",
+                      "color": "#0ca30c"
+                    }
+                  }
+                }
+              ],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "value": 1,
+                    "color": "#d03b3b"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": []
+        },
+        {
+          "type": "stat",
+          "id": 6,
+          "title": "VPN users",
+          "description": "Road-warrior VPN sessions that are up now (router_ipsec_road_warriors).",
+          "gridPos": {
+            "x": 17,
+            "y": 0,
+            "w": 3,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(router_ipsec_road_warriors)",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "editorMode": "code",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "0",
+              "decimals": null,
+              "mappings": [],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "text"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "Access and logins",
+              "url": "/d/security-access?${__url_time_range}"
+            },
+            {
+              "title": "Router",
+              "url": "/d/router?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 7,
+          "title": "Ingress 401 and 403",
+          "description": "HTTP answers 401 and 403 of the two ingress controllers in the time range: a request without a login or a client certificate. The dashboard \"Ingress traffic\" has the detail.",
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({namespace=~\"nginx-ingress|nginx-ingress-mtls\"} |~ `\" (401|403) ` [$__range]))",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "wideLayout": true,
+            "showPercentChange": false
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "0",
+              "decimals": null,
+              "mappings": [],
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "value": null,
+                    "color": "text"
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "Ingress traffic",
+              "url": "/d/ingress-traffic?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "alertlist",
+          "id": 8,
+          "title": "Security alerts firing now",
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 9,
+            "h": 9
+          },
+          "description": "The alerts with category=security that fire now, from Loki's ruler (windows-security-alerts, router-vpn-alerts, monitoring-security/rules.yaml). Alertmanager sends each one to Discord once. These alerts have no history: Loki's ruler does not store them. Empty: none fires.",
+          "options": {
+            "viewMode": "list",
+            "groupMode": "default",
+            "groupBy": [],
+            "maxItems": 20,
+            "sortOrder": 1,
+            "dashboardAlerts": false,
+            "alertName": "",
+            "alertInstanceLabelFilter": "{category=\"security\"}",
+            "datasource": "",
+            "folder": null,
+            "stateFilter": {
+              "firing": true,
+              "pending": true,
+              "noData": false,
+              "normal": false,
+              "error": true
+            },
+            "showInstances": true
+          }
+        },
+        {
+          "type": "table",
+          "id": 9,
+          "title": "Logins in the time range",
+          "gridPos": {
+            "x": 9,
+            "y": 4,
+            "w": 15,
+            "h": 9
+          },
+          "description": "Successful and failed logins for each system. Windows sends its failed logons only; Keycloak's logins are in the log since the change of keycloak/keycloak.yaml. \"sudo and su\": sudo outside Ansible, and the refusals. Open \"Access and logins\" for each event.",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (system, result) (count_over_time({job=\"syslog\", appname=~\"sshd.*\", hostname=~\".+\"} |= \"Accepted \" | regexp `Accepted (?P<method>\\S+) for (?P<user>\\S+) from (?P<src>\\S+) port \\d+(?: ssh2(?:: (?P<key>.+))?)?` | label_format system=\"SSH\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=~\"sshd.*\", hostname=~\".+\"} |~ `(Connection closed by|Disconnected from|Disconnecting) (authenticating|invalid) user |Access denied for user ` | regexp `(?:for|user) (?P<user>\\S+) (?:from )?[0-9A-Fa-f.:]+(?: port| not allowed|$)` | regexp `User (?P<user>\\S+) from \\S+ not allowed` | regexp `Access denied for user (?P<user>\\S+)` | regexp `(?:from|user \\S*) (?P<src>[0-9A-Fa-f.:]+)(?: port|:| not allowed|$)` | label_format reason=`{{ if or (contains \"Invalid user\" __line__) (contains \"invalid user\" __line__) }}unknown user{{ else if contains \"Failed password\" __line__ }}wrong password{{ else if contains \"Failed keyboard-interactive\" __line__ }}wrong password{{ else if contains \"Failed publickey\" __line__ }}key refused{{ else if contains \"Failed \" __line__ }}login refused{{ else if or (contains \"maximum authentication\" __line__) (contains \"Too many authentication\" __line__) }}too many attempts{{ else if contains \"not allowed because\" __line__ }}user not allowed{{ else if contains \"Access denied\" __line__ }}refused by PAM{{ else if contains \"REFUSED\" __line__ }}root refused{{ else }}no key or password accepted{{ end }}` | label_format system=\"SSH\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=\"sudo\", hostname=~\".+\"} |= \" COMMAND=\" | regexp `(?P<user>[^ ]+) : +(?:[A-Z]+=[^;]*; +)*COMMAND=(?P<command>.*)` | regexp ` : +TTY=(?P<tty>[^ ]+) ;` | regexp `(?: : +|; )USER=(?P<run_as>[^ ]+) ;` | label_format command=`{{ if .command }}{{ .command }}{{ else }}{{ __line__ }}{{ end }}` | label_format kind=`{{ if contains \"BECOME-SUCCESS-\" .command }}Ansible{{ else if .tty }}Terminal{{ else }}No terminal{{ end }}` | kind!=\"Ansible\" | label_format system=\"sudo and su\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=~\"sudo|su\", hostname=~\".+\"} |~ ` : (user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)|FAILED SU ` | regexp `(?P<user>[^ ]+) : (?P<reason>user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)` | regexp `FAILED SU \\(to (?P<run_as>\\S+)\\) (?P<user>\\S+) on` | label_format reason=`{{ if .reason }}{{ .reason }}{{ else }}su refused{{ end }}` | label_format system=\"sudo and su\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=\"pvedaemon\", hostname=~\".+\"} |= \"successful auth for user\" | regexp `successful auth for user '(?P<user>[^']+)'` | label_format system=\"Proxmox\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=\"pvedaemon\", hostname=~\".+\"} |= \"authentication failure;\" | regexp `rhost=(?:::ffff:)?(?P<src>\\S*) user=(?P<user>\\S*) msg=(?P<reason>.*)` | label_format system=\"Proxmox\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=\"charon-systemd\", hostname=~\".+\"} |= \" established between \" | regexp `IKE_SA (?P<conn>[^\\[ ]+)\\[\\d+\\] established between [^\\[]+\\[[^\\]]*\\]\\.\\.\\.(?P<src>[^\\[]+)\\[(?P<user>[^\\]]*)\\]` | conn!=\"LINDS\" | label_format system=\"VPN\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"syslog\", appname=\"charon-systemd\", hostname=~\".+\"} |~ `EAP-MS-CHAPv2 verification failed|no EAP key found|EAP method EAP_[A-Z0-9]+ failed|with EAP failed` | regexp `no EAP key found for hosts '[^']*' - '(?P<user>[^']*)'` | label_format reason=`{{ if contains \"no EAP key\" __line__ }}unknown user{{ else if contains \"verification failed\" __line__ }}wrong password{{ else }}EAP failed{{ end }}` | label_format system=\"VPN\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({job=\"windows\", channel=\"Security\", hostname=~\".+\"} | event_id=~\"4625|4771|4776\" | json event_data=\"event_data\" | line_format \"{{.event_data}}\" | regexp \"<Data Name='TargetUserName'>(?P<user>[^<]*)</Data>\" | regexp \"<Data Name='TargetDomainName'>(?P<domain>[^<]*)</Data>\" | regexp \"<Data Name='IpAddress'>(?:::ffff:)?(?P<client>[^<]*)</Data>\" | regexp \"<Data Name='WorkstationName'>(?P<workstation>[^<]*)</Data>\" | regexp \"<Data Name='LogonType'>(?P<logon_type>[^<]*)</Data>\" | regexp \"<Data Name='Status'>(?P<status>[^<]*)</Data>\" | regexp \"<Data Name='SubStatus'>(?P<substatus>[^<]*)</Data>\" | regexp \"<Data Name='Workstation'>(?P<workstation>[^<]*)</Data>\" | label_format reason=`{{ if and .substatus (ne .substatus \"0x0\") }}{{ .substatus }}{{ else }}{{ .status }}{{ end }}`, client=`{{ if and .client (ne .client \"-\") }}{{ .client }}{{ else }}(no address){{ end }}`, event=`{{ if eq .event_id \"4625\" }}4625 failed logon{{ else if eq .event_id \"4771\" }}4771 Kerberos pre-auth failed{{ else }}4776 NTLM check failed{{ end }}` | label_format system=\"Windows domain\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"keycloak\", container=\"keycloak\"} |= \"[org.keycloak.events]\" |= `type=\"` | regexp `type=\"(?P<kc_event>[^\"]*)\"` | regexp `clientId=\"(?P<client>[^\"]*)\"` | regexp `ipAddress=\"(?P<src>[^\"]*)\"` | regexp `error=\"(?P<error>[^\"]*)\"` | regexp `username=\"(?P<user>[^\"]*)\"` | kc_event=\"LOGIN\" | label_format system=\"Keycloak\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"keycloak\", container=\"keycloak\"} |= \"[org.keycloak.events]\" |= `type=\"` | regexp `type=\"(?P<kc_event>[^\"]*)\"` | regexp `clientId=\"(?P<client>[^\"]*)\"` | regexp `ipAddress=\"(?P<src>[^\"]*)\"` | regexp `error=\"(?P<error>[^\"]*)\"` | regexp `username=\"(?P<user>[^\"]*)\"` | kc_event=\"LOGIN_ERROR\" | label_format system=\"Keycloak\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"Web login successful\" | json login_type=\"[\\\"login.type\\\"]\", claims=\"claims\" | line_format \"{{.claims}}\" | json user=\"preferred_username\" | label_format system=\"Argo CD\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"finished call\" |= \"session.SessionService\" | json method=\"[\\\"grpc.method\\\"]\", code=\"[\\\"grpc.code\\\"]\", error=\"[\\\"grpc.error\\\"]\" | method=\"Create\" | code=\"OK\" | label_format system=\"Argo CD\", result=\"Succeeded\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"finished call\" |= \"session.SessionService\" | json method=\"[\\\"grpc.method\\\"]\", code=\"[\\\"grpc.code\\\"]\", error=\"[\\\"grpc.error\\\"]\" | method=\"Create\" | code!=\"OK\" | label_format system=\"Argo CD\", result=\"Failed\" [$__range]))\nor\nsum by (system, result) (count_over_time({namespace=\"monitoring\", container=\"grafana\"} |= \"Failed to authenticate request\" | logfmt client, error | client!=\"auth.client.session\" | label_format system=\"Grafana\", result=\"Failed\" [$__range]))",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "result",
+                "rowField": "system",
+                "valueField": "Value #A",
+                "emptyValue": "null"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "renameByName": {
+                  "system\\result": "System"
+                },
+                "indexByName": {
+                  "system\\result": 0,
+                  "Succeeded": 1,
+                  "Failed": 2
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "System"
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "md",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "",
+              "custom": {
+                "align": "left"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failed"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "value": null,
+                          "color": "text"
+                        },
+                        {
+                          "value": 1,
+                          "color": "#ec835a"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "System"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 170
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Access and logins",
+              "url": "/d/security-access?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 10,
+          "title": "Threats: what the routers blocked and saw",
+          "gridPos": {
+            "x": 0,
+            "y": 13,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "timeseries",
+          "id": 11,
+          "title": "Suricata: blocked and reported",
+          "description": "Each Suricata alert event of both routers, by what it is: blocked (jd-router-01 only), or reported and let through, by severity.",
+          "gridPos": {
+            "x": 0,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (kind) (count_over_time({job=\"suricata\", event_type=\"alert\"} | label_format kind=`{{ if eq .alert_action \"blocked\" }}Blocked{{ else if eq .alert_severity \"1\" }}Alert, high{{ else if eq .alert_severity \"2\" }}Alert, medium{{ else }}Alert, low{{ end }}` [$__auto]))",
+              "legendFormat": "{{kind}}",
+              "queryType": "range",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMax": 5
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Blocked"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alert, high"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d03b3b"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alert, medium"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#ec835a"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alert, low"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#fab219"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Suricata",
+              "url": "/d/suricata?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "id": 12,
+          "title": "DNS questions refused by the blocklists",
+          "description": "Answers that Unbound refused with a blocklist (router_dns_blocked_total), for each router.",
+          "gridPos": {
+            "x": 12,
+            "y": 14,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (instance) (increase(router_dns_blocked_total[$__interval]))",
+              "legendFormat": "{{instance}}",
+              "range": true,
+              "instant": false,
+              "editorMode": "code",
+              "interval": "5m",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMax": 5
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "jd-router-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "linds-router-01"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "DNS blocking",
+              "url": "/d/dns-blocking?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "id": 13,
+          "title": "Most frequent Suricata rules",
+          "description": "The rules with the most alert events in the time range, blocked and reported.",
+          "gridPos": {
+            "x": 0,
+            "y": 22,
+            "w": 9,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(15, sum by (alert_signature, alert_action) (count_over_time({job=\"suricata\", event_type=\"alert\"} [$__range])))",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "alert_signature": "Rule",
+                  "alert_action": "Action",
+                  "Value #A": "Events"
+                },
+                "indexByName": {
+                  "alert_signature": 0,
+                  "alert_action": 1,
+                  "Value #A": 2
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Events",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Events"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Action"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "blocked": {
+                            "text": "Blocked",
+                            "index": 0
+                          },
+                          "allowed": {
+                            "text": "Reported",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Suricata",
+              "url": "/d/suricata?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "id": 14,
+          "title": "Devices with the most refused DNS questions",
+          "description": "The devices that asked for the most names on a blocklist. A DNS server or a cluster node asks for its clients.",
+          "gridPos": {
+            "x": 9,
+            "y": 22,
+            "w": 7,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "topk(15, sum by (device, hostname) (count_over_time({job=\"syslog\", appname=\"unbound\"} |= \"rpz: applied\" | pattern \"<_>rpz: applied [<list>] <_> <action> <device>@<_> <name>. <qtype> IN\" [$__range])))",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "device": "Device",
+                  "hostname": "Router",
+                  "Value #A": "Refused"
+                },
+                "indexByName": {
+                  "device": 0,
+                  "hostname": 1,
+                  "Value #A": 2
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Refused",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Refused"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "DNS blocking",
+              "url": "/d/dns-blocking?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "id": 15,
+          "title": "Cilium drops by reason",
+          "description": "Packets that Cilium dropped in the cluster (hubble_drop_total). POLICY_DENIED is a NetworkPolicy refusal. The metric has no pod or namespace.",
+          "gridPos": {
+            "x": 16,
+            "y": 22,
+            "w": 8,
+            "h": 9
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (reason) (increase(hubble_drop_total[$__interval]))",
+              "legendFormat": "{{reason}}",
+              "range": true,
+              "instant": false,
+              "editorMode": "code",
+              "interval": "5m",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              }
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMax": 5
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "POLICY_DENIED"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "UNSUPPORTED_L3_PROTOCOL"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "TTL_EXCEEDED"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "CT_UNKNOWN_L4_PROTOCOL"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "FIB_LOOKUP_FAILED"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": []
+        },
+        {
+          "type": "row",
+          "id": 16,
+          "title": "Access: logins and changes to accounts",
+          "gridPos": {
+            "x": 0,
+            "y": 31,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "timeseries",
+          "id": 17,
+          "title": "Successful logins",
+          "description": "Logins for each system. \"sudo and su\" counts sudo outside Ansible.",
+          "gridPos": {
+            "x": 0,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (system) (count_over_time({job=\"syslog\", appname=~\"sshd.*\", hostname=~\".+\"} |= \"Accepted \" | regexp `Accepted (?P<method>\\S+) for (?P<user>\\S+) from (?P<src>\\S+) port \\d+(?: ssh2(?:: (?P<key>.+))?)?` | label_format system=\"SSH\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=\"sudo\", hostname=~\".+\"} |= \" COMMAND=\" | regexp `(?P<user>[^ ]+) : +(?:[A-Z]+=[^;]*; +)*COMMAND=(?P<command>.*)` | regexp ` : +TTY=(?P<tty>[^ ]+) ;` | regexp `(?: : +|; )USER=(?P<run_as>[^ ]+) ;` | label_format command=`{{ if .command }}{{ .command }}{{ else }}{{ __line__ }}{{ end }}` | label_format kind=`{{ if contains \"BECOME-SUCCESS-\" .command }}Ansible{{ else if .tty }}Terminal{{ else }}No terminal{{ end }}` | kind!=\"Ansible\" | label_format system=\"sudo and su\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=\"pvedaemon\", hostname=~\".+\"} |= \"successful auth for user\" | regexp `successful auth for user '(?P<user>[^']+)'` | label_format system=\"Proxmox\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=\"charon-systemd\", hostname=~\".+\"} |= \" established between \" | regexp `IKE_SA (?P<conn>[^\\[ ]+)\\[\\d+\\] established between [^\\[]+\\[[^\\]]*\\]\\.\\.\\.(?P<src>[^\\[]+)\\[(?P<user>[^\\]]*)\\]` | conn!=\"LINDS\" | label_format system=\"VPN\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"keycloak\", container=\"keycloak\"} |= \"[org.keycloak.events]\" |= `type=\"` | regexp `type=\"(?P<kc_event>[^\"]*)\"` | regexp `clientId=\"(?P<client>[^\"]*)\"` | regexp `ipAddress=\"(?P<src>[^\"]*)\"` | regexp `error=\"(?P<error>[^\"]*)\"` | regexp `username=\"(?P<user>[^\"]*)\"` | kc_event=\"LOGIN\" | label_format system=\"Keycloak\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"Web login successful\" | json login_type=\"[\\\"login.type\\\"]\", claims=\"claims\" | line_format \"{{.claims}}\" | json user=\"preferred_username\" | label_format system=\"Argo CD\", result=\"Succeeded\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"finished call\" |= \"session.SessionService\" | json method=\"[\\\"grpc.method\\\"]\", code=\"[\\\"grpc.code\\\"]\", error=\"[\\\"grpc.error\\\"]\" | method=\"Create\" | code=\"OK\" | label_format system=\"Argo CD\", result=\"Succeeded\" [$__auto]))",
+              "legendFormat": "{{system}}",
+              "queryType": "range",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMax": 5
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "SSH"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "sudo and su"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Proxmox"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "VPN"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Windows domain"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Keycloak"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#0ca30c"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Argo CD"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#9085e9"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Grafana"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#e66767"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Access and logins",
+              "url": "/d/security-access?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "id": 18,
+          "title": "Failed logins",
+          "description": "Failed logins and refusals for each system. SSH counts connections that closed before a login.",
+          "gridPos": {
+            "x": 12,
+            "y": 32,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum by (system) (count_over_time({job=\"syslog\", appname=~\"sshd.*\", hostname=~\".+\"} |~ `(Connection closed by|Disconnected from|Disconnecting) (authenticating|invalid) user |Access denied for user ` | regexp `(?:for|user) (?P<user>\\S+) (?:from )?[0-9A-Fa-f.:]+(?: port| not allowed|$)` | regexp `User (?P<user>\\S+) from \\S+ not allowed` | regexp `Access denied for user (?P<user>\\S+)` | regexp `(?:from|user \\S*) (?P<src>[0-9A-Fa-f.:]+)(?: port|:| not allowed|$)` | label_format reason=`{{ if or (contains \"Invalid user\" __line__) (contains \"invalid user\" __line__) }}unknown user{{ else if contains \"Failed password\" __line__ }}wrong password{{ else if contains \"Failed keyboard-interactive\" __line__ }}wrong password{{ else if contains \"Failed publickey\" __line__ }}key refused{{ else if contains \"Failed \" __line__ }}login refused{{ else if or (contains \"maximum authentication\" __line__) (contains \"Too many authentication\" __line__) }}too many attempts{{ else if contains \"not allowed because\" __line__ }}user not allowed{{ else if contains \"Access denied\" __line__ }}refused by PAM{{ else if contains \"REFUSED\" __line__ }}root refused{{ else }}no key or password accepted{{ end }}` | label_format system=\"SSH\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=~\"sudo|su\", hostname=~\".+\"} |~ ` : (user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)|FAILED SU ` | regexp `(?P<user>[^ ]+) : (?P<reason>user NOT in sudoers|[0-9]+ incorrect password attempts?|a password is required|command not allowed)` | regexp `FAILED SU \\(to (?P<run_as>\\S+)\\) (?P<user>\\S+) on` | label_format reason=`{{ if .reason }}{{ .reason }}{{ else }}su refused{{ end }}` | label_format system=\"sudo and su\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=\"pvedaemon\", hostname=~\".+\"} |= \"authentication failure;\" | regexp `rhost=(?:::ffff:)?(?P<src>\\S*) user=(?P<user>\\S*) msg=(?P<reason>.*)` | label_format system=\"Proxmox\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"syslog\", appname=\"charon-systemd\", hostname=~\".+\"} |~ `EAP-MS-CHAPv2 verification failed|no EAP key found|EAP method EAP_[A-Z0-9]+ failed|with EAP failed` | regexp `no EAP key found for hosts '[^']*' - '(?P<user>[^']*)'` | label_format reason=`{{ if contains \"no EAP key\" __line__ }}unknown user{{ else if contains \"verification failed\" __line__ }}wrong password{{ else }}EAP failed{{ end }}` | label_format system=\"VPN\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({job=\"windows\", channel=\"Security\", hostname=~\".+\"} | event_id=~\"4625|4771|4776\" | json event_data=\"event_data\" | line_format \"{{.event_data}}\" | regexp \"<Data Name='TargetUserName'>(?P<user>[^<]*)</Data>\" | regexp \"<Data Name='TargetDomainName'>(?P<domain>[^<]*)</Data>\" | regexp \"<Data Name='IpAddress'>(?:::ffff:)?(?P<client>[^<]*)</Data>\" | regexp \"<Data Name='WorkstationName'>(?P<workstation>[^<]*)</Data>\" | regexp \"<Data Name='LogonType'>(?P<logon_type>[^<]*)</Data>\" | regexp \"<Data Name='Status'>(?P<status>[^<]*)</Data>\" | regexp \"<Data Name='SubStatus'>(?P<substatus>[^<]*)</Data>\" | regexp \"<Data Name='Workstation'>(?P<workstation>[^<]*)</Data>\" | label_format reason=`{{ if and .substatus (ne .substatus \"0x0\") }}{{ .substatus }}{{ else }}{{ .status }}{{ end }}`, client=`{{ if and .client (ne .client \"-\") }}{{ .client }}{{ else }}(no address){{ end }}`, event=`{{ if eq .event_id \"4625\" }}4625 failed logon{{ else if eq .event_id \"4771\" }}4771 Kerberos pre-auth failed{{ else }}4776 NTLM check failed{{ end }}` | label_format system=\"Windows domain\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"keycloak\", container=\"keycloak\"} |= \"[org.keycloak.events]\" |= `type=\"` | regexp `type=\"(?P<kc_event>[^\"]*)\"` | regexp `clientId=\"(?P<client>[^\"]*)\"` | regexp `ipAddress=\"(?P<src>[^\"]*)\"` | regexp `error=\"(?P<error>[^\"]*)\"` | regexp `username=\"(?P<user>[^\"]*)\"` | kc_event=\"LOGIN_ERROR\" | label_format system=\"Keycloak\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"argocd\", container=\"argocd-server\"} |= \"finished call\" |= \"session.SessionService\" | json method=\"[\\\"grpc.method\\\"]\", code=\"[\\\"grpc.code\\\"]\", error=\"[\\\"grpc.error\\\"]\" | method=\"Create\" | code!=\"OK\" | label_format system=\"Argo CD\", result=\"Failed\" [$__auto]))\nor\nsum by (system) (count_over_time({namespace=\"monitoring\", container=\"grafana\"} |= \"Failed to authenticate request\" | logfmt client, error | client!=\"auth.client.session\" | label_format system=\"Grafana\", result=\"Failed\" [$__auto]))",
+              "legendFormat": "{{system}}",
+              "queryType": "range",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              }
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true,
+              "calcs": [
+                "sum"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "decimals": null,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "barWidthFactor": 0.8,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                },
+                "axisSoftMax": 5
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "SSH"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "sudo and su"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d95926"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Proxmox"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#199e70"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "VPN"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#c98500"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Windows domain"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#d55181"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Keycloak"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#0ca30c"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Argo CD"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#9085e9"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Grafana"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#e66767"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Access and logins",
+              "url": "/d/security-access?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "id": 19,
+          "title": "Windows: changes to accounts and groups",
+          "description": "Accounts made, enabled, disabled, deleted or locked out, passwords reset, and members added to groups, newest first, in the last 7 days whatever the time range. \"Privileged\": a group that controls the domain (the groups of the alert ADPrivilegedGroupMemberAdded).",
+          "gridPos": {
+            "x": 0,
+            "y": 40,
+            "w": 16,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{job=\"windows\", channel=\"Security\"} | event_id=~\"4720|4722|4723|4724|4725|4726|4738|4740|4767|4781|4794|4727|4728|4729|4730|4731|4732|4733|4734|4735|4737|4754|4755|4756|4757|4758\" | json event_data=\"event_data\" | line_format \"{{.event_data}}\" | regexp \"<Data Name='TargetUserName'>(?P<target>[^<]*)</Data>\" | regexp \"<Data Name='MemberName'>(?P<member>[^<]*)</Data>\" | regexp \"<Data Name='SubjectUserName'>(?P<actor>[^<]*)</Data>\" | regexp \"<Data Name='TargetSid'>(?P<group_sid>[^<]*)</Data>\" | label_format member=`{{ regexReplaceAll \"^CN=\" (regexReplaceAll \",.*\" .member \"\") \"\" }}`, group=`{{ .target }}`, privileged=`{{ if and .group_sid (eq (regexReplaceAll \"^S-1-5-21-[0-9-]+-(512|518|519|520|526|527)|^S-1-5-32-(544|548|549|550|551)\" .group_sid \"\") \"\") }}▲ yes{{ else if eq .group \"DnsAdmins\" }}▲ yes{{ end }}`",
+              "queryType": "range",
+              "maxLines": 200,
+              "direction": "backward"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "labels",
+                "format": "json",
+                "replace": false,
+                "keepTime": false
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "hostname",
+                    "event_id",
+                    "target",
+                    "member",
+                    "privileged",
+                    "actor"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "indexByName": {
+                  "Time": 0,
+                  "hostname": 1,
+                  "event_id": 2,
+                  "target": 3,
+                  "member": 4,
+                  "privileged": 5,
+                  "actor": 6
+                },
+                "renameByName": {
+                  "hostname": "Server",
+                  "event_id": "Event",
+                  "target": "Account or group",
+                  "member": "Member",
+                  "privileged": "Privileged",
+                  "actor": "By"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Time",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left",
+                "filterable": true,
+                "inspect": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 182
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Server"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 95
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Event"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Privileged"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 85
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Member"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "By"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 170
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Event"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "4625": {
+                            "text": "Failed logon",
+                            "index": 0
+                          },
+                          "4771": {
+                            "text": "Kerberos pre-auth failed",
+                            "index": 1
+                          },
+                          "4776": {
+                            "text": "NTLM check failed",
+                            "index": 2
+                          },
+                          "4720": {
+                            "text": "Account created",
+                            "index": 3
+                          },
+                          "4722": {
+                            "text": "Account enabled",
+                            "index": 4
+                          },
+                          "4723": {
+                            "text": "Password change",
+                            "index": 5
+                          },
+                          "4724": {
+                            "text": "Password reset",
+                            "index": 6
+                          },
+                          "4725": {
+                            "text": "Account disabled",
+                            "index": 7
+                          },
+                          "4726": {
+                            "text": "Account deleted",
+                            "index": 8
+                          },
+                          "4738": {
+                            "text": "Account changed",
+                            "index": 9
+                          },
+                          "4740": {
+                            "text": "▲ Account locked out",
+                            "index": 10,
+                            "color": "#ec835a"
+                          },
+                          "4767": {
+                            "text": "Account unlocked",
+                            "index": 11
+                          },
+                          "4781": {
+                            "text": "Account renamed",
+                            "index": 12
+                          },
+                          "4794": {
+                            "text": "▲ DSRM password set",
+                            "index": 13,
+                            "color": "#ec835a"
+                          },
+                          "4727": {
+                            "text": "Global group created",
+                            "index": 14
+                          },
+                          "4728": {
+                            "text": "Added to global group",
+                            "index": 15
+                          },
+                          "4729": {
+                            "text": "Removed from global group",
+                            "index": 16
+                          },
+                          "4730": {
+                            "text": "Global group deleted",
+                            "index": 17
+                          },
+                          "4731": {
+                            "text": "Local group created",
+                            "index": 18
+                          },
+                          "4732": {
+                            "text": "Added to local group",
+                            "index": 19
+                          },
+                          "4733": {
+                            "text": "Removed from local group",
+                            "index": 20
+                          },
+                          "4734": {
+                            "text": "Local group deleted",
+                            "index": 21
+                          },
+                          "4735": {
+                            "text": "Local group changed",
+                            "index": 22
+                          },
+                          "4737": {
+                            "text": "Global group changed",
+                            "index": 23
+                          },
+                          "4754": {
+                            "text": "Universal group created",
+                            "index": 24
+                          },
+                          "4755": {
+                            "text": "Universal group changed",
+                            "index": 25
+                          },
+                          "4756": {
+                            "text": "Added to universal group",
+                            "index": 26
+                          },
+                          "4757": {
+                            "text": "Removed from universal group",
+                            "index": 27
+                          },
+                          "4758": {
+                            "text": "Universal group deleted",
+                            "index": 28
+                          },
+                          "4769": {
+                            "text": "Service ticket refused",
+                            "index": 29
+                          },
+                          "4768": {
+                            "text": "TGT refused",
+                            "index": 30
+                          },
+                          "5061": {
+                            "text": "Key operation failed",
+                            "index": 31
+                          },
+                          "4662": {
+                            "text": "Directory object access",
+                            "index": 32
+                          },
+                          "4719": {
+                            "text": "Audit policy changed",
+                            "index": 33,
+                            "color": "#ec835a"
+                          },
+                          "1102": {
+                            "text": "▲ Security log cleared",
+                            "index": 34,
+                            "color": "#d03b3b"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "text"
+                    }
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Access and logins",
+              "url": "/d/security-access?${__url_time_range}"
+            },
+            {
+              "title": "Logs / Windows",
+              "url": "/d/logs-windows?${__url_time_range}"
+            }
+          ],
+          "timeFrom": "7d"
+        },
+        {
+          "type": "table",
+          "id": 20,
+          "title": "Windows: audit failures by event",
+          "description": "Security events with the keyword Audit Failure in the time range. 4769 with status 0xd (a ticket renewal that the KDC refused) is routine.",
+          "gridPos": {
+            "x": 16,
+            "y": 40,
+            "w": 8,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "sum by (event_id) (count_over_time({job=\"windows\", channel=\"Security\"} | json keywords=\"keywords\" | keywords=\"Audit Failure\" [$__range]))",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "event_id": "Event",
+                  "Value #A": "Events"
+                },
+                "indexByName": {
+                  "event_id": 0,
+                  "Value #A": 1
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Events",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "align": "left",
+                "filterable": true
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Events"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#3987e5"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Event"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "4625": {
+                            "text": "Failed logon",
+                            "index": 0
+                          },
+                          "4771": {
+                            "text": "Kerberos pre-auth failed",
+                            "index": 1
+                          },
+                          "4776": {
+                            "text": "NTLM check failed",
+                            "index": 2
+                          },
+                          "4720": {
+                            "text": "Account created",
+                            "index": 3
+                          },
+                          "4722": {
+                            "text": "Account enabled",
+                            "index": 4
+                          },
+                          "4723": {
+                            "text": "Password change",
+                            "index": 5
+                          },
+                          "4724": {
+                            "text": "Password reset",
+                            "index": 6
+                          },
+                          "4725": {
+                            "text": "Account disabled",
+                            "index": 7
+                          },
+                          "4726": {
+                            "text": "Account deleted",
+                            "index": 8
+                          },
+                          "4738": {
+                            "text": "Account changed",
+                            "index": 9
+                          },
+                          "4740": {
+                            "text": "▲ Account locked out",
+                            "index": 10,
+                            "color": "#ec835a"
+                          },
+                          "4767": {
+                            "text": "Account unlocked",
+                            "index": 11
+                          },
+                          "4781": {
+                            "text": "Account renamed",
+                            "index": 12
+                          },
+                          "4794": {
+                            "text": "▲ DSRM password set",
+                            "index": 13,
+                            "color": "#ec835a"
+                          },
+                          "4727": {
+                            "text": "Global group created",
+                            "index": 14
+                          },
+                          "4728": {
+                            "text": "Added to global group",
+                            "index": 15
+                          },
+                          "4729": {
+                            "text": "Removed from global group",
+                            "index": 16
+                          },
+                          "4730": {
+                            "text": "Global group deleted",
+                            "index": 17
+                          },
+                          "4731": {
+                            "text": "Local group created",
+                            "index": 18
+                          },
+                          "4732": {
+                            "text": "Added to local group",
+                            "index": 19
+                          },
+                          "4733": {
+                            "text": "Removed from local group",
+                            "index": 20
+                          },
+                          "4734": {
+                            "text": "Local group deleted",
+                            "index": 21
+                          },
+                          "4735": {
+                            "text": "Local group changed",
+                            "index": 22
+                          },
+                          "4737": {
+                            "text": "Global group changed",
+                            "index": 23
+                          },
+                          "4754": {
+                            "text": "Universal group created",
+                            "index": 24
+                          },
+                          "4755": {
+                            "text": "Universal group changed",
+                            "index": 25
+                          },
+                          "4756": {
+                            "text": "Added to universal group",
+                            "index": 26
+                          },
+                          "4757": {
+                            "text": "Removed from universal group",
+                            "index": 27
+                          },
+                          "4758": {
+                            "text": "Universal group deleted",
+                            "index": 28
+                          },
+                          "4769": {
+                            "text": "Service ticket refused",
+                            "index": 29
+                          },
+                          "4768": {
+                            "text": "TGT refused",
+                            "index": 30
+                          },
+                          "5061": {
+                            "text": "Key operation failed",
+                            "index": 31
+                          },
+                          "4662": {
+                            "text": "Directory object access",
+                            "index": 32
+                          },
+                          "4719": {
+                            "text": "Audit policy changed",
+                            "index": 33,
+                            "color": "#ec835a"
+                          },
+                          "1102": {
+                            "text": "▲ Security log cleared",
+                            "index": 34,
+                            "color": "#d03b3b"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Logs / Windows",
+              "url": "/d/logs-windows?${__url_time_range}"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 21,
+          "title": "Log sources and defence alerts",
+          "gridPos": {
+            "x": 0,
+            "y": 49,
+            "w": 24,
+            "h": 1
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "type": "table",
+          "id": 22,
+          "title": "Log sources: the last line from each",
+          "gridPos": {
+            "x": 0,
+            "y": 50,
+            "w": 12,
+            "h": 10
+          },
+          "description": "Each host that sent syslog or Windows logs in the last 7 days, the oldest first. A source that stops sending logs is blind: the alerts on its logs cannot fire. The routers, the Proxmox hosts, TrueNAS and the Windows servers send at least every hour (alert LogSourceSilent after 2 hours); the torrent VMs, the Plex VM and the switches can be quiet for hours. Suricata: the tiles at the top.",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "max by (job, hostname) (max_over_time({job=~\"syslog|windows\"} | label_format ts=`{{ unixEpoch __timestamp__ }}` | unwrap ts [7d])) * 1000",
+              "queryType": "instant",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "hostname": 0,
+                  "job": 1,
+                  "Value #A": 2
+                },
+                "renameByName": {
+                  "hostname": "Host",
+                  "job": "Kind",
+                  "Value #A": "Last line"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Last line"
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "cellHeight": "sm",
+            "showHeader": true,
+            "footer": {
+              "show": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "left"
+              },
+              "noValue": ""
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last line"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Kind"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "state-timeline",
+          "id": 23,
+          "title": "Defence alerts in the time range",
+          "gridPos": {
+            "x": 12,
+            "y": 50,
+            "w": 12,
+            "h": 10
+          },
+          "description": "Prometheus alerts on the defences and on the log pipeline: Suricata, the IPS, DNS, Loki, the tunnel. \"None firing\" fills the time when no such alert fired. The security alerts of Loki's ruler are not here: they have no history.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "range": true,
+              "instant": false,
+              "expr": "max by (alertname, instance, hostname) (ALERTS{alertstate=\"firing\", alertname=~\"RouterIPS.*|RouterSuricata.*|RouterDNS.*|LokiNotIngesting|RouterTunnelDown\"}) or on () label_replace(vector(0), \"alertname\", \"None firing\", \"\", \"\")",
+              "legendFormat": "{{alertname}} {{instance}}{{hostname}}"
+            }
+          ],
+          "options": {
+            "showValue": "never",
+            "mergeValues": true,
+            "rowHeight": 0.5,
+            "alignValue": "left",
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "#ec835a"
+              },
+              "custom": {
+                "fillOpacity": 50,
+                "lineWidth": 0
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {
+                      "text": "▲ Firing",
+                      "color": "#ec835a"
+                    },
+                    "0": {
+                      "text": "● None firing",
+                      "color": "#0ca30c"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "links": [
+            {
+              "title": "Router",
+              "url": "/d/router?${__url_time_range}"
+            }
+          ]
+        }
+      ]
+    }
