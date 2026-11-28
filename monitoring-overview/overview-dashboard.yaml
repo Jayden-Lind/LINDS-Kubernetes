@@ -203,7 +203,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -304,7 +304,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -405,7 +405,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -496,7 +496,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -1238,7 +1238,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -2378,8 +2378,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#0ca30c",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "#0ca30c",
+                    "value": 0
                   },
                   {
                     "color": "#d03b3b",
@@ -2468,7 +2472,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#0ca30c",
+                    "color": "text",
                     "value": null
                   },
                   {
@@ -2852,7 +2856,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -2860,6 +2864,26 @@ data:
               "noValue": "✗ No data"
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Ready"
+                },
+                "properties": [
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "text",
+                          "value": null
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
               {
                 "matcher": {
                   "id": "byName",
@@ -3061,8 +3085,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "text",
+                    "value": 0
                   }
                 ]
               },
@@ -3196,7 +3224,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -3271,8 +3299,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "text",
+                    "value": 0
                   }
                 ]
               },
@@ -3355,8 +3387,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#0ca30c",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "#0ca30c",
+                    "value": 0
                   },
                   {
                     "color": "#fab219",
@@ -4218,8 +4254,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#0ca30c",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "#0ca30c",
+                    "value": 0
                   },
                   {
                     "color": "#fab219",
@@ -4392,8 +4432,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#0ca30c",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "#0ca30c",
+                    "value": 0
                   },
                   {
                     "color": "#fab219",
@@ -4494,11 +4538,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
               },
+              "noValue": "✗ No data",
               "decimals": 0
             },
             "overrides": [

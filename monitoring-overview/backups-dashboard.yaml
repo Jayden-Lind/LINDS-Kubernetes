@@ -188,7 +188,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#d03b3b",
                     "value": null
                   }
                 ]
@@ -1768,8 +1768,12 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "#fab219",
+                    "color": "#d03b3b",
                     "value": null
+                  },
+                  {
+                    "color": "#fab219",
+                    "value": 0
                   },
                   {
                     "color": "#0ca30c",
@@ -1891,7 +1895,7 @@ data:
                 "uid": "prometheus"
               },
               "refId": "A",
-              "expr": "time() - max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{namespace=\"postgresql-linds\"} > 0)",
+              "expr": "time() - max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{namespace=\"postgresql-linds\"} > 0) or on () vector(-1)",
               "legendFormat": "",
               "range": false,
               "instant": true
@@ -1904,7 +1908,20 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "mappings": [],
+              "mappings": [
+                {
+                  "type": "range",
+                  "options": {
+                    "from": -1.5,
+                    "to": -0.5,
+                    "result": {
+                      "text": "✓ Never",
+                      "color": "#0ca30c",
+                      "index": 10
+                    }
+                  }
+                }
+              ],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -1918,7 +1935,6 @@ data:
                   }
                 ]
               },
-              "noValue": "✓ Never",
               "decimals": 1
             },
             "overrides": []

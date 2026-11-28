@@ -467,6 +467,7 @@ def protection_panel(grid, links):
          prom(BACKBLAZE_AGE, "", "E"), prom(PG_BASE_AGE, "", "F"), prom(PG_WAL_AGE, "", "G"),
          prom(GUESTS_NO_BACKUP, "", "H")],
         grid, text_mode="value_and_name", value_size=26, title_size=14, links=links, no_value="✗ No data",
+        thresholds=steps(CRIT),
         overrides=[
             by_ref("A", "Snapshots at JD", *age_props(26 * H, 50 * H, "✗ None in 7 days")),
             by_ref("B", "Copy at LINDS", *age_props(40 * H, 64 * H, "✗ None in 7 days")),
@@ -507,7 +508,7 @@ def overview():
     }
     for i, site in enumerate(("jd", "linds", "cluster")):
         panels.append(stat(SITE_NAMES[site], site_desc[site], [prom(f'overview:site:status{{site="{site}"}}')],
-                           g(6 * i, 0, 6, 5), mappings=STATUS, no_value="✗ No data", value_size=40,
+                           g(6 * i, 0, 6, 5), mappings=STATUS, no_value="✗ No data", value_size=40, thresholds=steps(CRIT),
                            links=site_links[site]))
     alive = 'overview:site:status'
     panels.append(stat(
@@ -516,7 +517,7 @@ def overview():
         "by themselves. The security alerts from the logs are on the security dashboards.",
         [prom(guard(f'count(overview:alert:active_seconds{{severity="{s}"}}) or on () vector(0)', alive), n, r)
          for s, n, r in (("critical", "Critical", "A"), ("warning", "Warning", "B"), ("info", "Notices", "C"))],
-        g(18, 0, 6, 5), text_mode="value_and_name", no_value="✗ No data", value_size=26,
+        g(18, 0, 6, 5), text_mode="value_and_name", no_value="✗ No data", value_size=26, thresholds=steps(CRIT),
         overrides=[override("Critical", extra=[{"id": "thresholds", "value": steps(GOOD, (CRIT, 1))}]),
                    override("Warning", extra=[{"id": "thresholds", "value": steps(GOOD, (WARN, 1))}]),
                    override("Notices", extra=[{"id": "thresholds", "value": steps("text")}])]))
@@ -610,12 +611,12 @@ def overview():
              [prom('label_replace(router_wireguard_handshake_age_seconds, "site", "$1", "instance", "(.+)-router-01")',
                    "{{site}} {{iface}}")],
              g(17, y + 1, 4, 4), unit="s", text_mode="value_and_name", value_size=16, links=to_router,
-             thresholds=steps(GOOD, (CRIT, 900)), mappings=[rmap(-1.5, -0.5, "– Unused", "text")],
+             thresholds=steps(CRIT, (GOOD, 0), (CRIT, 900)), mappings=[rmap(-1.5, -0.5, "– Unused", "text")],
              no_value="✗ No data"),
         stat("Probes", "Blackbox probes of the services (Availability dashboard) that fail now.",
              [prom(guard('count(probe_success{job="blackbox"} == 0) or on () vector(0)', 'probe_success{job="blackbox"}'))],
              g(21, y + 1, 3, 4), no_value="– Not deployed yet", links=[link("Availability", "availability")],
-             unit="suffix: failing", decimals=0, thresholds=steps(GOOD, (CRIT, 1)),
+             unit="suffix: failing", decimals=0, thresholds=steps("text", (CRIT, 1)),
              mappings=[vmap({0: ("✓ All pass", GOOD)})]),
     ]
     internet = 'host!~"10\\\\..*"'
@@ -647,9 +648,10 @@ def overview():
         stat("Kubernetes nodes", "Nodes that are Ready and nodes that are not (NodeNotReady after 2 minutes).",
              [prom(guard(f"count({ksm} == 1) or on () vector(0)", ksm), "Ready", "A"),
               prom(guard(f"count({ksm} == 0) or on () vector(0)", ksm), "Not ready", "B")],
-             g(0, y + 1, 4, 4), text_mode="value_and_name", value_size=18, no_value="✗ No data",
+             g(0, y + 1, 4, 4), text_mode="value_and_name", value_size=18, no_value="✗ No data", thresholds=steps(CRIT),
              links=[link("Kubernetes nodes", "k8s_views_nodes")],
-             overrides=[override("Not ready", extra=[{"id": "thresholds", "value": steps(GOOD, (CRIT, 1))}])]),
+             overrides=[override("Ready", extra=[{"id": "thresholds", "value": steps("text")}]),
+                        override("Not ready", extra=[{"id": "thresholds", "value": steps(GOOD, (CRIT, 1))}])]),
         stat("Proxmox hosts", "Time since each host started; Down when Proxmox reports it down.",
              [prom(one_of(f'pve_uptime_seconds{{job="pve", id="node/{h}"}} * on (instance, id) '
                           f'max_over_time(pve_up{{job="pve", id="node/{h}"}}[3m])', -1), h, chr(65 + i))
@@ -659,16 +661,18 @@ def overview():
         stat("Guests running", "Virtual machines and containers that run, for each host (templates left out). "
              "Stopped guests lists the others.",
              [prom('count by (instance) (pve_up{job="pve", id=~"(qemu|lxc)/.+"} == 1)', "{{instance}}")],
-             g(8, y + 1, 4, 4), text_mode="value_and_name", value_size=16, no_value="✗ No data", links=to_hw),
+             g(8, y + 1, 4, 4), text_mode="value_and_name", value_size=16, no_value="✗ No data", links=to_hw,
+             thresholds=steps(CRIT, ("text", 0))),
         stat("Hardware", "The worst sensor state of each host's BMC: the XCC over IPMI, the iDRAC over SNMP "
              "(HardwareSensorNotOk).",
              [prom(f"max({JD_COMPONENTS})", "jd-proxmox-02", "A"), prom(f"max({LI_COMPONENTS})", "linds-proxmox-01", "B")],
              g(12, y + 1, 4, 4), text_mode="value_and_name", value_size=16, mappings=HEALTH, no_value="✗ No reading",
-             links=to_hw),
+             thresholds=steps(CRIT), links=to_hw),
         stat("Last node restart", "Time since the most recent start of a Kubernetes node. A rolling Talos upgrade "
              "restarts them all, and with them the pods (Restarts, below).",
              [prom('min(time() - node_boot_time_seconds{job="node-exporter"})')],
-             g(16, y + 1, 4, 4), unit="s", decimals=1, no_value="✗ No data", links=[link("Kubernetes nodes", "k8s_views_nodes")]),
+             g(16, y + 1, 4, 4), unit="s", decimals=1, no_value="✗ No data", thresholds=steps(CRIT, ("text", 0)),
+             links=[link("Kubernetes nodes", "k8s_views_nodes")]),
         stat("Short of pods", "Deployments, StatefulSets and DaemonSets with fewer ready pods than they "
              "want (KubeDeploymentReplicasMismatch and the like fire after 15 minutes). A rollout shows here for a "
              "moment.",
@@ -676,7 +680,7 @@ def overview():
                          '+ (count(kube_statefulset_status_replicas_ready < kube_statefulset_replicas) or on () vector(0)) '
                          '+ (count(kube_daemonset_status_number_available < kube_daemonset_status_desired_number_scheduled) '
                          'or on () vector(0))', 'kube_deployment_spec_replicas'))],
-             g(20, y + 1, 4, 4), decimals=0, no_value="✗ No data", thresholds=steps(GOOD, (WARN, 1)),
+             g(20, y + 1, 4, 4), decimals=0, no_value="✗ No data", thresholds=steps(CRIT, (GOOD, 0), (WARN, 1)),
              mappings=[vmap({0: ("✓ None", GOOD)})], links=[link("Kubernetes namespaces", "k8s_views_ns")]),
     ]
     mem = ('(1 - node_memory_MemAvailable_bytes{job="node-exporter"} / node_memory_MemTotal_bytes{job="node-exporter"}) '
@@ -759,7 +763,7 @@ def overview():
              [prom(guard(f'count({argo}{{sync_status!="Synced"}} == 1) or on () vector(0)', argo), "Not synced", "A"),
               prom(guard(f'count({argo}{{health_status!="Healthy"}} == 1) or on () vector(0)', argo), "Not healthy", "B")],
              g(0, y + 1, 4, 4), text_mode="value_and_name", value_size=18, no_value="✗ No data",
-             thresholds=steps(GOOD, (WARN, 1)), links=[link("Argo CD", "qPkgGHg7k")]),
+             thresholds=steps(CRIT, (GOOD, 0), (WARN, 1)), links=[link("Argo CD", "qPkgGHg7k")]),
         stat("Next certificate to expire", "The cert-manager certificate that expires first. cert-manager renews them "
              "before the end; CertificateExpiringSoon fires at 14 days and CertificateExpiringCritical at 7.",
              [prom(cert_left, "{{name}}")], g(4, y + 1, 5, 4), unit="s", decimals=0, text_mode="value_and_name",
@@ -773,13 +777,14 @@ def overview():
               prom(guard('sum(increase(externalsecret_sync_calls_error[1d])) or on () vector(0)', "externalsecret_sync_calls_total"),
                    "Sync errors, 1 d", "B")],
              g(9, y + 1, 4, 4), text_mode="value_and_name", value_size=18, no_value="✗ No data", decimals=0,
-             thresholds=steps(GOOD, (WARN, 1)), links=[link("External Secrets", "bdtvyf4zxtv5sa")]),
+             thresholds=steps(CRIT, (GOOD, 0), (WARN, 1)), links=[link("External Secrets", "bdtvyf4zxtv5sa")]),
         stat("Postgres", "linds-postgres: instances that answer (2 expected), replicas that stream from the primary "
              "(1 expected), and how far the replica is behind.",
              [prom(f"sum(cnpg_collector_up{{{PG}}}) or on () vector(0)", "Up", "A"),
               prom(f"max(cnpg_pg_replication_streaming_replicas{{{PG}}}) or on () vector(0)", "Streaming", "B"),
               prom(f"max(cnpg_pg_replication_lag{{{PG}}})", "Lag", "C")],
-             g(13, y + 1, 6, 4), text_mode="value_and_name", value_size=18, decimals=0, links=[link("CloudNativePG", "cloudnative-pg")],
+             g(13, y + 1, 6, 4), text_mode="value_and_name", value_size=18, decimals=0, no_value="✗ No data",
+             thresholds=steps(CRIT), links=[link("CloudNativePG", "cloudnative-pg")],
              overrides=[override("Up", extra=[{"id": "thresholds", "value": steps(CRIT, (WARN, 1), (GOOD, 2))}]),
                         override("Streaming", extra=[{"id": "thresholds", "value": steps(WARN, (GOOD, 1))}]),
                         override("Lag", extra=[{"id": "unit", "value": "s"},
@@ -924,15 +929,16 @@ def backups():
         stat("Restore window", "How far back a restore can reach: the oldest base backup that the 7-day retention "
              "keeps. A restore can go to any point from then to the last archived WAL.",
              [prom(window)], g(0, y + 1, 4, 5), unit="s", decimals=1, no_value="✗ No data",
-             thresholds=steps(WARN, (GOOD, 5 * D))),
+             thresholds=steps(CRIT, (WARN, 0), (GOOD, 5 * D))),
         stat("WAL failures, 1 day", "WAL segments that the primary failed to archive in the last day. One "
              "failure that the next attempt fixes is normal (PostgreSQLWALArchivingFailing fires when they go on).",
              [prom(f"round(sum(increase(cnpg_pg_stat_archiver_failed_count{{{PG}}}[1d]) {primary})) or on () vector(0)")],
              g(4, y + 1, 4, 5), decimals=0, thresholds=steps(GOOD, (WARN, 1))),
         stat("Last failed base backup", "Time since barman-cloud-backup last failed (PostgreSQLBaseBackupFailed fires "
              "for a day after one).",
-             [prom(f"time() - max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{{{PG}}} > 0)")],
-             g(8, y + 1, 4, 5), unit="s", decimals=1, no_value="✓ Never", thresholds=steps(CRIT, (GOOD, D))),
+             [prom(f"time() - max(barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{{{PG}}} > 0) or on () vector(-1)")],
+             g(8, y + 1, 4, 5), unit="s", decimals=1, thresholds=steps(CRIT, (GOOD, D)),
+             mappings=[rmap(-1.5, -0.5, "✓ Never", GOOD)]),
         timeseries("Backup ages", "The age of the newest base backup (it drops at each nightly backup) and the "
                    "restore window.",
                    [prom(f"time() - max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{{{PG}}})",
