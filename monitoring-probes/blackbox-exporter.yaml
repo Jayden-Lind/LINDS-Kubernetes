@@ -1,0 +1,291 @@
+# blackbox_exporter: probes services from the outside in (HTTP, TLS, TCP,
+# DNS), for the Availability dashboard and the alerts in rules.yaml.
+#
+# Two exporters, one at each site: blackbox-exporter-jd and
+# blackbox-exporter-linds. Prometheus asks both to probe every target
+# (scrape-configs.yaml), so a target at one site is also probed across the
+# tunnel from the other, the way the other site's clients reach it. Each is
+# required at its site (nodeSelector, not a preference like the hardware
+# exporters): a vantage point that moves is not one. Two replicas each, so a
+# node restart does not leave a gap in every target's history.
+#
+# One configuration for both (blackbox.yml, as the ConfigMap
+# blackbox-exporter-config). The image tag is in kustomization.yaml
+# (images:), where Renovate's kustomize manager updates it.
+---
+# The probes' own identity. Its token goes to the API server only (module
+# http_kube_api), and the account has no RBAC of its own: only what every
+# authenticated client has, which includes reading /readyz.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: blackbox-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter-jd
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-jd
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+      app.kubernetes.io/instance: blackbox-exporter-jd
+  # One new pod up before an old one goes, so there is always one to scrape.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blackbox-exporter
+        app.kubernetes.io/instance: blackbox-exporter-jd
+    spec:
+      nodeSelector:
+        datacenter: jd
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: blackbox-exporter
+              app.kubernetes.io/instance: blackbox-exporter-jd
+      serviceAccountName: blackbox-exporter
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: blackbox-exporter
+          image: quay.io/prometheus/blackbox-exporter
+          args:
+            - --config.file=/etc/blackbox/config/blackbox.yml
+          ports:
+            - name: http
+              containerPort: 9115
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox/config
+              readOnly: true
+            - name: linds-ca
+              mountPath: /etc/blackbox/linds-ca
+              readOnly: true
+            - name: kube-api
+              mountPath: /var/run/secrets/blackbox
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: blackbox-exporter-config
+        # linds-CA, synced from Vault (the same Secret Grafana mounts).
+        - name: linds-ca
+          secret:
+            secretName: linds-ca-cert
+        # For http_kube_api only: a token of the service account above (the
+        # kubelet renews it) and the cluster CA, which signs the API server's
+        # certificate.
+        - name: kube-api
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: kube-ca.crt
+---
+# The same, at LINDS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter-linds
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-linds
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+      app.kubernetes.io/instance: blackbox-exporter-linds
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blackbox-exporter
+        app.kubernetes.io/instance: blackbox-exporter-linds
+    spec:
+      nodeSelector:
+        datacenter: linds
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: blackbox-exporter
+              app.kubernetes.io/instance: blackbox-exporter-linds
+      serviceAccountName: blackbox-exporter
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: blackbox-exporter
+          image: quay.io/prometheus/blackbox-exporter
+          args:
+            - --config.file=/etc/blackbox/config/blackbox.yml
+          ports:
+            - name: http
+              containerPort: 9115
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox/config
+              readOnly: true
+            - name: linds-ca
+              mountPath: /etc/blackbox/linds-ca
+              readOnly: true
+            - name: kube-api
+              mountPath: /var/run/secrets/blackbox
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: blackbox-exporter-config
+        - name: linds-ca
+          secret:
+            secretName: linds-ca-cert
+        - name: kube-api
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: kube-ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter-jd
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-jd
+spec:
+  selector:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-jd
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter-linds
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-linds
+spec:
+  selector:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/instance: blackbox-exporter-linds
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http
+---
+# A drain takes at most one of each pair at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blackbox-exporter-jd
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+      app.kubernetes.io/instance: blackbox-exporter-jd
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blackbox-exporter-linds
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+      app.kubernetes.io/instance: blackbox-exporter-linds

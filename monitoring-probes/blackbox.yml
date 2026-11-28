@@ -1,0 +1,215 @@
+# blackbox_exporter modules (kustomization.yaml makes the
+# blackbox-exporter-config ConfigMap from this file; a change restarts both
+# exporters with it). Each probe in scrape-configs.yaml names its module.
+#
+# Every module is IPv4 only: the cluster, the routers and the servers have no
+# IPv6 between them, and a name with an AAAA record must not be tested over a
+# path no client uses.
+#
+# Two files are mounted from the cluster (blackbox-exporter.yaml):
+#   /etc/blackbox/linds-ca/ca.crt     linds-CA, from the linds-ca-cert Secret.
+#                                     It signs every certificate probed here
+#                                     except the API server's.
+#   /var/run/secrets/blackbox/        a service account token and the
+#                                     cluster CA, for http_kube_api only.
+modules:
+  # An HTTP(S) URL that must answer 200 itself. No redirect is followed, so a
+  # redirect to a login page (Keycloak, or the app's own) is a failure, not a
+  # pass. Each app is probed at its own health URL, which needs no login.
+  http_200:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200]
+      follow_redirects: false
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+
+  # The Kubernetes API server's /readyz: 200 when it and etcd are ready. This
+  # cluster refuses anonymous requests (401), so the probe sends the pod's
+  # service account token; every authenticated client may read /readyz
+  # (ClusterRole system:public-info-viewer). Only this module sends the
+  # token, so only the API server ever sees it.
+  http_kube_api:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200]
+      follow_redirects: false
+      authorization:
+        type: Bearer
+        credentials_file: /var/run/secrets/blackbox/token
+      tls_config:
+        ca_file: /var/run/secrets/blackbox/kube-ca.crt
+
+  # A TLS handshake, the certificate checked against linds-CA, then nothing
+  # more: the domain controllers' LDAPS, the device certificates (Proxmox,
+  # TrueNAS, the BMCs, UniFi, the switch) and the public mTLS ingress. A
+  # target given by address names its certificate with __param_hostname
+  # (the TLS server name).
+  tls:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls: true
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+
+  # A TCP connect and nothing more, for a protocol blackbox does not speak
+  # (Kerberos, LDAP, SMB, NFS). Checked on 2026-11-28: none of these servers
+  # logs a connection that sends nothing. Not used for iSCSI, whose target on
+  # jd-proxmox-02 logs two kernel lines ("iSCSI Login negotiation failed")
+  # for each such connection, nor for Mumble or Factorio's RCON, which log
+  # every connection too.
+  tcp:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  # Minecraft's Server List Ping, what the game's server list does: the
+  # server answers with its status (JSON with "version") and closes the
+  # connection after the ping. Paper does not log it. The bytes are three
+  # packets, each a length and a packet ID:
+  #   \x0f\x00 handshake: protocol \x2f (47; the server answers any version),
+  #            server address \x09"localhost", port \x00\x00, next state
+  #            \x01 (status)
+  #   \x01\x00 status request
+  #   \x09\x01 ping, with "blackbox" as its 8-byte payload
+  # Every byte is below 0x80 on purpose: YAML turns \xNN into a character,
+  # which is two bytes in UTF-8 from 0x80 up.
+  minecraft_status:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      query_response:
+        - send: "\x0f\x00\x2f\x09localhost\x00\x00\x01\x01\x00\x09\x01blackbox"
+        - expect: '"version"'
+
+  # The domain controllers' locator records, which members use to find a DC:
+  # at least one SRV answer. Asked of every resolver, so for a router it
+  # tests its forward of linds.com.au to the DCs (unbound.conf).
+  dns_ad:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      transport_protocol: udp
+      query_name: _ldap._tcp.dc._msdcs.linds.com.au
+      query_type: SRV
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - '\sIN\s+SRV\s'
+
+  # A name on the internet, through the resolver's own path out (Quad9 over
+  # TLS for the routers; the DCs forward). github.com, because the cluster
+  # needs it (Argo CD, Renovate) and no blocklist has it.
+  dns_internet:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      transport_protocol: udp
+      query_name: github.com
+      query_type: A
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - '\sIN\s+A\s'
+
+  # CoreDNS's own zone: the kubernetes Service.
+  dns_cluster:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      transport_protocol: udp
+      query_name: kubernetes.default.svc.cluster.local
+      query_type: A
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - '\sIN\s+A\s'
+
+  # The mTLS gate (job mtls-gate in scrape-configs.yaml): a request with no
+  # client certificate, to the public ingress, for one public name. nginx-mtls
+  # completes the TLS handshake, then closes the connection without an
+  # answer (return 444, applications/nginx-ingress-mtls.yaml). So for these
+  # modules the GOOD result is a FAILED probe:
+  #   probe_success 0 and probe_failed_due_to_regex 1
+  #     the gate refused: TLS worked, the request got no HTTP answer
+  #   probe_success 1
+  #     the gate is OPEN: an HTTP answer came back without a certificate
+  #   probe_success 0 and probe_failed_due_to_regex 0
+  #     the probe never got that far (no TCP or TLS); the tls probes of the
+  #     same names in job blackbox report that
+  # One module per name, because the Host header must match the TLS server
+  # name (with a different Host, nginx answers 421 whatever the gate does).
+  # Each refusal is also two ERROR lines in the JD exporter's log ("Regexp
+  # did not match", "Probe failed"): that is the gate working. targets.py
+  # runs these every 15 minutes for that reason.
+  mtls_gate_home:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls: true
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+        server_name: home.linds.com.au
+      query_response:
+        - send: "GET / HTTP/1.1\r\nHost: home.linds.com.au\r\nConnection: close\r\n\r\n"
+        - expect: '^HTTP/1\.[01] [0-9]{3}'
+  mtls_gate_photos:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls: true
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+        server_name: photos.linds.com.au
+      query_response:
+        - send: "GET / HTTP/1.1\r\nHost: photos.linds.com.au\r\nConnection: close\r\n\r\n"
+        - expect: '^HTTP/1\.[01] [0-9]{3}'
+  mtls_gate_radarr:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls: true
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+        server_name: radarr.linds.com.au
+      query_response:
+        - send: "GET / HTTP/1.1\r\nHost: radarr.linds.com.au\r\nConnection: close\r\n\r\n"
+        - expect: '^HTTP/1\.[01] [0-9]{3}'
+  mtls_gate_sonarr:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls: true
+      tls_config:
+        ca_file: /etc/blackbox/linds-ca/ca.crt
+        server_name: sonarr.linds.com.au
+      query_response:
+        - send: "GET / HTTP/1.1\r\nHost: sonarr.linds.com.au\r\nConnection: close\r\n\r\n"
+        - expect: '^HTTP/1\.[01] [0-9]{3}'

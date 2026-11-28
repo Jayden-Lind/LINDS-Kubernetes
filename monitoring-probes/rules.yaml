@@ -1,0 +1,212 @@
+# Alerts on the blackbox probes (scrape-configs.yaml, made by targets.py).
+# They go to Discord through base/monitoring/alertmanager-config.yaml by the
+# default route, and like every alert there each is sent once when it starts
+# and once when it resolves. Two of its rules shape what arrives:
+#
+# - While RouterTunnelDown fires for the LINDS tunnel, alerts with
+#   site="linds" are held back. A probe's site is the target's, so the LINDS
+#   targets are held back; the LINDS exporter's own scrapes (up, so
+#   PrometheusTargetDown) carry site="linds" too (targets.py says how).
+# - A critical alert holds back the warnings of the same name. So while a
+#   critical ProbeTargetDown fires (DNS, identity, platform), the warning
+#   ones wait: what follows from a DNS or AD outage (every app by name) is
+#   not sent as well. An unrelated warning waits too, and arrives when the
+#   critical resolves, if it still fires then.
+#
+# Each target is probed from both sites. "Down" is down from every site that
+# answers: max over vantage. Down from one site only is ProbeFailsFromOneSite,
+# one alert per site, not one per target.
+#
+# Not here, because another alert already says it:
+# - an exporter that does not answer its scrapes: PrometheusTargetDown
+#   (base/monitoring/alerts.yaml), for each of its targets. Each site runs
+#   two replicas, so that takes both.
+# - the certificates cert-manager issues (label cert="cert-manager"):
+#   CertificateExpiringSoon and CertificateExpiringCritical (alerts.yaml).
+# - Unbound down on a router (RouterDNSDown), the API server's scrape failing
+#   (KubeAPIDown), the catcrawl viewer's pod (CatcrawlViewerDown), the
+#   Proxmox API unreadable (PrometheusTargetDown for job pve): the matching
+#   probes are held back while those fire (the `unless` clauses below).
+#
+# Tests: tests/rules.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: availability-probes
+  namespace: monitoring
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  groups:
+    - name: probes.record
+      rules:
+        # 1 when the target answers from at least one site, one series per
+        # target. The dashboard's uptime reads it; other dashboards can too.
+        - record: target:probe_success:max
+          expr: max without (vantage) (probe_success{job="blackbox"})
+
+    - name: probes.targets
+      rules:
+        # DNS, the domain controllers, Keycloak, the API server and Vault:
+        # most of the rest stops when these do. 10 minutes rides out a
+        # restart (a DC reboots in a few minutes; Unbound's restart with
+        # the blocklists takes 12-17 s).
+        - alert: ProbeTargetDown
+          expr: |
+            (
+              max without (vantage) (
+                probe_success{job="blackbox", kind=~"dns|identity|platform", alert!="no"}
+              ) == 0
+            )
+            unless on (target) (
+                # RouterDNSDown (base/monitoring/router-metrics.yaml) says it:
+                # Unbound itself is down.
+                label_replace(router_dns_up{job="router-node"} == 0, "target", "$1 dns ad", "instance", "(.+)")
+              or
+                label_replace(router_dns_up{job="router-node"} == 0, "target", "$1 dns internet", "instance", "(.+)")
+              or
+                # KubeAPIDown and PrometheusTargetDown say it: the API
+                # server's own scrape fails. This probe then reports only an
+                # API server that answers but is not ready (etcd).
+                label_replace(up{job="apiserver"} == 0 or absent(up{job="apiserver"}), "target", "kubernetes-api", "", "")
+            )
+            # Nothing answers from anywhere: the probers, not the targets
+            # (BlackboxProbesAllFailing).
+            unless on () (max(probe_success{job="blackbox"}) == 0)
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.target }} ({{ $labels.kind }}, {{ $labels.site }}) does not answer from any site"
+            description: "The {{ $labels.module }} probe of {{ $labels.instance }} has failed from every site for 10 minutes. The Availability dashboard shows since when and the other checks of the same host. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module={{ $labels.module }}&target={{ $labels.instance }}{{ with $labels.hostname }}&hostname={{ . }}{{ end }}'`."
+
+        # Apps, the public endpoints, storage, the hypervisors and the
+        # network devices. 10 minutes: a rollout or a restart (Plex, Immich)
+        # is back sooner.
+        - alert: ProbeTargetDown
+          expr: |
+            (
+              max without (vantage) (
+                probe_success{job="blackbox", kind!~"dns|identity|platform", alert!="no"}
+              ) == 0
+            )
+            unless on (target) (
+                # CatcrawlViewerDown (base/monitoring/alerts.yaml) says it:
+                # the viewer's pod does not answer its scrape.
+                label_replace(up{job="catcrawl-viewer"} == 0, "target", "catcrawl", "", "")
+              or
+                # PrometheusTargetDown says it: pve-exporter cannot read that
+                # host's Proxmox API, which is the same web server.
+                label_replace(up{job="pve"} == 0, "target", "$1 https", "instance", "(.+)")
+            )
+            unless on () (max(probe_success{job="blackbox"}) == 0)
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.target }} ({{ $labels.kind }}, {{ $labels.site }}) does not answer from any site"
+            description: "The {{ $labels.module }} probe of {{ $labels.instance }} has failed from every site for 10 minutes. The Availability dashboard shows since when. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module={{ $labels.module }}&target={{ $labels.instance }}{{ with $labels.hostname }}&hostname={{ . }}{{ end }}'`."
+
+        # Targets that answer from one site and not from the other: the path
+        # between the sites (the tunnel's MTU, a firewall rule, a route), or
+        # that site's exporter. One alert per site, however many targets;
+        # $value is how many. site is the probing site, so while the LINDS
+        # tunnel is down the LINDS one is held back (it cannot fire then
+        # anyway: Prometheus has no LINDS results).
+        - alert: ProbeFailsFromOneSite
+          expr: |
+            label_replace(
+              count by (vantage) (
+                  (probe_success{job="blackbox", alert!="no"} == 0)
+                and ignoring (vantage)
+                  (max without (vantage) (probe_success{job="blackbox"}) == 1)
+              ),
+              "site", "$1", "vantage", "(.+)"
+            )
+          for: 15m
+          keep_firing_for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} target(s) fail from {{ $labels.vantage }} that answer from the other site"
+            description: "Probed from {{ $labels.vantage }}, these targets fail while the other site reaches them: the path between the sites, or the exporter at {{ $labels.vantage }} (`kubectl -n monitoring logs deploy/blackbox-exporter-{{ $labels.vantage }}`). The Availability dashboard lists them in Down now, with a cross in that site's column."
+
+    - name: probes.certificates
+      rules:
+        # Certificates that cert-manager does not issue, so that
+        # CertificateExpiringSoon does not see: the device certificates
+        # (renewed by hand with LINDS-Ansible playbooks/certificates.yml), the
+        # domain controllers' (AD CS auto-enrolment) and the API server's
+        # (Talos). Three weeks, because the device ones need someone to run
+        # a playbook; AD CS renews six weeks ahead, so a DC here has failed
+        # to. A critical one holds back the warning of the same certificate.
+        - alert: ProbeCertificateExpiring
+          expr: |
+            min without (vantage) (probe_ssl_earliest_cert_expiry{job="blackbox", cert!="cert-manager"}) - time()
+              < 21 * 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.target }}: its certificate expires in {{ $value | humanizeDuration }}"
+            description: "{{ if eq $labels.cert \"device\" }}A linds-CA device certificate. Renew it with LINDS-Ansible: `ansible-playbook playbooks/certificates.yml --limit <device>-cert`; the role renews a certificate with 30 days or fewer left.{{ else if eq $labels.cert \"ad-cs\" }}The domain controller's own certificate, which AD CS auto-enrolment renews six weeks ahead and has not. On the DC: `certutil -pulse`, then the Certificates (Local Computer) store and the CertificateServicesClient event log.{{ else if eq $labels.cert \"talos\" }}The API server's certificate, which Talos issues from the cluster CA.{{ else }}Issued by {{ $labels.cert }}.{{ end }} The Availability dashboard lists every certificate by days left."
+        - alert: ProbeCertificateExpiring
+          expr: |
+            min without (vantage) (probe_ssl_earliest_cert_expiry{job="blackbox", cert!="cert-manager"}) - time()
+              < 7 * 86400
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.target }}: its certificate expires in {{ $value | humanizeDuration }}"
+            description: "{{ if eq $labels.cert \"device\" }}A linds-CA device certificate. Renew it with LINDS-Ansible: `ansible-playbook playbooks/certificates.yml --limit <device>-cert`; the role renews a certificate with 30 days or fewer left.{{ else if eq $labels.cert \"ad-cs\" }}The domain controller's own certificate, which AD CS auto-enrolment renews six weeks ahead and has not. On the DC: `certutil -pulse`, then the Certificates (Local Computer) store and the CertificateServicesClient event log.{{ else if eq $labels.cert \"talos\" }}The API server's certificate, which Talos issues from the cluster CA.{{ else }}Issued by {{ $labels.cert }}.{{ end }} When it expires, the probe fails."
+
+    - name: probes.mtls-gate
+      rules:
+        # The public ingress answered a request that had no client
+        # certificate: one of the four apps the internet reaches is open to
+        # anyone. Probed every 15 minutes (targets.py), so one answer in the
+        # last 20 minutes is enough, and no `for`: this is a configuration,
+        # it does not flap.
+        - alert: MtlsGateAcceptsAnonymous
+          expr: max_over_time(probe_success{job="mtls-gate"}[20m]) == 1
+          labels:
+            severity: critical
+          annotations:
+            summary: "The public ingress answers {{ $labels.target }} without a client certificate"
+            description: "A request for {{ $labels.hostname }} with no client certificate got an HTTP answer from nginx-mtls (172.16.1.12), which the internet reaches through jd-router-01. Every server block there must have ssl_verify_client on and the 444 for a missing or unlisted certificate (server-snippets in applications/nginx-ingress-mtls.yaml). Check: `curl -sv --resolve {{ $labels.hostname }}:443:172.16.1.12 https://{{ $labels.hostname }}/` must end with no HTTP answer."
+
+    - name: probes.prober
+      rules:
+        # No probe at all: a ScrapeConfig deleted or not loaded (its release
+        # label, or the app not synced). Then no other probe alert can fire,
+        # so this is what keeps "no data" from looking like "all fine". An
+        # exporter that does not answer is PrometheusTargetDown instead.
+        - alert: BlackboxProbesMissing
+          expr: |
+            absent(up{job="blackbox", vantage="jd", kind="dns"})
+            or absent(up{job="blackbox", vantage="jd", kind!="dns"})
+            or absent(up{job="blackbox", vantage="linds", kind="dns"})
+            or absent(up{job="blackbox", vantage="linds", kind!="dns"})
+            or absent_over_time(up{job="mtls-gate"}[1h])
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus has no {{ $labels.job }} targets{{ with $labels.vantage }} from {{ . }}{{ end }}{{ with $labels.kind }} ({{ . }}){{ end }}"
+            description: "Nothing is probed there, so ProbeTargetDown cannot fire for it. `kubectl -n monitoring get scrapeconfig`, Argo CD's monitoring-probes app, and Prometheus's Status > Targets page."
+
+        # Every probe fails, from both sites: the probers or the pods'
+        # network (a NetworkPolicy in monitoring, Cilium, the pods' DNS, a bad
+        # blackbox.yml) far more likely than every service at once.
+        # ProbeTargetDown is held back meanwhile.
+        - alert: BlackboxProbesAllFailing
+          expr: max(probe_success{job="blackbox"}) == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Every availability probe fails, from both sites"
+            description: "Not one target answers, so the probes themselves are suspect. `kubectl -n monitoring logs deploy/blackbox-exporter-jd`, and a probe by hand: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=dns_cluster&target=10.96.0.10'`."
