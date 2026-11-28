@@ -578,7 +578,12 @@ def grafana_fail(f):
             ' | logfmt client, error | client!="auth.client.session"')
 
 
-INGRESS_REFUSED = '{namespace=~"nginx-ingress|nginx-ingress-mtls"} |~ `" (401|403) `'
+# The access log in its two formats: the status after the quoted request line
+# (the format until monitoring-ingress/), and the field "s" of the JSON format
+# (applications/nginx-ingress*.yaml, log-format). Both, so that the count is
+# right before and after the controllers change format, and over a range that
+# has lines of each.
+INGRESS_REFUSED = '{namespace=~"nginx-ingress|nginx-ingress-mtls"} |~ `" (401|403) |"s":"(401|403)"`'
 
 
 # --- The summaries: one number for each system and result --------------------

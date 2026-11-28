@@ -637,7 +637,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({namespace=~\"nginx-ingress|nginx-ingress-mtls\"} |~ `\" (401|403) ` [$__range]))",
+              "expr": "sum(count_over_time({namespace=~\"nginx-ingress|nginx-ingress-mtls\"} |~ `\" (401|403) |\"s\":\"(401|403)\"` [$__range]))",
               "legendFormat": "",
               "queryType": "instant",
               "instant": true,
