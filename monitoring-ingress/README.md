@@ -92,6 +92,11 @@ down", "exiting" and "exit" from each worker process at each reload) and the
 controller's own log. The reloads come in bursts when many pods change, for
 example after node restarts.
 
+Blackbox probes through nginx (user agent `Blackbox Exporter/...`) also
+write access lines: about 0.7 MB a day for each probe that runs once a
+minute (481 bytes a line). The Probes variable of the dashboard hides them,
+and two of the alerts leave them out.
+
 ## Dashboard
 
 | Section | What it shows |
@@ -104,15 +109,19 @@ example after node restarts.
 | From the controllers' metrics | The Prometheus metrics of the controllers. They do not need the JSON log. |
 
 Variables: Controller, Site (the Ingress hosts), Source (internet or
-internal), Client (a regular expression), and for "Recent requests" only:
-Status and Path contains.
+internal), Probes (hidden or shown; hidden is the default), Client (a
+regular expression), and for "Recent requests" only: Status and Path
+contains.
 
 CAUTION: Loki refuses a query that makes more than 2000 series. A scan asks
 for thousands of different paths, so no panel groups 4xx by path.
 
 ## Alerts
 
-All three are rules for Loki's ruler, in `alerts.yaml`.
+All three are rules for Loki's ruler, in `alerts.yaml`. The first two
+leave out the blackbox probes: a site that is down is the probes' alert. The
+tripwire counts them, because a probe of the mTLS gate sends no
+certificate on purpose.
 
 | Alert | When | Severity, route |
 |---|---|---|

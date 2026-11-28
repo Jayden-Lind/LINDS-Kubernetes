@@ -146,6 +146,20 @@ data:
             "options": []
           },
           {
+            "name": "probes",
+            "label": "Probes",
+            "type": "custom",
+            "description": "The availability probes (blackbox exporter) ask every site's health URL each minute, from both sites. Hidden: their requests are left out of every panel except the tripwire.",
+            "query": "hidden : Blackbox Exporter/,shown : ^$",
+            "multi": false,
+            "includeAll": false,
+            "current": {
+              "text": "hidden",
+              "value": "Blackbox Exporter/"
+            },
+            "options": []
+          },
+          {
             "name": "client",
             "label": "Client",
             "description": "Client address, as a regular expression. Example: 192[.]168[.]1[.]20 for one device, 192[.]168[.]1[.].* for a network.",
@@ -206,7 +220,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (namespace) (rate({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
+              "expr": "sum by (namespace) (rate({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -312,7 +326,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "(sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
+              "expr": "(sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -418,7 +432,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "(sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"4..\" | s!=\"499\" [$__range])) or sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
+              "expr": "(sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"4..\" | s!=\"499\" [$__range])) or sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -524,7 +538,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace)",
+              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace)",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -629,7 +643,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace)",
+              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace)",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -734,7 +748,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "count by (namespace) (sum by (namespace, ip) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
+              "expr": "count by (namespace) (sum by (namespace, ip) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
               "legendFormat": "{{namespace}}",
               "queryType": "instant"
             }
@@ -839,7 +853,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
+              "expr": "sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -850,7 +864,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0",
+              "expr": "sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -861,7 +875,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "(sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
+              "expr": "(sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" [$__range])) or sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])) * 0) / sum by (namespace, sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range]))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -872,7 +886,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace, sn)",
+              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace, sn)",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -883,7 +897,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace, sn)",
+              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__range]) by (namespace, sn)",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -894,7 +908,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", uht=\"uht\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | unwrap uht | __error__=\"\" [$__range]) by (namespace, sn)",
+              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", uht=\"uht\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | unwrap uht | __error__=\"\" [$__range]) by (namespace, sn)",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -1213,7 +1227,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (cls) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | label_format cls=`{{ printf \"%.1sxx\" .s }}` [$__auto]))",
+              "expr": "sum by (cls) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | label_format cls=`{{ printf \"%.1sxx\" .s }}` [$__auto]))",
               "legendFormat": "{{cls}}",
               "queryType": "range"
             }
@@ -1355,7 +1369,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (kind) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\", up=\"up\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" | label_format kind=`{{ if hasPrefix \"unix:\" .up }}no ready pod (502){{ else if eq .s \"502\" }}502 bad gateway{{ else if eq .s \"503\" }}503 unavailable{{ else if eq .s \"504\" }}504 timeout{{ else }}other 5xx (from the app){{ end }}` [$__auto]))",
+              "expr": "sum by (kind) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\", up=\"up\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" | label_format kind=`{{ if hasPrefix \"unix:\" .up }}no ready pod (502){{ else if eq .s \"502\" }}502 bad gateway{{ else if eq .s \"503\" }}503 unavailable{{ else if eq .s \"504\" }}504 timeout{{ else }}other 5xx (from the app){{ end }}` [$__auto]))",
               "legendFormat": "{{kind}}",
               "queryType": "range"
             }
@@ -1493,7 +1507,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
+              "expr": "quantile_over_time(0.5, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
               "legendFormat": "p50 {{namespace}}",
               "queryType": "range"
             },
@@ -1503,7 +1517,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
+              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
               "legendFormat": "p95 {{namespace}}",
               "queryType": "range"
             },
@@ -1513,7 +1527,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.99, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
+              "expr": "quantile_over_time(0.99, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", rt=\"rt\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s!=\"101\" | unwrap rt | __error__=\"\" [$__auto]) by (namespace)",
               "legendFormat": "p99 {{namespace}}",
               "queryType": "range"
             }
@@ -1692,7 +1706,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", uht=\"uht\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | unwrap uht | __error__=\"\" [$__auto]) by (sn)",
+              "expr": "quantile_over_time(0.95, {namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", uht=\"uht\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | unwrap uht | __error__=\"\" [$__auto]) by (sn)",
               "legendFormat": "{{sn}}",
               "queryType": "range"
             }
@@ -1759,7 +1773,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (sn, path, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" | label_format path=`{{ regexReplaceAll \"/[0-9]+\" (regexReplaceAll \"[0-9a-fA-F]{16,}\" (regexReplaceAll \"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\" (regexReplaceAll \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)?\" .path \"{time}\") \"{uuid}\") \"{hex}\") \"/{n}\" }}` [$__range])))",
+              "expr": "topk(20, sum by (sn, path, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"5..\" | label_format path=`{{ regexReplaceAll \"/[0-9]+\" (regexReplaceAll \"[0-9a-fA-F]{16,}\" (regexReplaceAll \"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\" (regexReplaceAll \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)?\" .path \"{time}\") \"{uuid}\") \"{hex}\") \"/{n}\" }}` [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -1934,7 +1948,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (sn, path) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", uht=\"uht\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | uht > 1 | __error__=\"\" | label_format path=`{{ regexReplaceAll \"/[0-9]+\" (regexReplaceAll \"[0-9a-fA-F]{16,}\" (regexReplaceAll \"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\" (regexReplaceAll \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)?\" .path \"{time}\") \"{uuid}\") \"{hex}\") \"/{n}\" }}` [$__range])))",
+              "expr": "topk(20, sum by (sn, path) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", uht=\"uht\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | uht > 1 | __error__=\"\" | label_format path=`{{ regexReplaceAll \"/[0-9]+\" (regexReplaceAll \"[0-9a-fA-F]{16,}\" (regexReplaceAll \"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\" (regexReplaceAll \"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)?\" .path \"{time}\") \"{uuid}\") \"{hex}\") \"/{n}\" }}` [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -2076,7 +2090,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__auto]))",
+              "expr": "sum by (src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__auto]))",
               "legendFormat": "{{src}}",
               "queryType": "range"
             }
@@ -2173,7 +2187,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (ip, src, namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
+              "expr": "topk(20, sum by (ip, src, namespace) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -2369,7 +2383,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (ip, src, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"4..\" | s!=\"499\" [$__range])))",
+              "expr": "topk(20, sum by (ip, src, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"4..\" | s!=\"499\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -2570,7 +2584,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (ua, src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
+              "expr": "topk(20, sum by (ua, src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -2725,7 +2739,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (host, ip, src, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", host=\"host\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | sn=\"_\" [$__range])))",
+              "expr": "topk(20, sum by (host, ip, src, s) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", host=\"host\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | sn=\"_\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -2929,7 +2943,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "{namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\", m=\"m\", path=\"path\", host=\"host\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | path=~\"(?i).*(/[.](env|git|svn|hg|aws|ssh|ds_store|htpasswd|vscode)|wp-(login|admin|content|includes|config)|xmlrpc[.]php|[.]php([/?]|$)|phpmyadmin|/cgi-bin/|/etc/passwd|[.][.]/|%2e%2e|/actuator|/hnap1|/boaform|/manager/html|/owa/|/autodiscover|/vendor/phpunit|/solr/|/server-status).*\"",
+              "expr": "{namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\", m=\"m\", path=\"path\", host=\"host\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | path=~\"(?i).*(/[.](env|git|svn|hg|aws|ssh|ds_store|htpasswd|vscode)|wp-(login|admin|content|includes|config)|xmlrpc[.]php|[.]php([/?]|$)|phpmyadmin|/cgi-bin/|/etc/passwd|[.][.]/|%2e%2e|/actuator|/hnap1|/boaform|/manager/html|/owa/|/autodiscover|/vendor/phpunit|/solr/|/server-status).*\"",
               "queryType": "range",
               "maxLines": 500,
               "direction": "backward"
@@ -3226,7 +3240,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (ip, src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | path=~\"(?i).*(/[.](env|git|svn|hg|aws|ssh|ds_store|htpasswd|vscode)|wp-(login|admin|content|includes|config)|xmlrpc[.]php|[.]php([/?]|$)|phpmyadmin|/cgi-bin/|/etc/passwd|[.][.]/|%2e%2e|/actuator|/hnap1|/boaform|/manager/html|/owa/|/autodiscover|/vendor/phpunit|/solr/|/server-status).*\" [$__range])))",
+              "expr": "topk(20, sum by (ip, src) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", path=\"path\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | path=~\"(?i).*(/[.](env|git|svn|hg|aws|ssh|ds_store|htpasswd|vscode)|wp-(login|admin|content|includes|config)|xmlrpc[.]php|[.]php([/?]|$)|phpmyadmin|/cgi-bin/|/etc/passwd|[.][.]/|%2e%2e|/actuator|/hnap1|/boaform|/manager/html|/owa/|/autodiscover|/vendor/phpunit|/solr/|/server-status).*\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -3394,7 +3408,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"401|403\" [$__auto]))",
+              "expr": "sum by (sn) (count_over_time({namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"401|403\" [$__auto]))",
               "legendFormat": "{{sn}}",
               "queryType": "range"
             }
@@ -3456,7 +3470,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (reason) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\", cv=\"cv\", allowed=\"allowed\", tls=\"tls\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"400|408|421|444|495|496|497\" | label_format reason=`{{ if eq .s \"444\" }}{{ if eq .cv \"NONE\" }}no certificate{{ else if hasPrefix \"FAILED\" .cv }}certificate not trusted{{ else if eq .allowed \"0\" }}subject not allowed{{ else }}refused{{ end }}{{ else if eq .tls \"\" }}plain HTTP to port 443{{ else }}bad request{{ end }}` [$__auto]))",
+              "expr": "sum by (reason) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\", cv=\"cv\", allowed=\"allowed\", tls=\"tls\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"400|408|421|444|495|496|497\" | label_format reason=`{{ if eq .s \"444\" }}{{ if eq .cv \"NONE\" }}no certificate{{ else if hasPrefix \"FAILED\" .cv }}certificate not trusted{{ else if eq .allowed \"0\" }}subject not allowed{{ else }}refused{{ end }}{{ else if eq .tls \"\" }}plain HTTP to port 443{{ else }}bad request{{ end }}` [$__auto]))",
               "legendFormat": "{{reason}}",
               "queryType": "range"
             }
@@ -3677,7 +3691,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "sum by (dn, cv, allowed) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", dn=\"dn\", cv=\"cv\", allowed=\"allowed\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | cv!=\"NONE\" | cv!=\"\" [$__range]))",
+              "expr": "sum by (dn, cv, allowed) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", dn=\"dn\", cv=\"cv\", allowed=\"allowed\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | cv!=\"NONE\" | cv!=\"\" [$__range]))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -3835,7 +3849,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "topk(20, sum by (ip, src) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"400|444\" [$__range])))",
+              "expr": "topk(20, sum by (ip, src) (count_over_time({namespace=\"nginx-ingress-mtls\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", s=\"s\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"400|444\" [$__range])))",
               "legendFormat": "",
               "queryType": "instant",
               "format": "table"
@@ -4003,7 +4017,7 @@ data:
                 "type": "loki",
                 "uid": "loki"
               },
-              "expr": "{namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" | json sn=\"sn\", ip=\"ip\", host=\"host\", m=\"m\", path=\"path\", proto=\"proto\", s=\"s\", rt=\"rt\", ups=\"ups\", bytes=\"bytes\", tls=\"tls\", cv=\"cv\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"$status\" | path=~\"(?i).*$path.*\"",
+              "expr": "{namespace=~\"$controller\", container=\"nginx-ingress\"} |= \"{\\\"t\\\":\" !~ `$probes` | json sn=\"sn\", ip=\"ip\", host=\"host\", m=\"m\", path=\"path\", proto=\"proto\", s=\"s\", rt=\"rt\", ups=\"ups\", bytes=\"bytes\", tls=\"tls\", cv=\"cv\", ua=\"ua\" | sn=~\"$site\" | ip=~\"$client\" | label_format src=`{{ if eq (regexReplaceAll \"^(10|127)[.].*|^192[.]168[.].*|^172[.](1[6-9]|2[0-9]|3[01])[.].*\" .ip \"\") \"\" }}internal{{ else }}public{{ end }}` | src=~\"$source\" | s=~\"$status\" | path=~\"(?i).*$path.*\"",
               "queryType": "range",
               "maxLines": 500,
               "direction": "backward"

@@ -53,15 +53,18 @@ SCANNER = ('(?i).*(/[.](env|git|svn|hg|aws|ssh|ds_store|htpasswd|vscode)|wp-(log
 _ids = iter(range(1, 1000))
 
 
-def access(*fields, stream=STREAM):
-    """The common pipeline: access lines, | json, then the variable filters."""
+def access(*fields, stream=STREAM, probes=True):
+    """The common pipeline: access lines, | json, then the variable filters.
+    probes=False keeps the blackbox probes whatever the Probes variable says."""
     names = ["sn", "ip"] + [f for f in fields if f not in ("sn", "ip")]
     js = ", ".join('%s="%s"' % (f, f) for f in names)
-    return stream + ACCESS_LINE + " | json " + js + ' | sn=~"$site" | ip=~"$client"' + SOURCE + ' | src=~"$source"'
+    probe_filter = " !~ `$probes`" if probes else ""
+    return (stream + ACCESS_LINE + probe_filter + " | json " + js + ' | sn=~"$site" | ip=~"$client"' + SOURCE
+            + ' | src=~"$source"')
 
 
-def mtls(*fields):
-    return access(*fields, stream=MTLS_STREAM)
+def mtls(*fields, probes=True):
+    return access(*fields, stream=MTLS_STREAM, probes=probes)
 
 
 def count(query, by, rng="$__range"):
@@ -254,7 +257,7 @@ REFUSAL = (mtls("s", "cv", "allowed", "tls") + ' | s=~"400|408|421|444|495|496|4
            ' | label_format reason=`{{ if eq .s "444" }}{{ if eq .cv "NONE" }}no certificate'
            '{{ else if hasPrefix "FAILED" .cv }}certificate not trusted{{ else if eq .allowed "0" }}subject not allowed'
            '{{ else }}refused{{ end }}{{ else if eq .tls "" }}plain HTTP to port 443{{ else }}bad request{{ end }}`')
-UNVERIFIED = mtls("s", "cv", "allowed") + ' | s=~"2..|101" | cv!="SUCCESS" or allowed!="1"'
+UNVERIFIED = mtls("s", "cv", "allowed", probes=False) + ' | s=~"2..|101" | cv!="SUCCESS" or allowed!="1"'
 
 
 def ratio(part):
@@ -548,6 +551,12 @@ dashboard = {
          "description": "Internal: a private address (LAN, VPN, pods). Internet: any other address.",
          "query": "internet : public,internal : internal", "multi": False, "includeAll": True, "allValue": ".*",
          "current": {"text": "All", "value": "$__all"}, "options": []},
+        {"name": "probes", "label": "Probes", "type": "custom",
+         "description": "The availability probes (blackbox exporter) ask every site's health URL each minute, "
+                        "from both sites. Hidden: their requests are left out of every panel except the "
+                        "tripwire.",
+         "query": "hidden : Blackbox Exporter/,shown : ^$", "multi": False, "includeAll": False,
+         "current": {"text": "hidden", "value": "Blackbox Exporter/"}, "options": []},
         textbox("client", "Client", ".*", "Client address, as a regular expression. Example: 192[.]168[.]1[.]20 for one "
                 "device, 192[.]168[.]1[.].* for a network."),
         textbox("status", "Status", ".*", "For \"Recent requests\": the status, as a regular expression. "

@@ -37,15 +37,17 @@ data:
           # site that fails every request (a sealed Vault) still does.
           # The 30-minute window keeps the alert on through short gaps, so
           # one outage is one message. (Loki's ruler ignores keep_firing_for.)
+          # The availability probes (blackbox exporter, user agent "Blackbox
+          # Exporter/...") are left out: a site that is down is their alert.
           - alert: IngressSiteServerErrors
             expr: |
               (
-                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn", s="s" | s=~"5.." [30m]))
+                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s" | s=~"5.." [30m]))
                 /
-                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn" [30m]))
+                sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn" [30m]))
               ) > 0.2
               and
-              sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn", s="s" | s=~"5.." [30m])) >= 10
+              sum by (namespace, sn) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s" | s=~"5.." [30m])) >= 10
             for: 15m
             labels:
               severity: warning
@@ -58,10 +60,11 @@ data:
 
           # One client got many 401 or 403 answers from one site: password
           # guessing, or a client with a bad token. Normal is at most 4 in 10
-          # minutes (a browser with an expired Grafana session).
+          # minutes (a browser with an expired Grafana session). The probes
+          # are left out: a health URL that asks for a login is not an attack.
           - alert: IngressAuthFailureBurst
             expr: |
-              sum by (namespace, sn, ip) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn", s="s", ip="ip" | s=~"401|403" [10m])) >= 20
+              sum by (namespace, sn, ip) (count_over_time({namespace=~"nginx-ingress|nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" != "Blackbox Exporter/" | json sn="sn", s="s", ip="ip" | s=~"401|403" [10m])) >= 20
             labels:
               severity: warning
               category: security
@@ -73,7 +76,8 @@ data:
           # A tripwire: nginx-mtls must refuse every request without a verified
           # client certificate whose subject is in the allow map. A success
           # (2xx, or 101 for a websocket) with cv not SUCCESS, or with allowed
-          # not 1, means that the gate does not work.
+          # not 1, means that the gate does not work. The probes count here:
+          # the mTLS gate probe sends no certificate on purpose.
           - alert: IngressMTLSPassedWithoutCertificate
             expr: |
               sum by (namespace, sn, ip, cv) (count_over_time({namespace="nginx-ingress-mtls", container="nginx-ingress"} |= "{\"t\":" | json sn="sn", s="s", ip="ip", cv="cv", allowed="allowed" | s=~"2..|101" | cv!="SUCCESS" or allowed!="1" [10m])) > 0
