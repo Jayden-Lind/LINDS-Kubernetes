@@ -148,7 +148,7 @@ data:
           {
             "name": "client",
             "label": "Client",
-            "description": "Client address, as a regular expression. Example: 10[.]0[.]50[.]10",
+            "description": "Client address, as a regular expression. Example: 192[.]168[.]1[.]20 for one device, 192[.]168[.]1[.].* for a network.",
             "type": "textbox",
             "query": ".*",
             "current": {

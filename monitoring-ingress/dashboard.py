@@ -538,7 +538,8 @@ dashboard = {
          "description": "Internal: a private address (LAN, VPN, pods). Internet: any other address.",
          "query": "internet : public,internal : internal", "multi": False, "includeAll": True, "allValue": ".*",
          "current": {"text": "All", "value": "$__all"}, "options": []},
-        textbox("client", "Client", ".*", "Client address, as a regular expression. Example: 10[.]0[.]50[.]10"),
+        textbox("client", "Client", ".*", "Client address, as a regular expression. Example: 192[.]168[.]1[.]20 for one "
+                "device, 192[.]168[.]1[.].* for a network."),
         textbox("status", "Status", ".*", "For \"Recent requests\": the status, as a regular expression. "
                 "Example: 5.. or 401|403"),
         textbox("path", "Path contains", "", "For \"Recent requests\": text in the path."),
