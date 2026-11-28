@@ -7,7 +7,7 @@ the refusals of the client-certificate gate. Three alerts go to Discord.
 
 | Controller | Namespace | Serves | Client address that nginx sees |
 |---|---|---|---|
-| `nginx` | nginx-ingress | The LAN, the VPN and the pods. Not on the internet. | The real address: a LAN device, the VPN address of the router, or a pod |
+| `nginx` | nginx-ingress | The LANs of both sites, the VPN and the pods. Not on the internet. | The real address: a device on a LAN, a VPN client (10.0.10.x), or a pod |
 | `nginx-mtls` | nginx-ingress-mtls | The internet: the router forwards WAN port 443 to it. It requires a client certificate. | The real address of the client on the internet |
 
 nginx sees the real address of an internet client. The router forwards port
@@ -124,10 +124,11 @@ How often they would have fired in 30 days (2026-10-29 to 2026-11-28),
 measured on the real lines. The old format had no host, so the site is
 guessed from the path:
 
-- `IngressSiteServerErrors`: 9 times. 7 for vault.linds.com.au: Vault
-  answered every login of the External Secrets Operator with 503 for 45
-  minutes to 26 hours (one outage made two alerts). 1 for photos.linds.com.au
-  (Immich, 502) and 1 for home.linds.com.au (502).
+- `IngressSiteServerErrors`: 9 times. 7 for vault.linds.com.au: Vault was
+  sealed, and it answered every login of the External Secrets Operator with
+  503 ("Vault is sealed") for 25 minutes to 26 hours (one outage made two
+  alerts). 1 for photos.linds.com.au (Immich, 502) and 1 for
+  home.linds.com.au (502).
 - `IngressAuthFailureBurst`: 0 times. The most from one client in 10
   minutes was 4 (a browser with an expired Grafana session).
 - `IngressMTLSPassedWithoutCertificate`: cannot be measured, because the old
@@ -136,8 +137,9 @@ guessed from the path:
 `NginxHighErrorRate` (base/monitoring/alerts.yaml) reads the controllers'
 latency histogram: only requests that reached a pod, 5% over 5 minutes, no
 floor. It does not see a site with no ready pod. In the 14 days that
-Prometheus keeps, it fired 5 times, all for Vault, each for 0 to 8 minutes,
-and it did not fire for the Vault outage of 2026-11-27.
+Prometheus keeps, it fired 5 times, all for Vault, each for 0 to 8 minutes.
+Vault was sealed from 2026-11-27 01:53 to 2026-11-28 03:55 UTC; it fired once
+in that time, for less than a minute, near the end.
 
 ## Test a change
 
