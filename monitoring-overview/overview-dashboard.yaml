@@ -1722,6 +1722,18 @@ data:
                     "value": 0
                   },
                   {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "text",
+                          "value": null
+                        }
+                      ]
+                    }
+                  },
+                  {
                     "id": "mappings",
                     "value": [
                       {

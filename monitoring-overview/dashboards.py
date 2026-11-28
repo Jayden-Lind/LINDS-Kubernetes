@@ -477,6 +477,7 @@ def protection_panel(grid, links):
             by_ref("F", "Postgres base backup", *age_props(26 * H, 36 * H, "✗ No record")),
             by_ref("G", "Postgres WAL archive", *age_props(1800, 36 * H, "✗ No record")),
             by_ref("H", "Guest backups", {"id": "unit", "value": "suffix: no job"}, {"id": "decimals", "value": 0},
+                   {"id": "thresholds", "value": steps("text")},
                    {"id": "mappings", "value": [vmap({0: ("✓ All have a job", GOOD)})]}),
         ])
 
