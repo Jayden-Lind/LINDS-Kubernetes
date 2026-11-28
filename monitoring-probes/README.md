@@ -250,9 +250,10 @@ may need a module in `blackbox.yml`. A target behind a policy that admits
   `blackbox-exporter`. That account has no RBAC of its own, and only that
   module sends the token.
 - **DNS questions show in Suricata.** Each question to a router is a Suricata
-  DNS event in Loki, so the DNS probes run every 120 s. That is about 6,000
-  events a day for the two routers: `github.com` and
-  `_ldap._tcp.dc._msdcs.linds.com.au` from the node addresses.
+  DNS event in Loki, so the DNS probes run every 120 s. They ask the two
+  routers about 6,000 questions a day (`github.com` and
+  `_ldap._tcp.dc._msdcs.linds.com.au`, from the node addresses). The other
+  probes' own name lookups add some more, fewer because CoreDNS caches them.
 - **CoreDNS's interim hosts entry for jd-fs-01** (kube-system ConfigMap
   `coredns`) answers `jd-fs-01.linds.com.au` before AD does, so the
   `jd-fs-01 smb` probe cannot see a lost AD record for it.
