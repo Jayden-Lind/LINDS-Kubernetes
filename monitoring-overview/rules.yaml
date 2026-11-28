@@ -1,0 +1,235 @@
+# Rules for the Homelab overview and Backups dashboards.
+#
+# - The overview group makes the series that the overview's status tiles and
+#   alert table read. They are recording rules, so that the tests in
+#   tests/rules.test.yaml can check them.
+# - The backups group has the alerts for backups that no other rule covers.
+#   The alerts that read logs (sanoid, TrueNAS replication, shadow copies,
+#   DFS Replication) are in log-rules.yaml, because Loki's ruler runs them.
+#
+# Tests: tests/rules.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: overview
+  labels:
+    release: monitoring-kube-prometheus-stack
+spec:
+  groups:
+    - name: overview
+      rules:
+        # One series for each firing alert. Watchdog and InfoInhibitor are
+        # not problems, so they are not included. The value is the time in
+        # seconds since the alert became active.
+        #
+        # site: jd or linds, from instance, node or hostname. Addresses in
+        # 10.0.* are JD, 10.3.* and 192.168.* are LINDS. Pod addresses
+        # (10.244.*) and alerts with none of these labels are "cluster".
+        # where: the instance (a name, or a node-exporter address), else
+        # node, hostname or namespace.
+        # what: the most specific object label. The last label_replace whose
+        # label is not empty sets it. "device" counts only for a disk: on the
+        # hardware targets it is a class (hypervisor, bmc). The last step
+        # clears the exporter's own pod, which some alerts carry.
+        - record: overview:alert:active_seconds
+          expr: |
+            max by (alertname, severity, site, where, what) (
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+              label_replace(label_replace(label_replace(label_replace(label_replace(
+                  (time() - ALERTS_FOR_STATE{alertname!~"Watchdog|InfoInhibitor"})
+                    and ignoring (alertstate) ALERTS{alertstate="firing"},
+                "site", "jd", "instance", "jd-.*|10\\.0\\..*"),
+                "site", "linds", "instance", "linds-.*|10\\.3\\..*|192\\.168\\..*"),
+                "site", "jd", "node", "talos-(cp|worker-[0-9]+)"),
+                "site", "linds", "node", ".*linds.*"),
+                "site", "jd", "hostname", "(?i)jd-.*"),
+                "site", "linds", "hostname", "(?i)linds-.*"),
+                "site", "cluster", "site", ""),
+                "where", "$1", "resource_namespace", "(.+)"),
+                "where", "$1", "namespace", "(.+)"),
+                "where", "$1", "hostname", "(.+)"),
+                "where", "$1", "node", "(.+)"),
+                "where", "$1", "instance", "([a-zA-Z].*|(10\\.(0|3)|192\\.168)\\.[0-9.]+:9100)"),
+                "what", "$1", "job", "(.+)"),
+                "what", "$1", "integration", "(.+)"),
+                "what", "$1", "rule_group", "(.+)"),
+                "what", "$1", "container", "(.+)"),
+                "what", "$1", "pod", "(.+)"),
+                "what", "$1", "mountpoint", "(.+)"),
+                "what", "$1", "id", "(.+)"),
+                "what", "$1", "collector", "(.+)"),
+                "what", "$1", "dev", "(.+)"),
+                "what", "$1", "iface", "(.+)"),
+                "what", "$1", "interface", "(.+)"),
+                "what", "$1", "subnet", "(.+)"),
+                "what", "$1", "conn", "(.+)"),
+                "what", "$1", "peer", "(.+)"),
+                "what", "$1", "store", "(.+)"),
+                "what", "$1", "retailer", "(.+)"),
+                "what", "$1", "cronjob", "(.+)"),
+                "what", "$1", "job_name", "(.+)"),
+                "what", "$1", "daemonset", "(.+)"),
+                "what", "$1", "statefulset", "(.+)"),
+                "what", "$1", "deployment", "(.+)"),
+                "what", "$1", "persistentvolumeclaim", "(.+)"),
+                "what", "$1", "resource_name", "(.+)"),
+                "what", "$1", "vg", "(.+)"),
+                "what", "$1", "lv", "(.+)"),
+                "what", "$1", "vd", "(.+)"),
+                "what", "$1", "slot", "(.+)"),
+                "what", "$1", "pool", "(.+)"),
+                "what", "$1", "vdev", "(.+)"),
+                "what", "$1", "device", "(sd.*|nvme.*|.*[0-9,/].*)"),
+                "what", "$1", "sensor", "(.+)"),
+                "what", "$1", "name", "(.+)"),
+                "what", "", "what", "monitoring-kube-prometheus-stack-.*|pushgateway-.*|kube-state-metrics|node-exporter")
+            )
+
+        # The checks behind each status tile: 0 OK, 1 warning, 2 problem.
+        # A check whose series is missing counts as down, so that a target
+        # that has gone does not show as OK. The 3-minute windows let one
+        # failed scrape pass: about four scrapes a day to LINDS fail.
+        #
+        # alerts: the worst firing alert of the site. Critical is 2, warning
+        # is 1. Info and none are notices (ProxmoxGuestStopped, for example)
+        # and do not count.
+        - record: overview:check:status
+          labels: {site: jd, check: alerts}
+          expr: |
+            max(
+                overview:alert:active_seconds{site="jd", severity="critical"} * 0 + 2
+              or
+                overview:alert:active_seconds{site="jd", severity="warning"} * 0 + 1
+            ) or on () vector(0)
+        - record: overview:check:status
+          labels: {site: jd, check: router}
+          expr: 2 - 2 * max(max_over_time(up{job="router-node", instance="jd-router-01"}[3m])) or on () vector(2)
+        # The active WAN and its health checks: 0 the primary works, 1 the
+        # backup carries the traffic, 2 no working WAN.
+        - record: overview:check:status
+          labels: {site: jd, check: internet}
+          expr: |
+            2 - max(
+                max_over_time(router_wan_active{instance="jd-router-01", wan="primary"}[3m])
+                  * max_over_time(router_wan_healthy{instance="jd-router-01", wan="primary"}[3m]) * 2
+              or
+                max_over_time(router_wan_active{instance="jd-router-01", wan="backup"}[3m])
+                  * max_over_time(router_wan_healthy{instance="jd-router-01", wan="backup"}[3m])
+            ) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: jd, check: dns}
+          expr: 2 - 2 * max(max_over_time(router_dns_up{instance="jd-router-01"}[3m])) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: jd, check: proxmox}
+          expr: 2 - 2 * max(max_over_time(pve_up{job="pve", id="node/jd-proxmox-02"}[3m])) or on () vector(2)
+        # A node that has not been Ready for 3 minutes. JD's nodes are the
+        # ones without "linds" in the name.
+        - record: overview:check:status
+          labels: {site: jd, check: nodes}
+          expr: |
+            max(2 * (max_over_time(kube_node_status_condition{condition="Ready", status="true", node!~".*linds.*"}[3m]) == bool 0))
+              or on () vector(2)
+
+        - record: overview:check:status
+          labels: {site: linds, check: alerts}
+          expr: |
+            max(
+                overview:alert:active_seconds{site="linds", severity="critical"} * 0 + 2
+              or
+                overview:alert:active_seconds{site="linds", severity="warning"} * 0 + 1
+            ) or on () vector(0)
+        # Prometheus is at JD. It reads everything at LINDS through the
+        # tunnel, so the tunnel is a LINDS check.
+        - record: overview:check:status
+          labels: {site: linds, check: tunnel}
+          expr: 2 - 2 * max(max_over_time(router_ipsec_up{conn="LINDS"}[5m])) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: linds, check: router}
+          expr: 2 - 2 * max(max_over_time(up{job="router-node", instance="linds-router-01"}[3m])) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: linds, check: internet}
+          expr: |
+            2 - max(
+                max_over_time(router_wan_active{instance="linds-router-01", wan="primary"}[3m])
+                  * max_over_time(router_wan_healthy{instance="linds-router-01", wan="primary"}[3m]) * 2
+              or
+                max_over_time(router_wan_active{instance="linds-router-01", wan="backup"}[3m])
+                  * max_over_time(router_wan_healthy{instance="linds-router-01", wan="backup"}[3m])
+            ) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: linds, check: dns}
+          expr: 2 - 2 * max(max_over_time(router_dns_up{instance="linds-router-01"}[3m])) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: linds, check: proxmox}
+          expr: 2 - 2 * max(max_over_time(pve_up{job="pve", id="node/linds-proxmox-01"}[3m])) or on () vector(2)
+        - record: overview:check:status
+          labels: {site: linds, check: nodes}
+          expr: |
+            max(2 * (max_over_time(kube_node_status_condition{condition="Ready", status="true", node=~".*linds.*"}[3m]) == bool 0))
+              or on () vector(2)
+
+        - record: overview:check:status
+          labels: {site: cluster, check: alerts}
+          expr: |
+            max(
+                overview:alert:active_seconds{site="cluster", severity="critical"} * 0 + 2
+              or
+                overview:alert:active_seconds{site="cluster", severity="warning"} * 0 + 1
+            ) or on () vector(0)
+        - record: overview:check:status
+          labels: {site: cluster, check: api}
+          expr: 2 - 2 * max(max_over_time(up{job="apiserver"}[3m])) or on () vector(2)
+        # Watchdog fires all the time. If it is not firing, the rules do not
+        # run, and no alert can fire.
+        - record: overview:check:status
+          labels: {site: cluster, check: rules}
+          expr: 2 * max(absent(ALERTS{alertname="Watchdog", alertstate="firing"})) or on () vector(0)
+        - record: overview:check:status
+          labels: {site: cluster, check: alertmanager}
+          expr: |
+            2 - 2 * max(max_over_time(up{job="monitoring-kube-prometheus-alertmanager", container="alertmanager"}[3m]))
+              or on () vector(2)
+        # Without Loki, the log panels and the log alerts are blind, but
+        # nothing has stopped: 1, not 2.
+        - record: overview:check:status
+          labels: {site: cluster, check: logs}
+          expr: 1 - max(max_over_time(up{job="monitoring/loki"}[3m])) or on () vector(1)
+
+        # The worst check of each site.
+        - record: overview:site:status
+          expr: max by (site) (overview:check:status)
+
+    - name: overview.backups
+      rules:
+        # The nightly base backup of linds-postgres (postgresql/
+        # postgres-cluster.yaml, ScheduledBackup at 00:00 UTC). The barman
+        # plugin's metric holds the time of the newest backup in the object
+        # store. PostgreSQLBaseBackupFailed fires only when barman-cloud-backup
+        # itself fails; a backup that never starts sets no failure time. This
+        # rule covers that: no new backup for 36 hours is one missed night.
+        - alert: PostgreSQLBaseBackupStale
+          expr: |
+            time() - max by (namespace) (barman_cloud_cloudnative_pg_io_last_available_backup_timestamp) > 129600
+          for: 30m
+          keep_firing_for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL in {{ $labels.namespace }}: the newest base backup is {{ $value | humanizeDuration }} old"
+            description: "The nightly base backup did not finish. WAL archiving can still work, but a restore must replay more WAL, and the 7-day retention removes the old backups. Check `kubectl -n {{ $labels.namespace }} get backups` and `kubectl -n {{ $labels.namespace }} logs deploy/barman-cloud`."
+        # The plugin's metrics are gone for 2 hours, so the rule above cannot
+        # tell the age of the backups.
+        - alert: PostgreSQLBackupMetricsMissing
+          expr: absent_over_time(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="postgresql-linds"}[2h])
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL in {{ $labels.namespace }}: no backup metrics for 2 hours"
+            description: "The barman-cloud plugin in the Postgres pods does not report the newest base backup, so its age is not known. Check that the pods run (`kubectl -n {{ $labels.namespace }} get pods`) and that the cluster still uses the plugin."
