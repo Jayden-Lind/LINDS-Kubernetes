@@ -1,0 +1,77 @@
+# Three workloads take connections from the internet only: their
+# CiliumNetworkPolicies (minecraft/, plex-jd/, nginx-ingress-mtls/) admit
+# `world` and nothing else from outside their namespace. A probe from a pod is
+# not `world`: Cilium hands a pod's connection to a LoadBalancer address
+# straight to a backend pod (socket load balancing), so the backend sees the
+# blackbox pod's own identity and the policy drops it. Without these the
+# public probes would time out, and the mTLS gate check (job mtls-gate) could
+# never tell a refusal from a drop.
+#
+# Each policy here adds one rule to its workload: the blackbox exporters, at
+# either site, may open the port the internet already reaches, and nothing
+# else. Cilium adds up the policies of an endpoint, so the workload's own
+# policy is unchanged. Each file names its namespace (kustomization.yaml sets
+# none).
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blackbox-probes
+  namespace: minecraft
+spec:
+  description: "The blackbox exporters may reach the game port, as players do (monitoring-probes)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft
+      app.kubernetes.io/instance: minecraft
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: blackbox-exporter
+      toPorts:
+        - ports:
+            - port: "25565"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blackbox-probes
+  namespace: plex-jd
+spec:
+  description: "The blackbox exporters may reach Plex's port, as its clients do (monitoring-probes)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: plex-jd
+      app.kubernetes.io/instance: plex-jd
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: blackbox-exporter
+      toPorts:
+        - ports:
+            - port: "32400"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blackbox-probes
+  namespace: nginx-ingress-mtls
+spec:
+  description: "The blackbox exporters may reach HTTPS, as the internet does (monitoring-probes)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: nginx-ingress
+      app.kubernetes.io/instance: nginx-ingress-mtls
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: blackbox-exporter
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

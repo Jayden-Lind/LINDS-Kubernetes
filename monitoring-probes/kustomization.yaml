@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# No `namespace:` here, unlike monitoring-hardware: network-policies.yaml
+# puts one policy in each of three other namespaces, which `namespace:` would
+# move to monitoring. Every file names its own namespace.
+
+resources:
+  - blackbox-exporter.yaml
+  - scrape-configs.yaml
+  - network-policies.yaml
+  - rules.yaml
+  - dashboard.yaml
+
+# The modules. The name gets a hash of the content, so a change to
+# blackbox.yml restarts both exporters with it.
+configMapGenerator:
+  - name: blackbox-exporter-config
+    namespace: monitoring
+    files:
+      - blackbox.yml
+
+# The exporter's version, for both Deployments. Renovate's kustomize manager
+# reads this (renovate.json5 limits only the argocd and kubernetes managers),
+# so an update arrives as a PR like the other exporters'.
+images:
+  - name: quay.io/prometheus/blackbox-exporter
+    newTag: v0.29.1

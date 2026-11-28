@@ -1,0 +1,425 @@
+# promtool unit tests for ../rules.yaml. Not a manifest, and not in the
+# kustomization.
+#
+#   yq '.spec' monitoring-probes/rules.yaml > /tmp/probes.rules.yaml
+#   promtool check rules /tmp/probes.rules.yaml
+#   promtool test rules monitoring-probes/tests/rules.test.yaml
+#
+# Time starts at zero in each test, so timestamps below are small numbers,
+# and time() is the evaluation time in seconds.
+rule_files:
+  - /tmp/probes.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- ProbeTargetDown -----------------------------------------------------------
+  - name: a DC's LDAPS failing from both sites is critical after 10 minutes
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="jd-dc-01 ldaps", kind="identity", site="jd", module="tls", instance="10.0.50.200:636", cert="ad-cs", hostname="jd-dc-01.linds.com.au", vantage="jd"}'
+        values: '1x2 0x30'
+      - series: 'probe_success{job="blackbox", target="jd-dc-01 ldaps", kind="identity", site="jd", module="tls", instance="10.0.50.200:636", cert="ad-cs", hostname="jd-dc-01.linds.com.au", vantage="linds"}'
+        values: '1x2 0x30'
+      - series: 'probe_success{job="blackbox", target="grafana", kind="web", site="jd", module="http_200", instance="https://grafana.linds.com.au/api/health", cert="cert-manager", vantage="jd"}'
+        values: '1x32'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ProbeTargetDown
+      - eval_time: 14m
+        alertname: ProbeTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox
+              target: jd-dc-01 ldaps
+              kind: identity
+              site: jd
+              module: tls
+              instance: "10.0.50.200:636"
+              cert: ad-cs
+              hostname: jd-dc-01.linds.com.au
+            exp_annotations:
+              summary: "jd-dc-01 ldaps (identity, jd) does not answer from any site"
+              description: "The tls probe of 10.0.50.200:636 has failed from every site for 10 minutes. The Availability dashboard shows since when and the other checks of the same host. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=tls&target=10.0.50.200:636&hostname=jd-dc-01.linds.com.au'`."
+
+  - name: a web app down from both sites is a warning; one site down is not ProbeTargetDown
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="immich", kind="web", site="jd", module="http_200", instance="https://photos.linds.com.au/api/server/ping", cert="cert-manager", vantage="jd"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="immich", kind="web", site="jd", module="http_200", instance="https://photos.linds.com.au/api/server/ping", cert="cert-manager", vantage="linds"}'
+        values: '0x20'
+      # Only LINDS fails to reach Sonarr: not ProbeTargetDown.
+      - series: 'probe_success{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager", vantage="jd"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager", vantage="linds"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: ProbeTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              target: immich
+              kind: web
+              site: jd
+              module: http_200
+              instance: https://photos.linds.com.au/api/server/ping
+              cert: cert-manager
+            exp_annotations:
+              summary: "immich (web, jd) does not answer from any site"
+              description: "The http_200 probe of https://photos.linds.com.au/api/server/ping has failed from every site for 10 minutes. The Availability dashboard shows since when. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=http_200&target=https://photos.linds.com.au/api/server/ping'`."
+
+  - name: Unbound down on a router holds its DNS probes back (RouterDNSDown says it)
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="jd-router-01 dns ad", kind="dns", site="jd", module="dns_ad", instance="10.0.53.1", vantage="jd"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="jd-router-01 dns internet", kind="dns", site="jd", module="dns_internet", instance="10.0.53.1", vantage="jd"}'
+        values: '0x20'
+      - series: 'router_dns_up{job="router-node", instance="jd-router-01"}'
+        values: '0x20'
+      # linds-router-01's Unbound runs, but its AD forward fails: reported.
+      - series: 'probe_success{job="blackbox", target="linds-router-01 dns ad", kind="dns", site="linds", module="dns_ad", instance="10.3.1.1", vantage="linds"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="linds-router-01 dns internet", kind="dns", site="linds", module="dns_internet", instance="10.3.1.1", vantage="linds"}'
+        values: '1x20'
+      - series: 'router_dns_up{job="router-node", instance="linds-router-01"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ProbeTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox
+              target: linds-router-01 dns ad
+              kind: dns
+              site: linds
+              module: dns_ad
+              instance: 10.3.1.1
+            exp_annotations:
+              summary: "linds-router-01 dns ad (dns, linds) does not answer from any site"
+              description: "The dns_ad probe of 10.3.1.1 has failed from every site for 10 minutes. The Availability dashboard shows since when and the other checks of the same host. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=dns_ad&target=10.3.1.1'`."
+
+  - name: the API server probe is held back while the API server's scrape fails or is gone
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="kubernetes-api", kind="platform", site="jd", module="http_kube_api", instance="https://10.0.53.200:6443/readyz", cert="talos", vantage="jd"}'
+        values: '0x20'
+      - series: 'up{job="apiserver", instance="10.0.53.200:6443"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="vault", kind="platform", site="jd", module="http_200", instance="https://vault.linds.com.au/v1/sys/health", cert="cert-manager", vantage="jd"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ProbeTargetDown
+
+  - name: with no API server scrape at all, the API server probe is held back too (KubeAPIDown)
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="kubernetes-api", kind="platform", site="jd", module="http_kube_api", instance="https://10.0.53.200:6443/readyz", cert="talos", vantage="jd"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="vault", kind="platform", site="jd", module="http_200", instance="https://vault.linds.com.au/v1/sys/health", cert="cert-manager", vantage="jd"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ProbeTargetDown
+
+  - name: an API server that answers its scrape but not /readyz is reported
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="kubernetes-api", kind="platform", site="jd", module="http_kube_api", instance="https://10.0.53.200:6443/readyz", cert="talos", vantage="jd"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="kubernetes-api", kind="platform", site="jd", module="http_kube_api", instance="https://10.0.53.200:6443/readyz", cert="talos", vantage="linds"}'
+        values: '0x20'
+      - series: 'up{job="apiserver", instance="10.0.53.200:6443"}'
+        values: '1x20'
+      - series: 'probe_success{job="blackbox", target="vault", kind="platform", site="jd", module="http_200", instance="https://vault.linds.com.au/v1/sys/health", cert="cert-manager", vantage="jd"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: ProbeTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: blackbox
+              target: kubernetes-api
+              kind: platform
+              site: jd
+              module: http_kube_api
+              instance: https://10.0.53.200:6443/readyz
+              cert: talos
+            exp_annotations:
+              summary: "kubernetes-api (platform, jd) does not answer from any site"
+              description: "The http_kube_api probe of https://10.0.53.200:6443/readyz has failed from every site for 10 minutes. The Availability dashboard shows since when and the other checks of the same host. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=http_kube_api&target=https://10.0.53.200:6443/readyz'`."
+
+  - name: the catcrawl and Proxmox probes are held back while their own scrapes fail
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="catcrawl", kind="web", site="jd", module="http_200", instance="https://catcrawl.linds.com.au/healthz", cert="cert-manager", vantage="jd"}'
+        values: '0x20'
+      - series: 'up{job="catcrawl-viewer", instance="10.244.3.52:9100"}'
+        values: '0x20'
+      - series: 'probe_success{job="blackbox", target="jd-proxmox-02 https", kind="hypervisor", site="jd", module="http_200", instance="https://10.0.50.246:8006/", cert="device", vantage="jd"}'
+        values: '0x20'
+      - series: 'up{job="pve", instance="jd-proxmox-02"}'
+        values: '0x20'
+      # pve-exporter reads linds-proxmox-01 fine, so its web UI failing is news.
+      - series: 'probe_success{job="blackbox", target="linds-proxmox-01 https", kind="hypervisor", site="linds", module="http_200", instance="https://192.168.6.205:8006/", cert="device", vantage="jd"}'
+        values: '0x20'
+      - series: 'up{job="pve", instance="linds-proxmox-01"}'
+        values: '1x20'
+      - series: 'probe_success{job="blackbox", target="grafana", kind="web", site="jd", module="http_200", instance="https://grafana.linds.com.au/api/health", cert="cert-manager", vantage="jd"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ProbeTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              target: linds-proxmox-01 https
+              kind: hypervisor
+              site: linds
+              module: http_200
+              instance: https://192.168.6.205:8006/
+              cert: device
+            exp_annotations:
+              summary: "linds-proxmox-01 https (hypervisor, linds) does not answer from any site"
+              description: "The http_200 probe of https://192.168.6.205:8006/ has failed from every site for 10 minutes. The Availability dashboard shows since when. What the probe saw: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=http_200&target=https://192.168.6.205:8006/'`."
+
+  - name: a dashboard-only target (alert="no") never alerts, from one site or both
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="jd-proxmox-02 bmc", kind="hypervisor", site="jd", module="tls", instance="10.0.50.240:443", cert="device", alert="no", vantage="jd"}'
+        values: '0x30'
+      - series: 'probe_success{job="blackbox", target="jd-proxmox-02 bmc", kind="hypervisor", site="jd", module="tls", instance="10.0.50.240:443", cert="device", alert="no", vantage="linds"}'
+        values: '0x30'
+      - series: 'probe_success{job="blackbox", target="linds-switch-02", kind="network", site="linds", module="tls", instance="10.0.80.3:443", cert="device", alert="no", vantage="jd"}'
+        values: '0x30'
+      - series: 'probe_success{job="blackbox", target="linds-switch-02", kind="network", site="linds", module="tls", instance="10.0.80.3:443", cert="device", alert="no", vantage="linds"}'
+        values: '1x30'
+      - series: 'probe_success{job="blackbox", target="grafana", kind="web", site="jd", module="http_200", instance="https://grafana.linds.com.au/api/health", cert="cert-manager", vantage="jd"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ProbeTargetDown
+      - eval_time: 25m
+        alertname: ProbeFailsFromOneSite
+
+  - name: when nothing answers from anywhere, it is the probers, not every target
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="jd-dc-01 kerberos", kind="identity", site="jd", module="tcp", instance="10.0.50.200:88", vantage="jd"}'
+        values: '1x2 0x20'
+      - series: 'probe_success{job="blackbox", target="grafana", kind="web", site="jd", module="http_200", instance="https://grafana.linds.com.au/api/health", cert="cert-manager", vantage="jd"}'
+        values: '1x2 0x20'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BlackboxProbesAllFailing
+      - eval_time: 14m
+        alertname: BlackboxProbesAllFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Every availability probe fails, from both sites"
+              description: "Not one target answers, so the probes themselves are suspect. `kubectl -n monitoring logs deploy/blackbox-exporter-jd`, and a probe by hand: `kubectl get --raw '/api/v1/namespaces/monitoring/services/http:blackbox-exporter-jd:9115/proxy/probe?debug=true&module=dns_cluster&target=10.96.0.10'`."
+      - eval_time: 14m
+        alertname: ProbeTargetDown
+
+  # --- ProbeFailsFromOneSite -------------------------------------------------------
+  - name: targets failing from one site only are one alert for that site, after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="plex-jd", kind="public", site="jd", module="http_200", instance="http://172.16.1.50:32400/identity", vantage="jd"}'
+        values: '1x30'
+      - series: 'probe_success{job="blackbox", target="plex-jd", kind="public", site="jd", module="http_200", instance="http://172.16.1.50:32400/identity", vantage="linds"}'
+        values: '1x2 0x30'
+      - series: 'probe_success{job="blackbox", target="jd-fs-01 smb", kind="storage", site="jd", module="tcp", instance="jd-fs-01.linds.com.au:445", vantage="jd"}'
+        values: '1x30'
+      - series: 'probe_success{job="blackbox", target="jd-fs-01 smb", kind="storage", site="jd", module="tcp", instance="jd-fs-01.linds.com.au:445", vantage="linds"}'
+        values: '1x2 0x30'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ProbeFailsFromOneSite
+      - eval_time: 18m
+        alertname: ProbeFailsFromOneSite
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              vantage: linds
+              site: linds
+            exp_annotations:
+              summary: "2 target(s) fail from linds that answer from the other site"
+              description: "Probed from linds, these targets fail while the other site reaches them: the path between the sites, or the exporter at linds (`kubectl -n monitoring logs deploy/blackbox-exporter-linds`). The Availability dashboard lists them in Down now, with a cross in that site's column."
+      - eval_time: 18m
+        alertname: ProbeTargetDown
+
+  # --- Certificates ------------------------------------------------------------------
+  # probe_ssl_earliest_cert_expiry is a Unix time; time() here is seconds since
+  # the test began, so a value of 20 days (1728000) is a certificate with 20
+  # days left at the start.
+  - name: certificates cert-manager does not issue warn at 21 days and are critical at 7
+    interval: 1m
+    input_series:
+      # A device certificate with 20 days left, seen from both sites: one alert.
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox", target="jd-unifi-01", kind="network", site="jd", module="tls", instance="10.0.52.7:443", cert="device", vantage="jd"}'
+        values: '1728000x70'
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox", target="jd-unifi-01", kind="network", site="jd", module="tls", instance="10.0.52.7:443", cert="device", vantage="linds"}'
+        values: '1728000x70'
+      # A DC's own certificate with 6 days left.
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox", target="linds-dc ldaps", kind="identity", site="linds", module="tls", instance="10.3.1.200:636", cert="ad-cs", hostname="linds-dc.linds.com.au", vantage="jd"}'
+        values: '518400x70'
+      # cert-manager's own: CertificateExpiringSoon's business, not this one's.
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox", target="grafana", kind="web", site="jd", module="http_200", instance="https://grafana.linds.com.au/api/health", cert="cert-manager", vantage="jd"}'
+        values: '432000x70'
+    alert_rule_test:
+      - eval_time: 59m
+        alertname: ProbeCertificateExpiring
+      - eval_time: 61m
+        alertname: ProbeCertificateExpiring
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              target: jd-unifi-01
+              kind: network
+              site: jd
+              module: tls
+              instance: "10.0.52.7:443"
+              cert: device
+            exp_annotations:
+              summary: "jd-unifi-01: its certificate expires in 19d 22h 59m 0s"
+              description: "A linds-CA device certificate. Renew it with LINDS-Ansible: `ansible-playbook playbooks/certificates.yml --limit <device>-cert`; the role renews a certificate with 30 days or fewer left. The Availability dashboard lists every certificate by days left."
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              target: linds-dc ldaps
+              kind: identity
+              site: linds
+              module: tls
+              instance: "10.3.1.200:636"
+              cert: ad-cs
+              hostname: linds-dc.linds.com.au
+            exp_annotations:
+              summary: "linds-dc ldaps: its certificate expires in 5d 22h 59m 0s"
+              description: "The domain controller's own certificate, which AD CS auto-enrolment renews six weeks ahead and has not. On the DC: `certutil -pulse`, then the Certificates (Local Computer) store and the CertificateServicesClient event log. The Availability dashboard lists every certificate by days left."
+          - exp_labels:
+              severity: critical
+              job: blackbox
+              target: linds-dc ldaps
+              kind: identity
+              site: linds
+              module: tls
+              instance: "10.3.1.200:636"
+              cert: ad-cs
+              hostname: linds-dc.linds.com.au
+            exp_annotations:
+              summary: "linds-dc ldaps: its certificate expires in 5d 22h 59m 0s"
+              description: "The domain controller's own certificate, which AD CS auto-enrolment renews six weeks ahead and has not. On the DC: `certutil -pulse`, then the Certificates (Local Computer) store and the CertificateServicesClient event log. When it expires, the probe fails."
+
+  # --- The mTLS gate -------------------------------------------------------------------
+  # Probed every 15 minutes: one sample, then 14 minutes with none.
+  - name: an answer without a client certificate fires at once and for 20 minutes after
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="mtls-gate", target="home public", kind="public", site="jd", module="mtls_gate_home", instance="172.16.1.12:443", hostname="home.linds.com.au", vantage="jd"}'
+        values: '0 _x14 1 _x14 0 _x14 0'
+      # Refused every time: the gate working.
+      - series: 'probe_success{job="mtls-gate", target="photos public", kind="public", site="jd", module="mtls_gate_photos", instance="172.16.1.12:443", hostname="photos.linds.com.au", vantage="jd"}'
+        values: '0 _x14 0 _x14 0 _x14 0'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: MtlsGateAcceptsAnonymous
+      - eval_time: 15m
+        alertname: MtlsGateAcceptsAnonymous
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: mtls-gate
+              target: home public
+              kind: public
+              site: jd
+              module: mtls_gate_home
+              instance: "172.16.1.12:443"
+              hostname: home.linds.com.au
+              vantage: jd
+            exp_annotations:
+              summary: "The public ingress answers home public without a client certificate"
+              description: "A request for home.linds.com.au with no client certificate got an HTTP answer from nginx-mtls (172.16.1.12), which the internet reaches through jd-router-01. Every server block there must have ssl_verify_client on and the 444 for a missing or unlisted certificate (server-snippets in applications/nginx-ingress-mtls.yaml). Check: `curl -sv --resolve home.linds.com.au:443:172.16.1.12 https://home.linds.com.au/` must end with no HTTP answer."
+      # The refusal at 30m does not clear it while the answer at 15m is in
+      # the 20-minute window.
+      - eval_time: 34m
+        alertname: MtlsGateAcceptsAnonymous
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: mtls-gate
+              target: home public
+              kind: public
+              site: jd
+              module: mtls_gate_home
+              instance: "172.16.1.12:443"
+              hostname: home.linds.com.au
+              vantage: jd
+            exp_annotations:
+              summary: "The public ingress answers home public without a client certificate"
+              description: "A request for home.linds.com.au with no client certificate got an HTTP answer from nginx-mtls (172.16.1.12), which the internet reaches through jd-router-01. Every server block there must have ssl_verify_client on and the 444 for a missing or unlisted certificate (server-snippets in applications/nginx-ingress-mtls.yaml). Check: `curl -sv --resolve home.linds.com.au:443:172.16.1.12 https://home.linds.com.au/` must end with no HTTP answer."
+      - eval_time: 36m
+        alertname: MtlsGateAcceptsAnonymous
+
+  # --- The probers ---------------------------------------------------------------------
+  - name: a vantage point or job with no targets at all is reported after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="blackbox", vantage="jd", site="jd", target_site="jd", target="grafana", kind="web"}'
+        values: '1x30'
+      - series: 'up{job="blackbox", vantage="jd", site="jd", target_site="jd", target="jd-dc-01 dns ad", kind="dns"}'
+        values: '1x30'
+      - series: 'up{job="mtls-gate", vantage="jd", site="jd", target_site="jd", target="home public", kind="public"}'
+        values: '1 _x14 1 _x14'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: BlackboxProbesMissing
+      - eval_time: 16m
+        alertname: BlackboxProbesMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              vantage: linds
+              kind: dns
+            exp_annotations:
+              summary: "Prometheus has no blackbox targets from linds (dns)"
+              description: "Nothing is probed there, so ProbeTargetDown cannot fire for it. `kubectl -n monitoring get scrapeconfig`, Argo CD's monitoring-probes app, and Prometheus's Status > Targets page."
+          - exp_labels:
+              severity: warning
+              job: blackbox
+              vantage: linds
+            exp_annotations:
+              summary: "Prometheus has no blackbox targets from linds"
+              description: "Nothing is probed there, so ProbeTargetDown cannot fire for it. `kubectl -n monitoring get scrapeconfig`, Argo CD's monitoring-probes app, and Prometheus's Status > Targets page."
+
+  # --- Recording rule ------------------------------------------------------------------
+  - name: target:probe_success:max is 1 when either site reaches the target
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager", vantage="jd"}'
+        values: '0 0 0'
+      - series: 'probe_success{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager", vantage="linds"}'
+        values: '1 1 0'
+    promql_expr_test:
+      - expr: target:probe_success:max
+        eval_time: 1m
+        exp_samples:
+          - labels: 'target:probe_success:max{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager"}'
+            value: 1
+      - expr: target:probe_success:max
+        eval_time: 2m
+        exp_samples:
+          - labels: 'target:probe_success:max{job="blackbox", target="sonarr", kind="web", site="linds", module="http_200", instance="https://sonarr.linds.com.au/ping", cert="cert-manager"}'
+            value: 0
